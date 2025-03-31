@@ -9,7 +9,11 @@ const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 router.post('/sendMessage', async (req, res) => {
   try {
-    const { chat_id, text, parse_mode } = req.body;
+    const { chat_id, text, parse_mode, server_salt } = req.body;
+
+if(server_salt !== process.env.SERVER_SALT){
+  return res.status(400).json({ error: 'Неверный серверный соль' });
+}
 
    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`,{
     method: 'POST',
