@@ -1,4 +1,3 @@
-import { supabase } from '../db.js';
 import bot from '../bot.js';
 
 const escapeHTML = (text) => {

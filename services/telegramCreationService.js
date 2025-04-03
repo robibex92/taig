@@ -1,5 +1,4 @@
 import bot from '../bot.js';
-import { supabase } from '../db.js';
 
 function escapeHTML(text) {
   if (!text) return '';

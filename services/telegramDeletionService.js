@@ -1,4 +1,3 @@
-import { supabase } from '../db.js';
 import bot from '../bot.js';
 
 export const deleteAnnouncementFromTelegram = async (announcement) => {
