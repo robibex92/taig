@@ -52,19 +52,31 @@ pool.connect((err, client, release) => {
   release();
 });
 
+// Проверка подключения к базе данных
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
+  process.exit(-1);
+});
+
+// Логирование всех API запросов
+app.use('/api', (req, res, next) => {
+  console.log(`API Request: ${req.method} ${req.path}`);
+  next();
+});
+
 app.use('/api/telegram', telegramRoutes);
 
 // Роут для получения постов
 app.get('/api/posts', async (req, res) => {
-  console.log('Received request for posts:', {
+  console.log('Получен запрос на получение постов', {
     query: req.query,
+    ip: req.ip,
     headers: req.headers
   });
 
   try {
     const { status } = req.query;
-    
-    let query = 'SELECT * FROM posts';
+    let query = 'SELECT id, title, content, image_url, created_at, updated_at, status, source, marker FROM public.posts';
     const params = [];
     
     if (status) {
@@ -72,29 +84,59 @@ app.get('/api/posts', async (req, res) => {
       params.push(status);
     }
     
-    console.log('Executing query:', query, 'with params:', params);
+    query += ' ORDER BY created_at DESC';
     
-    const result = await pool.query(query, params);
-    console.log('Query result:', {
-      rowCount: result.rowCount,
-      rows: result.rows
-    });
+    console.log('Выполняем запрос:', { query, params });
     
-    res.setHeader('Content-Type', 'application/json');
-    res.json(result.rows);
+    const { rows } = await pool.query(query, params);
+    
+    console.log(`Найдено ${rows.length} постов`);
+    
+    res.json(rows);
   } catch (error) {
-    console.error('Error fetching posts:', {
-      message: error.message,
+    console.error('Ошибка при запросе к БД:', {
+      error: error.message,
       stack: error.stack,
-      query: error.query,
-      parameters: error.parameters
+      timestamp: new Date()
     });
     
     res.status(500).json({ 
-      error: 'Internal server error',
-      details: error.message 
+      error: 'Database error',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
     });
   }
+});
+
+// Эндпоинт для проверки здоровья сервера
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'OK',
+      db: 'connected',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0'
+    });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(500).json({
+      status: 'ERROR',
+      db: 'disconnected',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Обработчик для корневого пути
+app.get('/', (req, res) => {
+  res.json({
+    status: 'API is running',
+    endpoints: {
+      posts: '/api/posts',
+      telegram: '/api/telegram'
+    }
+  });
 });
 
 const PORT = process.env.PORT || 6543;
@@ -117,3 +159,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`API available at http://localhost:${PORT}/api/posts`);
   console.log(`Database connection: ${pool.options.host}:${pool.options.port}`);
 });
+
