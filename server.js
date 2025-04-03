@@ -3,7 +3,8 @@ import cors from 'cors';
 import telegramRoutes from './routes/telegram.js';
 import dotenv from 'dotenv';
 import bot from './bot.js';
-import { Pool } from 'pg';
+import pg from 'pg';
+const { Pool } = pg;  // ✅ Рабочая версия
 
 dotenv.config();
 
