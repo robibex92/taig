@@ -9,19 +9,8 @@ dotenv.config();
 
 const app = express();
 
-// Подробная настройка CORS
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
-
-// Обработка OPTIONS запросов
-app.options('*', cors());
-
+// настройка CORS
+app.use(cors()); // Разрешает запросы с фронта
 app.use(express.json());
 
 // Middleware для логирования всех запросов
@@ -139,7 +128,7 @@ app.get('/', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 6543;
+const PORT = process.env.PORT || 5000;
 
 // Запускаем бота
 bot.launch()
@@ -154,9 +143,5 @@ bot.launch()
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api/posts`);
-  console.log(`Database connection: ${pool.options.host}:${pool.options.port}`);
-});
+app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
 
