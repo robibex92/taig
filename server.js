@@ -23,13 +23,11 @@ app.use((req, res, next) => {
 
 // Подключение к базе данных
 const pool = new Pool({
-  user: 'backend_user',
-  host: '185.219.81.226',
-  database: 'TAIG',
-  password: 'Gjkmpjdfntkm1bpNfqubycrjujGfhrf!',
-  port: 6543,
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 30000,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,  // Укажите правильное имя БД
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT
 });
 
 // Проверка подключения к базе данных
