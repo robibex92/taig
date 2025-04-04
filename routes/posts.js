@@ -1,6 +1,6 @@
 import express from 'express';
-import pkg from 'pg'; // Импорт CommonJS модуля pg
-const { Pool } = pkg;
+import pkg from 'pg';  // Импортируем CommonJS модуль
+const { Pool } = pkg;  // Деструктурируем Pool из импорта
 
 const router = express.Router();
 const pool = new Pool({
