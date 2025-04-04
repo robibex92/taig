@@ -4,9 +4,7 @@ import dotenv from 'dotenv';
 import telegramRoutes from './routes/telegram.js';
 import postsRoutes from './routes/posts.js';
 import bot from './bot.js';
-import pg from 'pg';
-
-const { Pool } = pg;
+import { pool } from './config/db.js';
 
 // 1. Загрузка конфигурации
 dotenv.config();
@@ -50,29 +48,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 7. Подключение к БД
-//const pool = new Pool({
- // user: process.env.DB_USER,
-  //host: process.env.DB_HOST,
-  //database: process.env.DB_NAME,
-  //password: process.env.DB_PASSWORD.trim(),
-  //port: process.env.DB_PORT,
-  //ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-//});
-
-const pool = new Pool({
-  user: 'backend_user',
-  host: 'localhost',
-  database: 'taigsql',
-  password: 'Gjkmpjdfntkm1bpNfqubycrjujGfhrf!',
-  port: 6543
-});
-pool.on('connect', () => console.log('New DB connection'));
-pool.on('error', err => console.error('DB error:', err));
-
-// 8. Маршруты
-app.use('/api/telegram', telegramRoutes);
-app.use('/api/posts', postsRoutes);
 
 // 9. Health check
 app.get('/api/health', async (req, res) => {
