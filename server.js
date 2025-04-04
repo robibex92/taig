@@ -11,6 +11,12 @@ import pg from 'pg';       // ✅ Правильный импорт для ESM
 
 const { Pool } = pg;
 // Тестовый запрос к БД
+
+
+dotenv.config();
+
+const app = express();
+
 app.get('/api/test-db', async (req, res) => {
   try {
     const result = await pool.query('SELECT current_database() as db, current_user as user, version() as version');
@@ -40,10 +46,6 @@ app.get('/api/taigsql-data', async (req, res) => {
     res.status(500).json({ error: 'Query failed', details: err.message });
   }
 });
-
-dotenv.config();
-
-const app = express();
 
 // настройка CORS
 app.use(cors({
