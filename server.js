@@ -104,3 +104,13 @@ process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
+
+
+// Простейший тестовый endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: "Hello from backend!" });
+});
+
+app.listen(4000, () => {
+  console.log('Server running on port 4000');
+});
