@@ -66,6 +66,21 @@ app.get('/api/health', async (req, res) => {
     });
   }
 });
+
+// В server.js
+app.get('/api/posts', async (req, res) => {
+  try {
+    const { status } = req.query;
+    const result = await pool.query(
+      'SELECT * FROM posts WHERE status = $1', 
+      [status]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Простейший тестовый endpoint
 app.get('/api/test', (req, res) => {
      res.json({ message: "Hello from backend!" });
