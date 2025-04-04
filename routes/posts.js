@@ -1,5 +1,6 @@
 import express from 'express';
-import { Pool } from 'pg';
+import pg from 'pg';       // ✅ Правильный импорт для ESM
+const { Pool } = pg;
 
 const router = express.Router();
 const pool = new Pool({
