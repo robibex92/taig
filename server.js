@@ -17,47 +17,51 @@ dotenv.config();
 
 const app = express();
 
-// настройка CORS
+// Основная CORS конфигурация
 app.use(cors({
   origin: function (origin, callback) {
-    // Разрешаем запросы без origin (например, из Postman)
+    // Разрешаем запросы без origin (curl, Postman)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Проверяем вхождение origin в белый список
+    if (allowedOrigins.some(allowed => {
+      return origin === allowed || 
+             origin.replace(/\/$/, '') === allowed.replace(/\/$/, '');
+    })) {
+      return callback(null, true);
     }
+    
+    // Для запрещенных доменов
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
-  credentials: true, // Ключевой параметр!
-  methods: 'ALL',
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true, // Разрешаем передачу кук/авторизации
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Явно указываем методы
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Powered-By'],
+  maxAge: 86400 // Кэшируем preflight на 24 часа
 }));
 
-// Явная обработка preflight-запросов
-app.options('*', cors());
-//app.use(cors({
-//  origin: [
- //   'http://localhost:3000', // Ваш фронтенд
- //   'http://localhost:4000',
- //   'https://test.sibroot.ru',
- //   'https://tp.sibroot.ru'
- // ], // Разрешенный источник
- // methods: 'ALL' // Разрешает все методы
-//}));
+// Специальный обработчик для OPTIONS-запросов
+app.options('*', cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
+
 
 app.use(express.json());
 
 // Middleware для логирования всех запросов
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Vary', 'Origin'); // Важно для кэширования CORS
   }
+  next();
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', req.headers);
-  next();
 });
 
 // Подключение к базе данных
