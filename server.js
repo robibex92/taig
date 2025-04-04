@@ -18,15 +18,17 @@ dotenv.config();
 const app = express();
 
 // настройка CORS
-app.use(cors({
-  origin: [
-    'http://localhost:3000', // Ваш фронтенд
-    'http://localhost:4000',
-    'https://test.sibroot.ru',
-    'https://tp.sibroot.ru'
-  ], // Разрешенный источник
-  methods: 'ALL' // Разрешает все методы
-}));
+app.use(cors())
+//app.use(cors({
+//  origin: [
+ //   'http://localhost:3000', // Ваш фронтенд
+ //   'http://localhost:4000',
+ //   'https://test.sibroot.ru',
+ //   'https://tp.sibroot.ru'
+ // ], // Разрешенный источник
+ // methods: 'ALL' // Разрешает все методы
+//}));
+
 app.use(express.json());
 
 // Middleware для логирования всех запросов
@@ -148,7 +150,7 @@ app.get('/api/test-db', async (req, res) => {
 app.get('/api/taigsql-data', async (req, res) => {
   try {
     // Пример: получаем первые 10 записей из таблицы (замените на вашу таблицу)
-    const result = await pool.query('SELECT * FROM users LIMIT 10');
+    const result = await pool.query('SELECT * FROM public.users LIMIT 10');
     res.json({
       status: 'success',
       data: result.rows,
