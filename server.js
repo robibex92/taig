@@ -84,7 +84,12 @@ app.get('/api/health', async (req, res) => {
     });
   }
 });
-
+// Простейший тестовый endpoint
+app.get('/api/test', (req, res) => {
+  app.get('/api/test', (req, res) => {
+     res.json({ message: "Hello from backend!" });
+   });
+   
 // 10. Тестовые endpoint'ы
 app.get('/api/test-db', async (req, res) => {
   try {
