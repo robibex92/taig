@@ -52,7 +52,7 @@ app.use((req, res, next) => {
 
 // 7. Подключение к БД
 const pool = new Pool({
-  user: process.env.DB_USER,
+  user: String(process.env.DB_USER),
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: String(process.env.DB_PASSWORD),
