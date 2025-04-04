@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import telegramRoutes from './routes/telegram.js';
+import postsRoutes from './routes/posts.js'; // Импортируйте новый файл маршрутов
 import dotenv from 'dotenv';
 import bot from './bot.js';
 import pg from 'pg';       // ✅ Правильный импорт для ESM
@@ -52,48 +53,8 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use('/api/telegram', telegramRoutes);
-
-// Роут для получения постов
-app.get('/api/posts', async (req, res) => {
-  console.log('Получен запрос на получение постов', {
-    query: req.query,
-    ip: req.ip,
-    headers: req.headers
-  });
-
-  try {
-    const { status } = req.query;
-    let query = 'SELECT id, title, content, image_url, created_at, updated_at, status, source, marker FROM public.posts';
-    const params = [];
-    
-    if (status) {
-      query += ' WHERE status = $1';
-      params.push(status);
-    }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    console.log('Выполняем запрос:', { query, params });
-    
-    const { rows } = await pool.query(query, params);
-    
-    console.log(`Найдено ${rows.length} постов`);
-    
-    res.json(rows);
-  } catch (error) {
-    console.error('Ошибка при запросе к БД:', {
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date()
-    });
-    
-    res.status(500).json({ 
-      error: 'Database error',
-      details: process.env.NODE_ENV === 'development' ? error.message : null
-    });
-  }
-});
+app.use('/api/telegram', telegramRoutes); // Существующий маршрут для Telegram
+app.use('/api/posts', postsRoutes); // Используйте маршруты постов
 
 // Эндпоинт для проверки здоровья сервера
 app.get('/api/health', async (req, res) => {
@@ -143,4 +104,3 @@ process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
-
