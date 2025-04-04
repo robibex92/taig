@@ -116,7 +116,7 @@ app.get('/api/test-db', async (req, res) => {
 app.get('/api/taigsql-data', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT * FROM users 
+      SELECT * FROM public.users 
       ORDER BY id DESC 
       LIMIT 10
     `);
