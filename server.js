@@ -52,10 +52,10 @@ app.use((req, res, next) => {
 
 // 7. Подключение к БД
 const pool = new Pool({
-  user: String(process.env.DB_USER),
+  user: process.env.DB_USER,
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
-  password: String(process.env.DB_PASSWORD),
+  password: process.env.DB_PASSWORD.trim(),
   port: process.env.DB_PORT,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
