@@ -19,11 +19,23 @@ const app = express();
 
 // настройка CORS
 app.use(cors({
-  origin: '*', // Разрешает запросы с любого источника
-  methods: 'ALL', // Разрешает все методы
-  allowedHeaders: '*', // Разрешает все заголовки
-  credentials: true // Разрешает учетные данные (cookies, authorization headers и т.д.)
+  origin: function (origin, callback) {
+    // Разрешаем запросы без origin (например, из Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Ключевой параметр!
+  methods: 'ALL',
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Явная обработка preflight-запросов
+app.options('*', cors());
 //app.use(cors({
 //  origin: [
  //   'http://localhost:3000', // Ваш фронтенд
