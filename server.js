@@ -21,28 +21,17 @@ const allowedOrigins = [
   'https://tp.sibroot.ru'
 ];
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(allowed => 
-      origin.startsWith(allowed.replace(/\/$/, ''))
-    )) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS blocked for origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'X-Powered-By'],
-  maxAge: 86400 // Кэширование preflight на 24 часа
-};
 
 // 4. Middleware
 app.use(express.json());
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.use(cors({
+  origin: 'http://localhost:3000', // Разрешенный источник
+  methods: 'ALL', // Разрешает все методы
+  allowedHeaders: ['Content-Type', 'Authorization'], // Разрешенные заголовки
+  credentials: true // Разрешает учетные данные (cookies, authorization headers и т.д.)
+}));
+// Обработка предварительных запросов (OPTIONS)
+app.options('*', cors());
 
 // 5. Дополнительные заголовки безопасности
 app.use((req, res, next) => {
@@ -69,6 +58,14 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT || 6543,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+console.log('Database connection parameters:', {
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: '********', // Не показывать реальный пароль
+  port: process.env.DB_PORT
 });
 
 pool.on('connect', () => console.log('New DB connection'));
@@ -137,7 +134,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🛡️  CORS allowed for: ${allowedOrigins.join(', ')}`);
 });
 
-// 12. Graceful shutdown  
+// 12. Graceful shutdown
 const shutdown = () => {
   console.log('\n🛑 Shutting down gracefully...');
   server.close(() => {
