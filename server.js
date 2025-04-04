@@ -1,189 +1,151 @@
 import express from 'express';
 import cors from 'cors';
-import telegramRoutes from './routes/telegram.js';
-import postsRoutes from './routes/posts.js'; // Импортируйте новый файл маршрутов
 import dotenv from 'dotenv';
+import telegramRoutes from './routes/telegram.js';
+import postsRoutes from './routes/posts.js';
 import bot from './bot.js';
-import pg from 'pg';       // ✅ Правильный импорт для ESM
-
-
-
+import pg from 'pg';
 
 const { Pool } = pg;
-// Тестовый запрос к БД
 
-
+// 1. Загрузка конфигурации
 dotenv.config();
 
+// 2. Инициализация приложения
 const app = express();
 
-// Основная CORS конфигурация
-app.use(cors({
-  origin: function (origin, callback) {
-    // Разрешаем запросы без origin (curl, Postman)
-    if (!origin) return callback(null, true);
-    
-    // Проверяем вхождение origin в белый список
-    if (allowedOrigins.some(allowed => {
-      return origin === allowed || 
-             origin.replace(/\/$/, '') === allowed.replace(/\/$/, '');
-    })) {
-      return callback(null, true);
+// 3. Конфигурация CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://test.sibroot.ru',
+  'https://tp.sibroot.ru'
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(allowed => 
+      origin.startsWith(allowed.replace(/\/$/, ''))
+    )) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked for origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     }
-    
-    // Для запрещенных доменов
-    callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
-  credentials: true, // Разрешаем передачу кук/авторизации
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Явно указываем методы
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Length', 'X-Powered-By'],
-  maxAge: 86400 // Кэшируем preflight на 24 часа
-}));
+  maxAge: 86400 // Кэширование preflight на 24 часа
+};
 
-// Специальный обработчик для OPTIONS-запросов
-app.options('*', cors({
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-}));
-
-
+// 4. Middleware
 app.use(express.json());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
-// Middleware для логирования всех запросов
+// 5. Дополнительные заголовки безопасности
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && allowedOrigins.some(allowed => origin.startsWith(allowed))) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Vary', 'Origin'); // Важно для кэширования CORS
+    res.header('Vary', 'Origin');
   }
   next();
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  console.log('Headers:', req.headers);
 });
 
-// Подключение к базе данных
+// 6. Логирование запросов
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.ip} ${req.method} ${req.path}`);
+  next();
+});
+
+// 7. Подключение к БД
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,  // Укажите правильное имя БД
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'taigsql',
   password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 30000
+  port: process.env.DB_PORT || 6543,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Проверка подключения к базе данных
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-    return;
-  }
-  console.log('Successfully connected to the database');
-  release();
-});
+pool.on('connect', () => console.log('New DB connection'));
+pool.on('error', err => console.error('DB error:', err));
 
-// Проверка подключения к базе данных
-pool.on('error', (err) => {
-  console.error('Unexpected database error:', err);
-  process.exit(-1);
-});
+// 8. Маршруты
+app.use('/api/telegram', telegramRoutes);
+app.use('/api/posts', postsRoutes);
 
-// Логирование всех API запросов
-app.use('/api', (req, res, next) => {
-  console.log(`API Request: ${req.method} ${req.path}`);
-  next();
-});
-
-app.use('/api/telegram', telegramRoutes); // Существующий маршрут для Telegram
-app.use('/api/posts', postsRoutes); // Используйте маршруты постов
-
-// Эндпоинт для проверки здоровья сервера
+// 9. Health check
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
     res.json({ 
       status: 'OK',
       db: 'connected',
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0'
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('Health check failed:', err);
     res.status(500).json({
       status: 'ERROR',
-      db: 'disconnected',
-      error: err.message,
-      timestamp: new Date().toISOString()
+      error: err.message
     });
   }
 });
 
-// Обработчик для корневого пути
-app.get('/', (req, res) => {
-  res.json({
-    status: 'API is running',
-    endpoints: {
-      posts: '/api/posts',
-      telegram: '/api/telegram'
-    }
-  });
-});
-
-const PORT = process.env.PORT || 5000;
-
-//Запускаем бота
-bot.launch()
-  .then(() => {
-    console.log('🤖 Telegram бот успешно запущен');
-  })
-  .catch((error) => {
-    console.error('❌ Ошибка при запуске бота:', error);
-  });
-
-// Включаем graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-//app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
-app.listen(PORT, '0.0.0.0', () => { // ← Добавьте '0.0.0.0'
-  console.log(`Сервер запущен на порту ${PORT}`);
-});
-
-// Простейший тестовый endpoint
-app.get('/api/test', (req, res) => {
-  res.json({ message: "Hello from backend!" });
-});
-
+// 10. Тестовые endpoint'ы
 app.get('/api/test-db', async (req, res) => {
   try {
-    console.log('Пытаемся подключиться к БД...');
-    const result = await pool.query('SELECT current_database() as db');
-    console.log('Результат запроса:', result.rows);
-    res.json({ status: 'OK', db: result.rows[0].db });
+    const { rows } = await pool.query(`
+      SELECT 
+        current_database() as db,
+        current_user as user,
+        inet_server_addr() as host,
+        inet_server_port() as port
+    `);
+    res.json(rows[0]);
   } catch (err) {
-    console.error('Ошибка БД:', err.stack); // Логируем полный стек ошибки
-    res.status(500).json({ 
-      error: 'DB error',
-      message: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
+    console.error('Database check failed:', err.stack);
+    res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/api/taigsql-data', async (req, res) => {
   try {
-    // Пример: получаем первые 10 записей из таблицы (замените на вашу таблицу)
-    const result = await pool.query('SELECT * FROM public.users LIMIT 10');
-    res.json({
-      status: 'success',
-      data: result.rows,
-      count: result.rowCount
-    });
+    const { rows } = await pool.query(`
+      SELECT * FROM users 
+      ORDER BY id DESC 
+      LIMIT 10
+    `);
+    res.json({ data: rows });
   } catch (err) {
-    console.error('Taigsql query error:', err);
-    res.status(500).json({ error: 'Query failed', details: err.message });
+    console.error('Query failed:', err.stack);
+    res.status(500).json({ 
+      error: 'Database error',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
+
+// 11. Запуск сервера
+const PORT = process.env.PORT || 4000;
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server ready at http://localhost:${PORT}`);
+  console.log(`🛡️  CORS allowed for: ${allowedOrigins.join(', ')}`);
+});
+
+// 12. Graceful shutdown  
+const shutdown = () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  server.close(() => {
+    pool.end();
+    bot.stop();
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
