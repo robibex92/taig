@@ -1,6 +1,6 @@
 import express from 'express';
-import pg from 'pg';       // ✅ Правильный импорт для ESM
-const { Pool } = pg;
+import pkg from 'pg'; // Импорт CommonJS модуля pg
+const { Pool } = pkg;
 
 const router = express.Router();
 const pool = new Pool({
@@ -23,20 +23,20 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     let query = 'SELECT id, title, content, image_url, created_at, updated_at, status, source, marker FROM public.posts';
     const params = [];
-    
+
     if (status) {
       query += ' WHERE status = $1';
       params.push(status);
     }
-    
+
     query += ' ORDER BY created_at DESC';
-    
+
     console.log('Выполняем запрос:', { query, params });
-    
+
     const { rows } = await pool.query(query, params);
-    
+
     console.log(`Найдено ${rows.length} постов`);
-    
+
     res.json(rows);
   } catch (error) {
     console.error('Ошибка при запросе к БД:', {
@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
       stack: error.stack,
       timestamp: new Date()
     });
-    
+
     res.status(500).json({ 
       error: 'Database error',
       details: process.env.NODE_ENV === 'development' ? error.message : null
