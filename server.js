@@ -60,14 +60,6 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-console.log('Database connection parameters:', {
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: '********', // Не показывать реальный пароль
-  port: process.env.DB_PORT
-});
-
 pool.on('connect', () => console.log('New DB connection'));
 pool.on('error', err => console.error('DB error:', err));
 
