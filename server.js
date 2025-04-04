@@ -5,7 +5,41 @@ import postsRoutes from './routes/posts.js'; // Импортируйте нов�
 import dotenv from 'dotenv';
 import bot from './bot.js';
 import pg from 'pg';       // ✅ Правильный импорт для ESM
+
+
+
+
 const { Pool } = pg;
+// Тестовый запрос к БД
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT current_database() as db, current_user as user, version() as version');
+    res.json({
+      status: 'DB connection successful',
+      database: result.rows[0].db,
+      user: result.rows[0].user,
+      postgresVersion: result.rows[0].version
+    });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: 'DB connection failed', details: err.message });
+  }
+});
+
+app.get('/api/taigsql-data', async (req, res) => {
+  try {
+    // Пример: получаем первые 10 записей из таблицы (замените на вашу таблицу)
+    const result = await pool.query('SELECT * FROM users LIMIT 10');
+    res.json({
+      status: 'success',
+      data: result.rows,
+      count: result.rowCount
+    });
+  } catch (err) {
+    console.error('Taigsql query error:', err);
+    res.status(500).json({ error: 'Query failed', details: err.message });
+  }
+});
 
 dotenv.config();
 
