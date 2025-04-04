@@ -18,7 +18,12 @@ dotenv.config();
 const app = express();
 
 // настройка CORS
-app.use(cors())
+app.use(cors({
+  origin: '*', // Разрешает запросы с любого источника
+  methods: 'ALL', // Разрешает все методы
+  allowedHeaders: '*', // Разрешает все заголовки
+  credentials: true // Разрешает учетные данные (cookies, authorization headers и т.д.)
+}));
 //app.use(cors({
 //  origin: [
  //   'http://localhost:3000', // Ваш фронтенд
