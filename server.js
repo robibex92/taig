@@ -90,14 +90,14 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Запускаем бота
+{/* Запускаем бота
 bot.launch()
   .then(() => {
     console.log('🤖 Telegram бот успешно запущен');
   })
   .catch((error) => {
     console.error('❌ Ошибка при запуске бота:', error);
-  });
+  });*/}
 
 // Включаем graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
