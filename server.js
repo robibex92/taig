@@ -137,8 +137,10 @@ bot.launch()
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
-
+//app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => { // ← Добавьте '0.0.0.0'
+  console.log(`Сервер запущен на порту ${PORT}`);
+});
 
 // Простейший тестовый endpoint
 app.get('/api/test', (req, res) => {
