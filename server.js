@@ -52,12 +52,13 @@ app.use((req, res, next) => {
 
 // 7. Подключение к БД
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
+ // user: process.env.DB_USER,
+  user: 'backend_user',
+  host: 'localhost',
+  database: 'taigsql',
   password: 'Gjkmpjdfntkm1bpNfqubycrjujGfhrf!',
   //password: String(process.env.DB_PASSWORD),
-  port: process.env.DB_PORT,
+  port: 6543,
   //ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   ssl: false
 });
