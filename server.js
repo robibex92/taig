@@ -49,8 +49,8 @@ app.get('/api/taigsql-data', async (req, res) => {
 
 // настройка CORS
 app.use(cors({
-  origin: ['https://test.sibroot.ru', 'http://localhost:3000', 'https://tp.sibroot.ru', 'http://185.219.81.226:4000'],
-  methods: ['GET', 'POST']
+  origin: 'http://localhost:3000', // Разрешенный источник
+  methods: 'ALL' // Разрешает все методы
 }));
 app.use(express.json());
 
