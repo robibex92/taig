@@ -46,7 +46,10 @@ dotenv.config();
 const app = express();
 
 // настройка CORS
-app.use(cors()); // Разрешает запросы с фронта
+app.use(cors({
+  origin: ['https://test.sibroot.ru', 'http://localhost:3000', 'https://tp.sibroot.ru', 'http://185.219.81.226:4000'],
+  methods: ['GET', 'POST']
+}));
 app.use(express.json());
 
 // Middleware для логирования всех запросов
