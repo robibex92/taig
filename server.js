@@ -23,10 +23,8 @@ const allowedOrigins = [
 // 4. Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:3000', // Разрешенный источник
-  methods: 'ALL', // Разрешает все методы
-  allowedHeaders: ['Content-Type', 'Authorization'], // Разрешенные заголовки
-  credentials: true // Разрешает учетные данные (cookies, authorization headers и т.д.)
+  origin: allowedOrigins,
+  credentials: true
 }));
 // Обработка предварительных запросов (OPTIONS)
 app.options('*', cors());
