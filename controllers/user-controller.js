@@ -1,5 +1,5 @@
 import { getUserByTelegramId, createUser, updateUser, saveRefreshToken } from '../services/user-service.js';
-import { generateToken, verifyToken } from '../services/token-service.js';
+import { generateTokens, verifyToken } from '../services/token-service.js';
 
 // Авторизация через Telegram
 export const authenticateUser = async (req, res) => {
