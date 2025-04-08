@@ -41,6 +41,49 @@ export const authenticateUser = async (req, res) => {
   }
 };
 
+// Обновление Access Token
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token missing' });
+    }
+
+    // Проверка Refresh Token
+    const decoded = verifyToken(refreshToken);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    // Проверка соответствия Refresh Token в базе данных
+    const storedRefreshToken = await getRefreshToken(decoded.id);
+    if (storedRefreshToken !== refreshToken) {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    // Генерация новых токенов
+    const user = await getUserByTelegramId(decoded.telegram_id);
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+
+    // Обновление Refresh Token в базе данных
+    await saveRefreshToken(user.id, newRefreshToken);
+
+    // Установка нового Refresh Token в HttpOnly Cookie
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Только для HTTPS
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+    });
+
+    // Возвращение нового Access Token
+    res.json({ accessToken });
+  } catch (error) {
+    console.error('Error refreshing access token:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // Получение данных текущего пользователя
 export const getCurrentUser = async (req, res) => {
   try {

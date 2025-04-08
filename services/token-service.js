@@ -8,3 +8,12 @@ export const generateTokens = (user) => {
 
   return { accessToken, refreshToken };
 };
+
+// Проверка токена
+export const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+};
