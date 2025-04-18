@@ -4,32 +4,25 @@ import { pool } from '../config/db.js';
 const routerFloorRules = express.Router();
 
 // 1. Получить все правила для дома и подъезда
-routerFloorRules.get('/floor-rules', async (req, res) => {
+routerFloorRules.get('/api/floorRules', async (req, res) => {
+  const { house, entrance } = req.query;
+  if (!house || !entrance) {
+    return res.status(400).json({ error: "house and entrance are required" });
+  }
   try {
-    const { house, entrance } = req.query;
-
-    if (!house || !entrance) {
-      return res.status(400).json({ 
-        error: 'Параметры house и entrance обязательны' 
-      });
-    }
-
     const { rows } = await pool.query(
-      `SELECT * FROM floor_rules 
-       WHERE house = $1 AND entrance = $2 
-       ORDER BY floor ASC`,
+      'SELECT * FROM floor_rules WHERE house = $1 AND entrance = $2',
       [house, entrance]
     );
-
     res.json({ data: rows });
   } catch (error) {
-    console.error('Ошибка при получении правил:', error);
+    console.error('Error fetching floor rules:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
 // 2. Добавить или обновить правило
-routerFloorRules.post('/floor-rules', async (req, res) => {
+routerFloorRules.post('/api/floor-rules', async (req, res) => {
   try {
     const { house, entrance, floor, position } = req.body;
 

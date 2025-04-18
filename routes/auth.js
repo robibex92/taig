@@ -4,9 +4,9 @@ import { authenticateUser, refreshAccessToken } from '../controllers/user-contro
 const router = express.Router();
 
 // Авторизация через Telegram
-router.post('/auth/telegram', authenticateUser);
+router.post('/api/auth/telegram', authenticateUser);
 
 // Обновление Access Token
-router.post('/auth/refresh', refreshAccessToken);
+router.post('/api/auth/refresh', refreshAccessToken);
 
 export default router;

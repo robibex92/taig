@@ -4,7 +4,7 @@ import { pool } from '../config/db.js';
 const routerFaqs = express.Router();
 
 // 1. Получение всех FAQ (с фильтрацией по статусу)
-routerFaqs.get('/faqs', async (req, res) => {
+routerFaqs.get('/api/faqs', async (req, res) => {
   try {
     const { status } = req.query;
     let query = 'SELECT * FROM faq';
@@ -26,7 +26,7 @@ routerFaqs.get('/faqs', async (req, res) => {
 });
 
 // 2. Изменение конкретного FAQ
-routerFaqs.patch('/faqs/:id', async (req, res) => {
+routerFaqs.patch('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { question, answer, status } = req.body;
@@ -75,7 +75,7 @@ routerFaqs.patch('/faqs/:id', async (req, res) => {
 });
 
 // 3. Удаление конкретного FAQ (мягкое удаление через статус)
-routerFaqs.delete('/faqs/:id', async (req, res) => {
+routerFaqs.delete('/api/faqs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     

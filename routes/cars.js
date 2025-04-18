@@ -4,10 +4,10 @@ import { pool } from '../config/db.js';
 const routerCars = express.Router();
 
 // 1. Получить все машины
-routerCars.get('/cars', async (req, res) => {
+routerCars.get('/api/cars', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM cars WHERE status = true ORDER BY created_at DESC'
+      'SELECT id, user_id, car_number, car_model, car_brand, car_color, info FROM cars WHERE status = true ORDER BY created_at DESC'
     );
     res.json({ data: rows });
   } catch (error) {
@@ -17,7 +17,7 @@ routerCars.get('/cars', async (req, res) => {
 });
 
 // 2. Получить машины по user_id
-routerCars.get('/cars/user/:user_id', async (req, res) => {
+routerCars.get('/api/cars/user/:user_id', async (req, res) => {
   try {
     const { user_id } = req.params;
     const { rows } = await pool.query(
@@ -32,7 +32,7 @@ routerCars.get('/cars/user/:user_id', async (req, res) => {
 });
 
 // 3. Добавить новую машину
-routerCars.post('/cars', async (req, res) => {
+routerCars.post('/api/cars', async (req, res) => {
   try {
     const {
       user_id,
@@ -64,7 +64,7 @@ routerCars.post('/cars', async (req, res) => {
 });
 
 // 4. Удалить запись (мягкое удаление через status)
-routerCars.delete('/cars/:id', async (req, res) => {
+routerCars.delete('/api/cars/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query(
@@ -78,19 +78,5 @@ routerCars.delete('/cars/:id', async (req, res) => {
   }
 });
 
-// 5. Получить машины по номеру (car_number)
-routerCars.get('/cars/number/:car_number', async (req, res) => {
-  try {
-    const { car_number } = req.params;
-    const { rows } = await pool.query(
-      'SELECT * FROM cars WHERE car_number = $1 AND status = true',
-      [car_number]
-    );
-    res.json({ data: rows });
-  } catch (error) {
-    console.error('Error fetching car by number:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 export default routerCars;

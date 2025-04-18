@@ -4,7 +4,7 @@ import { pool } from '../config/db.js';
 const routerAdImages = express.Router();
 
 // 1. Создать изображения (одно или несколько)
-routerAdImages.post('/ad-images', async (req, res) => {
+routerAdImages.post('/api/ad-images', async (req, res) => {
     try {
       const { ad_id, images } = req.body;
   
@@ -54,7 +54,7 @@ routerAdImages.post('/ad-images', async (req, res) => {
   });
 
 // 2. Получить все изображения для объявления
-routerAdImages.get('/ad-images/:ad_id', async (req, res) => {
+routerAdImages.get('/api/ad-images/:ad_id', async (req, res) => {
   try {
     const { ad_id } = req.params;
     
@@ -71,7 +71,7 @@ routerAdImages.get('/ad-images/:ad_id', async (req, res) => {
 });
 
 // 3. Удалить изображения
-routerAdImages.delete('/ad-images', async (req, res) => {
+routerAdImages.delete('/api/ad-images', async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -96,7 +96,7 @@ routerAdImages.delete('/ad-images', async (req, res) => {
 });
 
 // 4. Изменить статус is_main
-routerAdImages.patch('/ad-images/main', async (req, res) => {
+routerAdImages.patch('/api/ad-images/main', async (req, res) => {
   try {
     const { ad_id, image_id } = req.body;
 
