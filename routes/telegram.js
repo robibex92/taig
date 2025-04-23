@@ -3,6 +3,8 @@ import bot from '../services/telegramBot.js';
 import { pool } from '../config/db.js';
 import fs from 'fs';
 import path from 'path';
+import FormData from './form-data.js';
+import fetch from 'node-fetch'; // если fetch не глобальный
 
 const router = express.Router();
 
@@ -45,22 +47,45 @@ class TelegramCreationService {
       const sendPromises = chatIds.map(async (chatId, index) => {
         const threadId = threadIds[index];
         if (photos.length > 0) {
-          // Проверяем, есть ли хотя бы один объект с полем source (stream)
-          const hasStream = photos.some(p => typeof p === 'object' && p.source);
-          if (hasStream) {
-            // Используем node-telegram-bot-api для отправки файлов как stream
-            const mediaGroup = photos.map((photo, idx) => ({
-              type: 'photo',
-              media: photo,
-              ...(idx === 0 ? { caption: escapeHtml(message), parse_mode: 'HTML' } : {})
-            }));
-            const result = await bot.sendMediaGroup(chatId, mediaGroup, threadId ? { message_thread_id: threadId } : {});
+          // Проверяем, есть ли хотя бы один attach:// (локальный файл)
+          const hasAttach = photos.some(p => typeof p === 'object' && typeof p.media === 'string' && p.media.startsWith('attach://'));
+          if (hasAttach) {
+            // Формируем form-data
+            const form = new FormData();
+            const mediaGroup = photos.map((photo, idx) => {
+              let obj = { ...photo };
+              if (idx === 0) {
+                obj.caption = escapeHtml(message);
+                obj.parse_mode = 'HTML';
+              }
+              // Если локальный файл — добавить в form-data
+              if (typeof photo.media === 'string' && photo.media.startsWith('attach://')) {
+                const filename = photo.media.replace('attach://', '');
+                const uploadsDir = path.join(__dirname, '../uploads');
+                const filePath = path.join(uploadsDir, filename);
+                if (fs.existsSync(filePath)) {
+                  form.append(filename, fs.createReadStream(filePath));
+                }
+              }
+              return obj;
+            });
+            form.append('chat_id', chatId);
+            if (threadId) form.append('message_thread_id', threadId);
+            form.append('media', JSON.stringify(mediaGroup));
+            // Отправляем через fetch
+            const tgUrl = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMediaGroup`;
+            const response = await fetch(tgUrl, {
+              method: 'POST',
+              body: form,
+              headers: form.getHeaders()
+            });
+            const result = await response.json();
             return { chatId, threadId, result };
           } else {
-            // Старый способ: отправка по URL через fetch
+            // Только ссылки — отправка по JSON
             const mediaGroup = photos.map((imageUrl, idx) => ({
               type: 'photo',
-              media: imageUrl,
+              media: imageUrl.media || imageUrl,
               ...(idx === 0 ? { caption: escapeHtml(message), parse_mode: 'HTML' } : {})
             }));
             const body = {
