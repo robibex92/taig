@@ -101,17 +101,19 @@ app.patch("/api/users/me", updateCurrentUser);
 app.use(userRoutes); // Все роуты пользователей начинаются с /api/users
 
 // 5. Настройка SSL
-const options = {
-  key: fs.readFileSync("/root/taig/taig/ssl/key.key"), // Путь к закрытому ключу
-  cert: fs.readFileSync("/root/taig/taig/ssl/crt.crt"), // Путь к сертификату
-};
-
-// 11. Запуск сервера
+let server;
 const PORT = process.env.PORT || 4000;
-//const server = app.listen(PORT, () => {
-//  console.log(`Server is running on port ${PORT}`)
-//});
-
-const server = https.createServer(options, app).listen(PORT, () => {
-  console.log(`HTTPS Server is running on port ${PORT}`);
-});
+try {
+  const options = {
+    key: fs.readFileSync("/root/taig/taig/ssl/key.key"), // Путь к закрытому ключу
+    cert: fs.readFileSync("/root/taig/taig/ssl/crt.crt"), // Путь к сертификату
+  };
+  server = https.createServer(options, app).listen(PORT, () => {
+    console.log(`HTTPS Server is running on port ${PORT}`);
+  });
+} catch (e) {
+  console.warn('SSL key/cert not found, falling back to HTTP. Reason:', e.message);
+  server = app.listen(PORT, () => {
+    console.log(`HTTP Server is running on port ${PORT}`);
+  });
+}
