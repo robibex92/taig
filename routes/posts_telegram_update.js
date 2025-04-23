@@ -42,16 +42,12 @@ export async function updateTelegramMessagesForPost(post) {
         // Формируем photos как массив объектов { source: fs.createReadStream(<путь>) }
         let photos = [];
         if (post.image_url) {
-          if (!post.image_url.startsWith('http')) {
-            const filename = path.basename(post.image_url);
-            const filePath = path.join(__dirname, '../uploads', filename);
-            if (fs.existsSync(filePath)) {
-              photos = [{ type: 'photo', media: `attach://${filename}` }];
-            } else {
-              console.warn('Файл для отправки в Telegram не найден:', filePath);
-            }
+          const filename = path.basename(post.image_url);
+          const filePath = path.join(__dirname, '../uploads', filename);
+          if (fs.existsSync(filePath)) {
+            photos = [{ source: fs.createReadStream(filePath) }];
           } else {
-            photos = [{ type: 'photo', media: post.image_url }];
+            console.warn('Файл для отправки в Telegram не найден:', filePath);
           }
         }
         const sendResult = await TelegramCreationService.sendMessage({

@@ -104,24 +104,17 @@ routerAdsTelegram.post("/api/ads-telegram", authenticateJWT, async (req, res) =>
         `${priceStr}\n\n` +
         `👤 Автор объявления: ${authorLink}\n\n` +
         `🔗 <a href=\"${adLink}\">Посмотреть объявление на сайте ТУТ</a>`;
-      // Формируем photosToSend как массив объектов для Telegram API
+      // Формируем photosToSend как массив объектов { source: fs.createReadStream(<путь>) }
       const photosToSend = Array.isArray(images) && images.length > 0
         ? images.map(img => {
-            const url = img.url || img.image_url;
-            if (!url) return null;
-            // Если это локальный файл
-            if (!url.startsWith('http')) {
-              const filename = path.basename(url);
-              const filePath = path.join(__dirname, '../uploads', filename);
-              if (fs.existsSync(filePath)) {
-                return { type: 'photo', media: `attach://${filename}` };
-              } else {
-                console.warn('Файл для отправки в Telegram не найден:', filePath);
-                return null;
-              }
+            const filename = path.basename(img.url || img.image_url);
+            const filePath = path.join(__dirname, '../uploads', filename);
+            // Проверяем, существует ли файл, иначе Telegram не сможет отправить
+            if (fs.existsSync(filePath)) {
+              return { source: fs.createReadStream(filePath) };
             } else {
-              // Это ссылка
-              return { type: 'photo', media: url };
+              console.warn('Файл для отправки в Telegram не найден:', filePath);
+              return null;
             }
           }).filter(Boolean)
         : [];
