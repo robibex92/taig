@@ -52,8 +52,23 @@ routerPosts.post("/api/posts", async (req, res) => {
         try {
           let result;
           const photosToSend = (photos && photos.length > 0)
-            ? photos
-            : (image_url ? [image_url] : []);
+            ? photos.map(img => {
+                const url = img.url || img.image_url || img;
+                if (!url) return null;
+                if (!url.startsWith('http')) {
+                  const filename = path.basename(url);
+                  const filePath = path.join(__dirname, '../uploads', filename);
+                  if (fs.existsSync(filePath)) {
+                    return { type: 'photo', media: `attach://${filename}` };
+                  } else {
+                    console.warn('Файл для отправки в Telegram не найден:', filePath);
+                    return null;
+                  }
+                } else {
+                  return { type: 'photo', media: url };
+                }
+              }).filter(Boolean)
+            : (image_url ? [{ type: 'photo', media: image_url }] : []);
           if (photosToSend.length > 0) {
             // DEBUG: Log the result of sendMessage for media
             console.log('DEBUG: Sending media, awaiting TelegramCreationService.sendMessage...');
