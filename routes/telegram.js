@@ -34,6 +34,10 @@ async function retryRequest(url, body, maxRetries = 3) {
 }
 
 class TelegramCreationService {
+  /**
+   * Sends a message (text or media group) to multiple Telegram chats/threads.
+   * Returns for each chat: { chatId, threadId, result } where result contains message_id(s).
+   */
   static async sendMessage({ message, chatIds, threadIds = [], photos = [] }) {
     try {
       const sendPromises = chatIds.map(async (chatId, index) => {
@@ -53,7 +57,8 @@ class TelegramCreationService {
             `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMediaGroup`,
             body
           );
-          // нет обращения к БД
+          // sendMediaGroup result: { ok, result: [ { message_id, ... }, ... ] }
+          return { chatId, threadId, result };
         } else {
           const body = {
             chat_id: chatId,
@@ -65,15 +70,18 @@ class TelegramCreationService {
             `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
             body
           );
+          // sendMessage result: { ok, result: { message_id, ... } }
+          return { chatId, threadId, result };
         }
       });
-      await Promise.all(sendPromises);
-      return { success: true };
+      const results = await Promise.all(sendPromises);
+      return { success: true, results };
     } catch (error) {
       return { success: false, message: error.message };
     }
   }
 }
+
 
 // --- Получить список сообщений по ad_id, post_id или context_id ---
 router.get('/messages', async (req, res) => {

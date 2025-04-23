@@ -64,8 +64,19 @@ if (!user) {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Возвращение Access Token
-    res.json({ message: 'User authenticated successfully', user, accessToken });
+    // Возвращение Access Token и только нужных полей пользователя
+    const safeUser = {
+      user_id: user.user_id,
+      username: user.username,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      avatar: user.avatar,
+      telegram_first_name: user.telegram_first_name,
+      telegram_last_name: user.telegram_last_name,
+      is_manually_updated: user.is_manually_updated,
+      // Добавьте сюда только нужные поля
+    };
+    res.json({ message: 'User authenticated successfully', user: safeUser, accessToken });
   } catch (error) {
     console.error('Error authenticating user:', error);
     res.status(500).json({ error: 'Internal server error' });

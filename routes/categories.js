@@ -44,33 +44,40 @@ routerCategories.get(
   async (req, res) => {
     try {
       const { category_id } = req.params;
-
       // Сначала проверяем существование категории
       const { rows: categoryCheck } = await pool.query(
         "SELECT id FROM categories WHERE id = $1",
         [category_id]
       );
-
       if (categoryCheck.length === 0) {
         return res.status(404).json({ error: "Category not found" });
       }
-
       // Получаем подкатегории
       const { rows } = await pool.query(
         "SELECT * FROM subcategories WHERE category_id = $1 ORDER BY name ASC",
         [category_id]
       );
-
-      res.json({
-        category: categoryCheck[0],
-        subcategories: rows,
-      });
+      res.json({ subcategories: rows });
     } catch (error) {
       console.error("Error fetching subcategories:", error);
       res.status(500).json({ error: "Internal Server Error" });
     }
   }
 );
+
+// 4. Получить все подкатегории сразу (для фронта)
+routerCategories.get("/api/subcategories", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM subcategories ORDER BY category_id, name ASC"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching all subcategories:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 
 // 4. Получить конкретную подкатегорию
 routerCategories.get(

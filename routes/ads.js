@@ -166,6 +166,7 @@ routerAds.post("/api/ads", async (req, res) => {
       subcategory,
       price = null,
       status = "active",
+      images = [] // <-- добавили images
     } = req.body;
 
     // Валидация обязательных полей
@@ -180,8 +181,22 @@ routerAds.post("/api/ads", async (req, res) => {
        RETURNING *`,
       [user_id, title, content, category, subcategory, price, status]
     );
+    const ad = rows[0];
+    const ad_id = ad.id;
 
-    res.status(201).json({ data: rows[0] });
+    // --- ВСТАВКА ИЗОБРАЖЕНИЙ ---
+    if (Array.isArray(images) && images.length > 0) {
+      for (let i = 0; i < images.length; ++i) {
+        const img = images[i];
+        await pool.query(
+          `INSERT INTO ad_images (ad_id, image_url, is_main, created_at)
+           VALUES ($1, $2, $3, NOW())`,
+          [ad_id, img.url || img.image_url, !!img.is_main]
+        );
+      }
+    }
+
+    res.status(201).json({ data: ad });
   } catch (error) {
     console.error("Error creating ad:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -258,7 +273,44 @@ routerAds.delete("/api/ads/:id", async (req, res) => {
       return res.status(404).json({ error: "Ad not found" });
     }
 
-    res.json({ message: "Ad deleted", data: rows[0] });
+    // --- Удаление связанных сообщений из Telegram и БД ---
+    try {
+      // 1. Найти все telegram сообщения по ad_id
+      const { rows: messages } = await pool.query(
+        `SELECT chat_id, message_id FROM telegram_messages WHERE ad_id = $1`,
+        [id]
+      );
+
+      let telegramDeleteResults = [];
+      for (const msg of messages) {
+        try {
+          // Удалить сообщение через Telegram Bot API
+          const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`;
+          const tgRes = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: msg.chat_id,
+              message_id: msg.message_id
+            })
+          });
+          const data = await tgRes.json();
+          telegramDeleteResults.push({ chat_id: msg.chat_id, message_id: msg.message_id, ok: data.ok, description: data.description });
+          if (!data.ok) {
+            console.error(`[${new Date().toISOString()}] Не удалось удалить сообщение в Telegram:`, data);
+          }
+        } catch (err) {
+          console.error(`[${new Date().toISOString()}] Ошибка при удалении сообщения в Telegram:`, err);
+          telegramDeleteResults.push({ chat_id: msg.chat_id, message_id: msg.message_id, ok: false, error: err.message });
+        }
+      }
+      // 2. Удалить записи из telegram_messages
+      await pool.query(`DELETE FROM telegram_messages WHERE ad_id = $1`, [id]);
+      console.log(`[${new Date().toISOString()}] Объявление #${id} удалено (status=deleted). Telegram messages deleted:`, telegramDeleteResults);
+    } catch (err) {
+      console.error(`[${new Date().toISOString()}] Ошибка при удалении telegram сообщений объявления #${id}:`, err);
+    }
+    res.json({ message: "Ad deleted" });
   } catch (error) {
     console.error("Error deleting ad:", error);
     res.status(500).json({ error: "Internal Server Error" });
