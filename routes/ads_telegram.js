@@ -3,6 +3,8 @@ import { pool } from "../config/db.js";
 import { getTelegramChatTargets } from '../utils/telegramChatTargets.js';
 import { TelegramCreationService } from './telegram.js';
 import { authenticateJWT } from '../middlewares/authMiddleware.js';
+import fs from 'fs';
+import path from 'path';
 
 const routerAdsTelegram = express.Router();
 
@@ -97,9 +99,21 @@ routerAdsTelegram.post("/api/ads-telegram", authenticateJWT, async (req, res) =>
         `${priceStr}\n\n` +
         `👤 Автор объявления: ${authorLink}\n\n` +
         `🔗 <a href=\"${adLink}\">Посмотреть объявление на сайте ТУТ</a>`;
+      // Формируем photosToSend как массив объектов { source: fs.createReadStream(<путь>) }
       const photosToSend = Array.isArray(images) && images.length > 0
-        ? images.map(img => img.url || img.image_url).filter(Boolean)
+        ? images.map(img => {
+            const filename = path.basename(img.url || img.image_url);
+            const filePath = path.join(__dirname, '../uploads', filename);
+            // Проверяем, существует ли файл, иначе Telegram не сможет отправить
+            if (fs.existsSync(filePath)) {
+              return { source: fs.createReadStream(filePath) };
+            } else {
+              console.warn('Файл для отправки в Telegram не найден:', filePath);
+              return null;
+            }
+          }).filter(Boolean)
         : [];
+
       telegramResults = await Promise.all(chatTargets.map(async (target) => {
         try {
           let result;

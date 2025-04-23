@@ -1,5 +1,7 @@
 import { pool } from "../config/db.js";
 import { TelegramCreationService } from "./telegram.js";
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Обновляет сообщения в Telegram для объявления с новым текстом/медиа
@@ -66,11 +68,22 @@ export async function updateTelegramMessagesForAd(ad) {
           }
         );
         // 3b. Отправить новое (обновлённое) сообщение с медиа
+        // Формируем photos как массив объектов { source: fs.createReadStream(<путь>) }
+        let photos = [];
+        if (ad.image_url) {
+          const filename = path.basename(ad.image_url);
+          const filePath = path.join(__dirname, '../uploads', filename);
+          if (fs.existsSync(filePath)) {
+            photos = [{ source: fs.createReadStream(filePath) }];
+          } else {
+            console.warn('Файл для отправки в Telegram не найден:', filePath);
+          }
+        }
         const sendResult = await TelegramCreationService.sendMessage({
           message: newText,
           chatIds: [msg.chat_id],
           threadIds: msg.thread_id ? [msg.thread_id] : [],
-          photos: [ad.image_url]
+          photos
         });
         // 3c. Обновить запись в БД
         const newMsgId = Array.isArray(sendResult?.results) && sendResult.results[0]?.result?.message_id

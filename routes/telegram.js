@@ -1,6 +1,8 @@
 import express from 'express';
 import bot from '../services/telegramBot.js';
 import { pool } from '../config/db.js';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
@@ -43,22 +45,35 @@ class TelegramCreationService {
       const sendPromises = chatIds.map(async (chatId, index) => {
         const threadId = threadIds[index];
         if (photos.length > 0) {
-          const mediaGroup = photos.map((imageUrl, idx) => ({
-            type: 'photo',
-            media: imageUrl,
-            ...(idx === 0 ? { caption: escapeHtml(message), parse_mode: 'HTML' } : {})
-          }));
-          const body = {
-            chat_id: chatId,
-            ...(threadId ? { message_thread_id: threadId } : {}),
-            media: mediaGroup
-          };
-          const result = await retryRequest(
-            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMediaGroup`,
-            body
-          );
-          // sendMediaGroup result: { ok, result: [ { message_id, ... }, ... ] }
-          return { chatId, threadId, result };
+          // Проверяем, есть ли хотя бы один объект с полем source (stream)
+          const hasStream = photos.some(p => typeof p === 'object' && p.source);
+          if (hasStream) {
+            // Используем node-telegram-bot-api для отправки файлов как stream
+            const mediaGroup = photos.map((photo, idx) => ({
+              type: 'photo',
+              media: photo,
+              ...(idx === 0 ? { caption: escapeHtml(message), parse_mode: 'HTML' } : {})
+            }));
+            const result = await bot.sendMediaGroup(chatId, mediaGroup, threadId ? { message_thread_id: threadId } : {});
+            return { chatId, threadId, result };
+          } else {
+            // Старый способ: отправка по URL через fetch
+            const mediaGroup = photos.map((imageUrl, idx) => ({
+              type: 'photo',
+              media: imageUrl,
+              ...(idx === 0 ? { caption: escapeHtml(message), parse_mode: 'HTML' } : {})
+            }));
+            const body = {
+              chat_id: chatId,
+              ...(threadId ? { message_thread_id: threadId } : {}),
+              media: mediaGroup
+            };
+            const result = await retryRequest(
+              `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMediaGroup`,
+              body
+            );
+            return { chatId, threadId, result };
+          }
         } else {
           const body = {
             chat_id: chatId,
