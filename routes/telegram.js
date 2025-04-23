@@ -50,25 +50,36 @@ class TelegramCreationService {
           // Проверяем, есть ли хотя бы один attach:// (локальный файл)
           const hasAttach = photos.some(p => typeof p === 'object' && typeof p.media === 'string' && p.media.startsWith('attach://'));
           if (hasAttach) {
-            // Формируем form-data
+            // Формируем form-data и mediaGroup с фильтрацией
             const form = new FormData();
-            const mediaGroup = photos.map((photo, idx) => {
-              let obj = { ...photo };
-              if (idx === 0) {
-                obj.caption = escapeHtml(message);
-                obj.parse_mode = 'HTML';
-              }
-              // Если локальный файл — добавить в form-data
-              if (typeof photo.media === 'string' && photo.media.startsWith('attach://')) {
-                const filename = photo.media.replace('attach://', '');
-                const uploadsDir = path.join(__dirname, '../uploads');
-                const filePath = path.join(uploadsDir, filename);
-                if (fs.existsSync(filePath)) {
-                  form.append(filename, fs.createReadStream(filePath));
+            const attachedFiles = [];
+            const mediaGroup = photos
+              .map((photo, idx) => {
+                if (!photo || !photo.media || typeof photo.media !== 'string' || photo.media.length === 0) return null;
+                let obj = { ...photo };
+                if (idx === 0) {
+                  obj.caption = escapeHtml(message);
+                  obj.parse_mode = 'HTML';
                 }
-              }
-              return obj;
-            });
+                // Если локальный файл — добавить в form-data только если файл существует
+                if (photo.media.startsWith('attach://')) {
+                  const filename = photo.media.replace('attach://', '');
+                  const uploadsDir = path.join(__dirname, '../uploads');
+                  const filePath = path.join(uploadsDir, filename);
+                  if (fs.existsSync(filePath)) {
+                    form.append(filename, fs.createReadStream(filePath));
+                    attachedFiles.push(filePath);
+                  } else {
+                    console.warn('Файл для attach:// не найден и не будет добавлен в mediaGroup:', filePath);
+                    return null;
+                  }
+                }
+                return obj;
+              })
+              .filter(item => item && item.media && typeof item.media === 'string' && item.media.length > 0);
+            // Логируем mediaGroup и список файлов
+            console.log('TELEGRAM MEDIA GROUP TO SEND:', JSON.stringify(mediaGroup, null, 2));
+            console.log('FILES ATTACHED TO FORM:', attachedFiles);
             form.append('chat_id', chatId);
             if (threadId) form.append('message_thread_id', threadId);
             form.append('media', JSON.stringify(mediaGroup));
