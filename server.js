@@ -102,8 +102,8 @@ app.use(userRoutes); // Все роуты пользователей начин�
 
 // 5. Настройка SSL
 const options = {
-  key: fs.readFileSync("./root/taig/taig/ssl/key.key"), // Путь к закрытому ключу
-  cert: fs.readFileSync("./root/taig/taig/ssl/crt.crt"), // Путь к сертификату
+  key: fs.readFileSync("/root/taig/taig/ssl/key.key"), // Путь к закрытому ключу
+  cert: fs.readFileSync("/root/taig/taig/ssl/crt.crt"), // Путь к сертификату
 };
 
 // 11. Запуск сервера
