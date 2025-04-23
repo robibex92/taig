@@ -2,6 +2,11 @@ import { pool } from "../config/db.js";
 import { TelegramCreationService } from "./telegram.js";
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Обновляет сообщения в Telegram для объявления с новым текстом/медиа
