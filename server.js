@@ -30,6 +30,8 @@ import { authenticateJWT } from "./middlewares/authMiddleware.js";
 import telegramRoutes from "./routes/telegram.js";
 import https from "https";
 import fs from "fs";
+import cron from "node-cron";
+import fetch from "node-fetch";
 
 // 1. Загрузка конфигурации
 dotenv.config();
@@ -100,20 +102,22 @@ app.get("/api/users/me", getCurrentUser);
 app.patch("/api/users/me", updateCurrentUser);
 app.use(userRoutes); // Все роуты пользователей начинаются с /api/users
 
-// 5. Настройка SSL
-let server;
-const PORT = process.env.PORT || 4000;
-try {
-  const options = {
-    key: fs.readFileSync("/root/taig/taig/ssl/key.key"), // Путь к закрытому ключу
-    cert: fs.readFileSync("/root/taig/taig/ssl/crt.crt"), // Путь к сертификату
-  };
-  server = https.createServer(options, app).listen(PORT, () => {
-    console.log(`HTTPS Server is running on port ${PORT}`);
-  });
-} catch (e) {
-  console.warn('SSL key/cert not found, falling back to HTTP. Reason:', e.message);
-  server = app.listen(PORT, () => {
-    console.log(`HTTP Server is running on port ${PORT}`);
-  });
-}
+// --- Автоматическая архивация объявлений раз в 12 часов ---
+cron.schedule("0 */12 * * *", async () => {
+  try {
+    const port = process.env.PORT || 4000;
+    const res = await fetch(`http://localhost:${port}/api/ads/archive-old`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    console.log(`[CRON] Архивация объявлений:`, data.message);
+  } catch (err) {
+    console.error("[CRON] Ошибка архивации объявлений:", err);
+  }
+});
+
+// Запуск сервера
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
