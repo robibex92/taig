@@ -118,6 +118,9 @@ cron.schedule("0 */12 * * *", async () => {
 });
 
 // Запуск сервера
+const PORT = process.env.PORT || 4000;
+
+// Create HTTP server
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`HTTP Server running on port ${PORT}`);
 });
