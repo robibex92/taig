@@ -317,4 +317,34 @@ routerAds.delete("/api/ads/:id", async (req, res) => {
   }
 });
 
+// 10. Архивировать старые объявления (старше 720 часов)
+routerAds.post("/api/ads/archive-old", async (req, res) => {
+  try {
+    // 720 часов = 30 дней
+    const hours = 720;
+    // Получаем текущую дату (UTC)
+    const now = new Date();
+    // В Postgres можно сразу сравнить разницу в часах
+    const query = `
+      UPDATE ads
+      SET status = 'архивед', updated_at = NOW()
+      WHERE status != 'архивед'
+        AND (created_at IS NOT NULL OR updated_at IS NOT NULL)
+        AND EXTRACT(EPOCH FROM (NOW() - GREATEST(
+          COALESCE(updated_at, '1970-01-01'),
+          COALESCE(created_at, '1970-01-01')
+        )))/3600 > $1
+      RETURNING id, title, created_at, updated_at, status;
+    `;
+    const { rows } = await pool.query(query, [hours]);
+    res.json({
+      message: `Архивировано ${rows.length} объявлений`,
+      archive: rows
+    });
+  } catch (error) {
+    console.error("Error archiving old ads:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 export default routerAds;

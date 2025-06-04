@@ -14,8 +14,6 @@ userRouter.get("/api/users/me", getCurrentUser);
 // Protected: обновление данных текущего пользователя
 userRouter.patch("/api/users/me", updateCurrentUser);
 
-
-
 // Public: получение данных любого пользователя по ID
 publicUserRouter.get("/api/users/:user_id", async (req, res) => {
   try {
