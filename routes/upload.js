@@ -30,11 +30,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Маршрут для загрузки файлов (требует аутентификации)
 router.post("/", upload.single("file"), (req, res) => {
   // Формируем полный URL для файла
   const fileUrl = `${API_URL}/api/upload/uploads/${req.file.filename}`;
   res.json({ success: true, fileUrl });
 });
+
+// Маршрут для публичного доступа к файлам (без аутентификации)
+router.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 import fs from "fs";
 
