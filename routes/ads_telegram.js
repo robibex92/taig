@@ -164,11 +164,17 @@ routerAdsTelegram.post(
         telegramResults = await Promise.all(
           chatTargets.map(async (target) => {
             try {
+              console.log("Sending to chat:", target.chatId);
               let result;
               if (photosToSend.length > 0) {
                 // Отправляем первое фото с текстом
                 const firstPhoto = photosToSend[0];
                 const remainingPhotos = photosToSend.slice(1);
+
+                console.log("Sending first photo with caption:", {
+                  photo: firstPhoto,
+                  caption: messageText,
+                });
 
                 // Отправляем первое фото с caption
                 result = await TelegramCreationService.sendMessage({
@@ -185,11 +191,18 @@ routerAdsTelegram.post(
                   ],
                 });
 
+                console.log(
+                  "First photo send result:",
+                  JSON.stringify(result, null, 2)
+                );
+
                 // Если есть дополнительные фото, отправляем их без caption
                 if (remainingPhotos.length > 0) {
+                  console.log("Sending remaining photos:", remainingPhotos);
                   const additionalResults = await Promise.all(
-                    remainingPhotos.map((photo) =>
-                      TelegramCreationService.sendMessage({
+                    remainingPhotos.map(async (photo) => {
+                      console.log("Sending additional photo:", photo);
+                      const res = await TelegramCreationService.sendMessage({
                         message: "",
                         chatIds: [target.chatId],
                         threadIds: target.threadId ? [target.threadId] : [],
@@ -199,8 +212,13 @@ routerAdsTelegram.post(
                             media: photo,
                           },
                         ],
-                      })
-                    )
+                      });
+                      console.log(
+                        "Additional photo send result:",
+                        JSON.stringify(res, null, 2)
+                      );
+                      return res;
+                    })
                   );
 
                   // Объединяем результаты
@@ -211,17 +229,57 @@ routerAdsTelegram.post(
                     ];
                   }
                 }
+
+                // Логируем все результаты отправки
+                console.log(
+                  "All send results:",
+                  JSON.stringify(result, null, 2)
+                );
+
+                // Сохраняем message_id в базу данных
+                if (result && Array.isArray(result.results)) {
+                  for (const res of result.results) {
+                    console.log(
+                      "Processing result item:",
+                      JSON.stringify(res, null, 2)
+                    );
+                    if (res.result?.result?.message_id) {
+                      console.log("Saving message to database:", {
+                        ad_id,
+                        chatId: res.chatId,
+                        threadId: res.threadId,
+                        messageId: res.result.result.message_id,
+                      });
+                      await pool.query(
+                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+                        [
+                          ad_id,
+                          res.chatId,
+                          res.threadId,
+                          res.result.result.message_id,
+                        ]
+                      );
+                    } else {
+                      console.log("No message_id in result:", res);
+                    }
+                  }
+                }
               } else {
                 // Если нет фото, отправляем только текст
+                console.log("Sending text-only message:", messageText);
                 result = await TelegramCreationService.sendMessage({
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
                 });
+                console.log(
+                  "Text-only send result:",
+                  JSON.stringify(result, null, 2)
+                );
               }
               return { chat: target, ok: true };
             } catch (err) {
-              console.error("Ошибка отправки или логирования в Telegram:", err);
+              console.error("Error sending to Telegram:", err);
               return { chat: target, ok: false, error: err.message };
             }
           })
