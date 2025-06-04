@@ -167,12 +167,19 @@ routerAdsTelegram.post(
               console.log("Sending to chat:", target.chatId);
               let result;
               if (photosToSend.length > 0) {
+                // Генерируем уникальный ID для медиа-группы
+                const mediaGroupId = Date.now().toString();
+
                 // Формируем медиа-группу для отправки
                 const mediaGroup = photosToSend.map((photo, index) => ({
                   type: "photo",
                   media: photo,
                   ...(index === 0
-                    ? { caption: messageText, parse_mode: "HTML" }
+                    ? {
+                        caption: messageText,
+                        parse_mode: "HTML",
+                        media_group_id: mediaGroupId,
+                      }
                     : {}),
                 }));
 
@@ -181,12 +188,16 @@ routerAdsTelegram.post(
                   JSON.stringify(mediaGroup, null, 2)
                 );
 
+                // Добавляем задержку перед отправкой
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+
                 // Отправляем медиа-группу
                 result = await TelegramCreationService.sendMessage({
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
-                  photos: photosToSend, // Передаем массив URL'ов
+                  photos: photosToSend,
+                  mediaGroupId: mediaGroupId,
                 });
 
                 console.log(
@@ -202,31 +213,27 @@ routerAdsTelegram.post(
                       JSON.stringify(res, null, 2)
                     );
                     if (res.result && Array.isArray(res.result)) {
-                      // Для медиа-группы сохраняем ID первого сообщения
-                      const firstMessage = res.result[0];
-                      if (firstMessage && firstMessage.message_id) {
-                        console.log("Saving message to database:", {
-                          ad_id,
-                          chatId: res.chatId,
-                          threadId: res.threadId,
-                          messageId: firstMessage.message_id,
-                          mediaGroupId: firstMessage.media_group_id,
-                        });
-                        await pool.query(
-                          `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
-                          [
+                      // Для медиа-группы сохраняем все сообщения
+                      for (const message of res.result) {
+                        if (message && message.message_id) {
+                          console.log("Saving message to database:", {
                             ad_id,
-                            res.chatId,
-                            res.threadId,
-                            firstMessage.message_id,
-                            firstMessage.media_group_id,
-                          ]
-                        );
-                      } else {
-                        console.log(
-                          "No message_id in first message:",
-                          firstMessage
-                        );
+                            chatId: res.chatId,
+                            threadId: res.threadId,
+                            messageId: message.message_id,
+                            mediaGroupId: message.media_group_id,
+                          });
+                          await pool.query(
+                            `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                            [
+                              ad_id,
+                              res.chatId,
+                              res.threadId,
+                              message.message_id,
+                              message.media_group_id,
+                            ]
+                          );
+                        }
                       }
                     } else if (res.result?.result?.message_id) {
                       // Для обычного сообщения

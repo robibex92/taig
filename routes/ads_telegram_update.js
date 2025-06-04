@@ -119,11 +119,20 @@ export async function updateTelegramMessagesForAd(ad) {
         console.log("Final photos:", JSON.stringify(photos, null, 2));
 
         if (photos.length > 0) {
+          // Генерируем уникальный ID для медиа-группы
+          const mediaGroupId = Date.now().toString();
+
           // Формируем медиа-группу для отправки
           const mediaGroup = photos.map((photo, index) => ({
             type: "photo",
             media: photo,
-            ...(index === 0 ? { caption: newText, parse_mode: "HTML" } : {}),
+            ...(index === 0
+              ? {
+                  caption: newText,
+                  parse_mode: "HTML",
+                  media_group_id: mediaGroupId,
+                }
+              : {}),
           }));
 
           console.log(
@@ -131,12 +140,16 @@ export async function updateTelegramMessagesForAd(ad) {
             JSON.stringify(mediaGroup, null, 2)
           );
 
+          // Добавляем задержку перед отправкой
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+
           // Отправляем медиа-группу
           const sendResult = await TelegramCreationService.sendMessage({
             message: newText,
             chatIds: [msg.chat_id],
             threadIds: msg.thread_id ? [msg.thread_id] : [],
-            photos: photos, // Передаем массив URL'ов
+            photos: photos,
+            mediaGroupId: mediaGroupId,
           });
 
           console.log(
@@ -145,31 +158,50 @@ export async function updateTelegramMessagesForAd(ad) {
           );
 
           // 3c. Обновить запись в БД
-          let newMsgId = null;
           if (sendResult && Array.isArray(sendResult.results)) {
             for (const res of sendResult.results) {
               if (res.result && Array.isArray(res.result)) {
-                // Для медиа-группы берем ID первого сообщения
-                const firstMessage = res.result[0];
-                if (firstMessage && firstMessage.message_id) {
-                  newMsgId = firstMessage.message_id;
-                  break;
+                // Для медиа-группы обновляем все сообщения
+                for (const message of res.result) {
+                  if (message && message.message_id) {
+                    console.log("Updating message in database:", {
+                      ad_id: ad.id,
+                      chatId: res.chatId,
+                      threadId: res.threadId,
+                      messageId: message.message_id,
+                      mediaGroupId: message.media_group_id,
+                    });
+                    await pool.query(
+                      `UPDATE telegram_messages SET message_id = $1, media_group_id = $2 WHERE ad_id = $3 AND chat_id = $4`,
+                      [
+                        message.message_id,
+                        message.media_group_id,
+                        ad.id,
+                        res.chatId,
+                      ]
+                    );
+                  }
                 }
               } else if (res.result?.result?.message_id) {
                 // Для обычного сообщения
-                newMsgId = res.result.result.message_id;
-                break;
+                console.log("Updating message in database:", {
+                  ad_id: ad.id,
+                  chatId: res.chatId,
+                  threadId: res.threadId,
+                  messageId: res.result.result.message_id,
+                });
+                await pool.query(
+                  `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,
+                  [res.result.result.message_id, ad.id, res.chatId]
+                );
               }
             }
           }
-
-          if (newMsgId) {
-            await pool.query(
-              `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,
-              [newMsgId, ad.id, msg.chat_id]
-            );
-          }
-          results.push({ chat_id: msg.chat_id, updated: true, newMsgId });
+          results.push({
+            chat_id: msg.chat_id,
+            updated: true,
+            newMsgId: res.result.result.message_id,
+          });
         } else {
           // 4. Просто текст — редактировать
           const editRes = await fetch(
