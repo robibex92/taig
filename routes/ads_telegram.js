@@ -128,17 +128,19 @@ routerAdsTelegram.post(
           `👤 Автор объявления: ${authorLink}\n\n` +
           `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 
-        // Формируем photosToSend как массив URL-ов изображений
+        // Формируем photosToSend как массив объектов с URL и caption
         const photosToSend =
           Array.isArray(images) && images.length > 0
             ? images
-                .map((img) => {
-                  // Если img это строка (URL), используем её напрямую
-                  if (typeof img === "string") {
-                    return img;
-                  }
-                  // Если img это объект, берем url или image_url
-                  return img.url || img.image_url;
+                .map((img, index) => {
+                  const url =
+                    typeof img === "string" ? img : img.url || img.image_url;
+                  // Добавляем caption только к первому изображению
+                  return {
+                    url,
+                    caption: index === 0 ? messageText : undefined,
+                    parse_mode: "HTML",
+                  };
                 })
                 .filter(Boolean)
             : [];
@@ -152,7 +154,7 @@ routerAdsTelegram.post(
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
-                  photos: photosToSend, // Теперь передаем массив URL-ов
+                  photos: photosToSend,
                 });
                 // Подробное логирование результата отправки
                 console.log(

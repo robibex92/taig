@@ -90,18 +90,20 @@ export async function updateTelegramMessagesForAd(ad) {
           }
         );
         // 3b. Отправить новое (обновлённое) сообщение с медиа
-        // Формируем photos как массив URL-ов изображений
+        // Формируем photos как массив объектов с URL и caption
         let photos = [];
         if (ad.image_url) {
-          // Если image_url это строка (URL), используем её напрямую
-          if (typeof ad.image_url === "string") {
-            photos = [ad.image_url];
-          } else {
-            // Если image_url это объект, берем url или image_url
-            photos = [ad.image_url.url || ad.image_url.image_url].filter(
-              Boolean
-            );
-          }
+          const url =
+            typeof ad.image_url === "string"
+              ? ad.image_url
+              : ad.image_url.url || ad.image_url.image_url;
+          photos = [
+            {
+              url,
+              caption: newText,
+              parse_mode: "HTML",
+            },
+          ];
         }
 
         const sendResult = await TelegramCreationService.sendMessage({
