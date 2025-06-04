@@ -128,16 +128,16 @@ routerAdsTelegram.post(
           `👤 Автор объявления: ${authorLink}\n\n` +
           `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 
-        // Формируем photosToSend как массив объектов с URL и caption
+        // Формируем photosToSend как массив объектов в формате Telegram API
         const photosToSend =
           Array.isArray(images) && images.length > 0
             ? images
                 .map((img, index) => {
                   const url =
                     typeof img === "string" ? img : img.url || img.image_url;
-                  // Добавляем caption только к первому изображению
                   return {
-                    url,
+                    type: "photo",
+                    media: url,
                     caption: index === 0 ? messageText : undefined,
                     parse_mode: "HTML",
                   };

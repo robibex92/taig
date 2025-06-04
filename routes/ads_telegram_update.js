@@ -90,7 +90,7 @@ export async function updateTelegramMessagesForAd(ad) {
           }
         );
         // 3b. Отправить новое (обновлённое) сообщение с медиа
-        // Формируем photos как массив объектов с URL и caption
+        // Формируем photos как массив объектов в формате Telegram API
         let photos = [];
         if (ad.image_url) {
           const url =
@@ -99,7 +99,8 @@ export async function updateTelegramMessagesForAd(ad) {
               : ad.image_url.url || ad.image_url.image_url;
           photos = [
             {
-              url,
+              type: "photo",
+              media: url,
               caption: newText,
               parse_mode: "HTML",
             },
