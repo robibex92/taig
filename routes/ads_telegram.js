@@ -167,72 +167,30 @@ routerAdsTelegram.post(
               console.log("Sending to chat:", target.chatId);
               let result;
               if (photosToSend.length > 0) {
-                // Отправляем первое фото с текстом
-                const firstPhoto = photosToSend[0];
-                const remainingPhotos = photosToSend.slice(1);
+                // Формируем медиа-группу для отправки
+                const mediaGroup = photosToSend.map((photo, index) => ({
+                  type: "photo",
+                  media: photo,
+                  ...(index === 0
+                    ? { caption: messageText, parse_mode: "HTML" }
+                    : {}),
+                }));
 
-                console.log("Sending first photo with caption:", {
-                  photo: firstPhoto,
-                  caption: messageText,
-                });
+                console.log(
+                  "Sending media group:",
+                  JSON.stringify(mediaGroup, null, 2)
+                );
 
-                // Отправляем первое фото с caption
+                // Отправляем медиа-группу
                 result = await TelegramCreationService.sendMessage({
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
-                  photos: [
-                    {
-                      type: "photo",
-                      media: firstPhoto,
-                      caption: messageText,
-                      parse_mode: "HTML",
-                    },
-                  ],
+                  photos: photosToSend, // Передаем массив URL'ов
                 });
 
                 console.log(
-                  "First photo send result:",
-                  JSON.stringify(result, null, 2)
-                );
-
-                // Если есть дополнительные фото, отправляем их без caption
-                if (remainingPhotos.length > 0) {
-                  console.log("Sending remaining photos:", remainingPhotos);
-                  const additionalResults = await Promise.all(
-                    remainingPhotos.map(async (photo) => {
-                      console.log("Sending additional photo:", photo);
-                      const res = await TelegramCreationService.sendMessage({
-                        message: "",
-                        chatIds: [target.chatId],
-                        threadIds: target.threadId ? [target.threadId] : [],
-                        photos: [
-                          {
-                            type: "photo",
-                            media: photo,
-                          },
-                        ],
-                      });
-                      console.log(
-                        "Additional photo send result:",
-                        JSON.stringify(res, null, 2)
-                      );
-                      return res;
-                    })
-                  );
-
-                  // Объединяем результаты
-                  if (result && result.results) {
-                    result.results = [
-                      ...result.results,
-                      ...additionalResults.flatMap((r) => r.results || []),
-                    ];
-                  }
-                }
-
-                // Логируем все результаты отправки
-                console.log(
-                  "All send results:",
+                  "Media group send result:",
                   JSON.stringify(result, null, 2)
                 );
 

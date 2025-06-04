@@ -119,51 +119,30 @@ export async function updateTelegramMessagesForAd(ad) {
         console.log("Final photos:", JSON.stringify(photos, null, 2));
 
         if (photos.length > 0) {
-          // Отправляем первое фото с текстом
-          const firstPhoto = photos[0];
-          const remainingPhotos = photos.slice(1);
+          // Формируем медиа-группу для отправки
+          const mediaGroup = photos.map((photo, index) => ({
+            type: "photo",
+            media: photo,
+            ...(index === 0 ? { caption: newText, parse_mode: "HTML" } : {}),
+          }));
 
-          // Отправляем первое фото с caption
+          console.log(
+            "Sending media group:",
+            JSON.stringify(mediaGroup, null, 2)
+          );
+
+          // Отправляем медиа-группу
           const sendResult = await TelegramCreationService.sendMessage({
             message: newText,
             chatIds: [msg.chat_id],
             threadIds: msg.thread_id ? [msg.thread_id] : [],
-            photos: [
-              {
-                type: "photo",
-                media: firstPhoto,
-                caption: newText,
-                parse_mode: "HTML",
-              },
-            ],
+            photos: photos, // Передаем массив URL'ов
           });
 
-          // Если есть дополнительные фото, отправляем их без caption
-          if (remainingPhotos.length > 0) {
-            const additionalResults = await Promise.all(
-              remainingPhotos.map((photo) =>
-                TelegramCreationService.sendMessage({
-                  message: "",
-                  chatIds: [msg.chat_id],
-                  threadIds: msg.thread_id ? [msg.thread_id] : [],
-                  photos: [
-                    {
-                      type: "photo",
-                      media: photo,
-                    },
-                  ],
-                })
-              )
-            );
-
-            // Объединяем результаты
-            if (sendResult && sendResult.results) {
-              sendResult.results = [
-                ...sendResult.results,
-                ...additionalResults.flatMap((r) => r.results || []),
-              ];
-            }
-          }
+          console.log(
+            "Media group send result:",
+            JSON.stringify(sendResult, null, 2)
+          );
 
           // 3c. Обновить запись в БД
           const newMsgId =
