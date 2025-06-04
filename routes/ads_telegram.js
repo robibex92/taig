@@ -128,7 +128,7 @@ routerAdsTelegram.post(
           `👤 Автор объявления: ${authorLink}\n\n` +
           `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 
-        // Формируем photosToSend как массив объектов в формате Telegram API
+        // Формируем photosToSend как массив URL-ов
         const photosToSend =
           Array.isArray(images) && images.length > 0
             ? images
@@ -151,13 +151,7 @@ routerAdsTelegram.post(
                   }
 
                   console.log("Processing image URL:", url);
-
-                  return {
-                    type: "photo",
-                    media: url,
-                    caption: index === 0 ? messageText : undefined,
-                    parse_mode: "HTML",
-                  };
+                  return url;
                 })
                 .filter(Boolean)
             : [];
@@ -172,114 +166,58 @@ routerAdsTelegram.post(
             try {
               let result;
               if (photosToSend.length > 0) {
+                // Отправляем первое фото с текстом
+                const firstPhoto = photosToSend[0];
+                const remainingPhotos = photosToSend.slice(1);
+
+                // Отправляем первое фото с caption
                 result = await TelegramCreationService.sendMessage({
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
-                  photos: photosToSend,
+                  photos: [
+                    {
+                      type: "photo",
+                      media: firstPhoto,
+                      caption: messageText,
+                      parse_mode: "HTML",
+                    },
+                  ],
                 });
-                // Подробное логирование результата отправки
-                console.log(
-                  "TELEGRAM SEND RESULT (media):",
-                  JSON.stringify(result, null, 2)
-                );
-                if (result && Array.isArray(result.results)) {
-                  for (const res of result.results) {
-                    console.log(
-                      "TELEGRAM RESULT ITEM (media):",
-                      JSON.stringify(res, null, 2)
-                    );
-                    let messagesArr = Array.isArray(res.result?.result)
-                      ? res.result.result
-                      : Array.isArray(res.result)
-                      ? res.result
-                      : null;
-                    if (messagesArr && Array.isArray(messagesArr)) {
-                      for (const msg of messagesArr) {
-                        if (msg && msg.message_id) {
-                          console.log("INSERT telegram_messages:", {
-                            ad_id,
-                            chatId: res.chatId,
-                            threadId: res.threadId,
-                            messageId: msg.message_id,
-                          });
-                          await pool.query(
-                            `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                            [ad_id, res.chatId, res.threadId, msg.message_id]
-                          );
-                        } else {
-                          console.log("NO message_id in media msg:", msg);
-                        }
-                      }
-                    } else if (
-                      res.result &&
-                      res.result.result &&
-                      res.result.result.message_id
-                    ) {
-                      // исправлено: message_id теперь берется из res.result.result.message_id
-                      console.log("INSERT telegram_messages (single media):", {
-                        ad_id,
-                        chatId: res.chatId,
-                        threadId: res.threadId,
-                        messageId: res.result.result.message_id,
-                      });
-                      await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                        [
-                          ad_id,
-                          res.chatId,
-                          res.threadId,
-                          res.result.result.message_id,
-                        ]
-                      );
-                    } else {
-                      console.log("NO message_id found in media result:", res);
-                    }
+
+                // Если есть дополнительные фото, отправляем их без caption
+                if (remainingPhotos.length > 0) {
+                  const additionalResults = await Promise.all(
+                    remainingPhotos.map((photo) =>
+                      TelegramCreationService.sendMessage({
+                        message: "",
+                        chatIds: [target.chatId],
+                        threadIds: target.threadId ? [target.threadId] : [],
+                        photos: [
+                          {
+                            type: "photo",
+                            media: photo,
+                          },
+                        ],
+                      })
+                    )
+                  );
+
+                  // Объединяем результаты
+                  if (result && result.results) {
+                    result.results = [
+                      ...result.results,
+                      ...additionalResults.flatMap((r) => r.results || []),
+                    ];
                   }
                 }
               } else {
-                // Просто текст
+                // Если нет фото, отправляем только текст
                 result = await TelegramCreationService.sendMessage({
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
                 });
-                console.log(
-                  "TELEGRAM SEND RESULT (text):",
-                  JSON.stringify(result, null, 2)
-                );
-                if (result && Array.isArray(result.results)) {
-                  for (const res of result.results) {
-                    console.log(
-                      "TELEGRAM RESULT ITEM (text):",
-                      JSON.stringify(res, null, 2)
-                    );
-                    if (
-                      res.result &&
-                      res.result.result &&
-                      res.result.result.message_id
-                    ) {
-                      // исправлено: message_id теперь берется из res.result.result.message_id
-                      console.log("INSERT telegram_messages (text):", {
-                        ad_id,
-                        chatId: res.chatId,
-                        threadId: res.threadId,
-                        messageId: res.result.result.message_id,
-                      });
-                      await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                        [
-                          ad_id,
-                          res.chatId,
-                          res.threadId,
-                          res.result.result.message_id,
-                        ]
-                      );
-                    } else {
-                      console.log("NO message_id found in text result:", res);
-                    }
-                  }
-                }
               }
               return { chat: target, ok: true };
             } catch (err) {

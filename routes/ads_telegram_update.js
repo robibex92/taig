@@ -89,8 +89,9 @@ export async function updateTelegramMessagesForAd(ad) {
             }),
           }
         );
+
         // 3b. Отправить новое (обновлённое) сообщение с медиа
-        // Формируем photos как массив объектов в формате Telegram API
+        // Формируем photos как массив URL-ов
         let photos = [];
         if (ad.image_url) {
           let url =
@@ -111,39 +112,90 @@ export async function updateTelegramMessagesForAd(ad) {
             }
 
             console.log("Processing image URL:", url);
-
-            photos = [
-              {
-                type: "photo",
-                media: url,
-                caption: newText,
-                parse_mode: "HTML",
-              },
-            ];
+            photos = [url];
           }
         }
 
         console.log("Final photos:", JSON.stringify(photos, null, 2));
 
-        const sendResult = await TelegramCreationService.sendMessage({
-          message: newText,
-          chatIds: [msg.chat_id],
-          threadIds: msg.thread_id ? [msg.thread_id] : [],
-          photos,
-        });
-        // 3c. Обновить запись в БД
-        const newMsgId =
-          Array.isArray(sendResult?.results) &&
-          sendResult.results[0]?.result?.message_id
-            ? sendResult.results[0].result.message_id
-            : null;
-        if (newMsgId) {
-          await pool.query(
-            `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,
-            [newMsgId, ad.id, msg.chat_id]
+        if (photos.length > 0) {
+          // Отправляем первое фото с текстом
+          const firstPhoto = photos[0];
+          const remainingPhotos = photos.slice(1);
+
+          // Отправляем первое фото с caption
+          const sendResult = await TelegramCreationService.sendMessage({
+            message: newText,
+            chatIds: [msg.chat_id],
+            threadIds: msg.thread_id ? [msg.thread_id] : [],
+            photos: [
+              {
+                type: "photo",
+                media: firstPhoto,
+                caption: newText,
+                parse_mode: "HTML",
+              },
+            ],
+          });
+
+          // Если есть дополнительные фото, отправляем их без caption
+          if (remainingPhotos.length > 0) {
+            const additionalResults = await Promise.all(
+              remainingPhotos.map((photo) =>
+                TelegramCreationService.sendMessage({
+                  message: "",
+                  chatIds: [msg.chat_id],
+                  threadIds: msg.thread_id ? [msg.thread_id] : [],
+                  photos: [
+                    {
+                      type: "photo",
+                      media: photo,
+                    },
+                  ],
+                })
+              )
+            );
+
+            // Объединяем результаты
+            if (sendResult && sendResult.results) {
+              sendResult.results = [
+                ...sendResult.results,
+                ...additionalResults.flatMap((r) => r.results || []),
+              ];
+            }
+          }
+
+          // 3c. Обновить запись в БД
+          const newMsgId =
+            Array.isArray(sendResult?.results) &&
+            sendResult.results[0]?.result?.message_id
+              ? sendResult.results[0].result.message_id
+              : null;
+          if (newMsgId) {
+            await pool.query(
+              `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,
+              [newMsgId, ad.id, msg.chat_id]
+            );
+          }
+          results.push({ chat_id: msg.chat_id, updated: true, newMsgId });
+        } else {
+          // 4. Просто текст — редактировать
+          const editRes = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageText`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: msg.chat_id,
+                message_id: msg.message_id,
+                text: newText,
+                parse_mode: "HTML",
+              }),
+            }
           );
+          const editJson = await editRes.json();
+          results.push({ chat_id: msg.chat_id, edited: editJson.ok });
         }
-        results.push({ chat_id: msg.chat_id, updated: true, newMsgId });
       } else {
         // 4. Просто текст — редактировать
         const editRes = await fetch(
