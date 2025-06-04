@@ -93,19 +93,37 @@ export async function updateTelegramMessagesForAd(ad) {
         // Формируем photos как массив объектов в формате Telegram API
         let photos = [];
         if (ad.image_url) {
-          const url =
+          let url =
             typeof ad.image_url === "string"
               ? ad.image_url
               : ad.image_url.url || ad.image_url.image_url;
-          photos = [
-            {
-              type: "photo",
-              media: url,
-              caption: newText,
-              parse_mode: "HTML",
-            },
-          ];
+
+          // Убедимся, что URL является строкой и имеет правильный формат
+          if (typeof url !== "string") {
+            console.error("Invalid URL type:", typeof url, url);
+          } else {
+            // Если URL относительный, добавим домен
+            if (url.startsWith("/")) {
+              const baseUrl =
+                process.env.PUBLIC_SITE_URL ||
+                "https://api.asicredinvest.md/api-v1";
+              url = `${baseUrl}${url}`;
+            }
+
+            console.log("Processing image URL:", url);
+
+            photos = [
+              {
+                type: "photo",
+                media: url,
+                caption: newText,
+                parse_mode: "HTML",
+              },
+            ];
+          }
         }
+
+        console.log("Final photos:", JSON.stringify(photos, null, 2));
 
         const sendResult = await TelegramCreationService.sendMessage({
           message: newText,

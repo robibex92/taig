@@ -133,8 +133,25 @@ routerAdsTelegram.post(
           Array.isArray(images) && images.length > 0
             ? images
                 .map((img, index) => {
-                  const url =
+                  let url =
                     typeof img === "string" ? img : img.url || img.image_url;
+
+                  // Убедимся, что URL является строкой и имеет правильный формат
+                  if (typeof url !== "string") {
+                    console.error("Invalid URL type:", typeof url, url);
+                    return null;
+                  }
+
+                  // Если URL относительный, добавим домен
+                  if (url.startsWith("/")) {
+                    const baseUrl =
+                      process.env.PUBLIC_SITE_URL ||
+                      "https://api.asicredinvest.md/api-v1";
+                    url = `${baseUrl}${url}`;
+                  }
+
+                  console.log("Processing image URL:", url);
+
                   return {
                     type: "photo",
                     media: url,
@@ -144,6 +161,11 @@ routerAdsTelegram.post(
                 })
                 .filter(Boolean)
             : [];
+
+        console.log(
+          "Final photosToSend:",
+          JSON.stringify(photosToSend, null, 2)
+        );
 
         telegramResults = await Promise.all(
           chatTargets.map(async (target) => {
