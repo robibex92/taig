@@ -145,11 +145,24 @@ export async function updateTelegramMessagesForAd(ad) {
           );
 
           // 3c. Обновить запись в БД
-          const newMsgId =
-            Array.isArray(sendResult?.results) &&
-            sendResult.results[0]?.result?.message_id
-              ? sendResult.results[0].result.message_id
-              : null;
+          let newMsgId = null;
+          if (sendResult && Array.isArray(sendResult.results)) {
+            for (const res of sendResult.results) {
+              if (res.result && Array.isArray(res.result)) {
+                // Для медиа-группы берем ID первого сообщения
+                const firstMessage = res.result[0];
+                if (firstMessage && firstMessage.message_id) {
+                  newMsgId = firstMessage.message_id;
+                  break;
+                }
+              } else if (res.result?.result?.message_id) {
+                // Для обычного сообщения
+                newMsgId = res.result.result.message_id;
+                break;
+              }
+            }
+          }
+
           if (newMsgId) {
             await pool.query(
               `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,

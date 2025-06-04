@@ -201,7 +201,35 @@ routerAdsTelegram.post(
                       "Processing result item:",
                       JSON.stringify(res, null, 2)
                     );
-                    if (res.result?.result?.message_id) {
+                    if (res.result && Array.isArray(res.result)) {
+                      // Для медиа-группы сохраняем ID первого сообщения
+                      const firstMessage = res.result[0];
+                      if (firstMessage && firstMessage.message_id) {
+                        console.log("Saving message to database:", {
+                          ad_id,
+                          chatId: res.chatId,
+                          threadId: res.threadId,
+                          messageId: firstMessage.message_id,
+                          mediaGroupId: firstMessage.media_group_id,
+                        });
+                        await pool.query(
+                          `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                          [
+                            ad_id,
+                            res.chatId,
+                            res.threadId,
+                            firstMessage.message_id,
+                            firstMessage.media_group_id,
+                          ]
+                        );
+                      } else {
+                        console.log(
+                          "No message_id in first message:",
+                          firstMessage
+                        );
+                      }
+                    } else if (res.result?.result?.message_id) {
+                      // Для обычного сообщения
                       console.log("Saving message to database:", {
                         ad_id,
                         chatId: res.chatId,
