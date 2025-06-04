@@ -127,23 +127,18 @@ routerAdsTelegram.post(
           `${priceStr}\n\n` +
           `👤 Автор объявления: ${authorLink}\n\n` +
           `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
-        // Формируем photosToSend как массив объектов { source: fs.createReadStream(<путь>) }
+
+        // Формируем photosToSend как массив URL-ов изображений
         const photosToSend =
           Array.isArray(images) && images.length > 0
             ? images
                 .map((img) => {
-                  const filename = path.basename(img.url || img.image_url);
-                  const filePath = path.join(__dirname, "../uploads", filename);
-                  // Проверяем, существует ли файл, иначе Telegram не сможет отправить
-                  if (fs.existsSync(filePath)) {
-                    return { source: fs.createReadStream(filePath) };
-                  } else {
-                    console.warn(
-                      "Файл для отправки в Telegram не найден:",
-                      filePath
-                    );
-                    return null;
+                  // Если img это строка (URL), используем её напрямую
+                  if (typeof img === "string") {
+                    return img;
                   }
+                  // Если img это объект, берем url или image_url
+                  return img.url || img.image_url;
                 })
                 .filter(Boolean)
             : [];
@@ -157,7 +152,7 @@ routerAdsTelegram.post(
                   message: messageText,
                   chatIds: [target.chatId],
                   threadIds: target.threadId ? [target.threadId] : [],
-                  photos: photosToSend,
+                  photos: photosToSend, // Теперь передаем массив URL-ов
                 });
                 // Подробное логирование результата отправки
                 console.log(

@@ -90,17 +90,20 @@ export async function updateTelegramMessagesForAd(ad) {
           }
         );
         // 3b. Отправить новое (обновлённое) сообщение с медиа
-        // Формируем photos как массив объектов { source: fs.createReadStream(<путь>) }
+        // Формируем photos как массив URL-ов изображений
         let photos = [];
         if (ad.image_url) {
-          const filename = path.basename(ad.image_url);
-          const filePath = path.join(__dirname, "../uploads", filename);
-          if (fs.existsSync(filePath)) {
-            photos = [{ source: fs.createReadStream(filePath) }];
+          // Если image_url это строка (URL), используем её напрямую
+          if (typeof ad.image_url === "string") {
+            photos = [ad.image_url];
           } else {
-            console.warn("Файл для отправки в Telegram не найден:", filePath);
+            // Если image_url это объект, берем url или image_url
+            photos = [ad.image_url.url || ad.image_url.image_url].filter(
+              Boolean
+            );
           }
         }
+
         const sendResult = await TelegramCreationService.sendMessage({
           message: newText,
           chatIds: [msg.chat_id],
