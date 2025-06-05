@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../config/db.js";
-import { authenticateJWT } from "../middlewares/auth.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 
 const routerAds = express.Router();
 
