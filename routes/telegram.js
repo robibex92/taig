@@ -2,9 +2,9 @@
 // This file re-creates the TelegramCreationService and exports it for use in routes.
 // It uses the bot instance from services/telegramBot.js and provides a sendMessage function compatible with previous usage.
 
-import bot from '../services/telegramBot.js';
+import bot from "../services/telegramBot.js";
 
-import express from 'express';
+import express from "express";
 const router = express.Router();
 export default router;
 
@@ -12,13 +12,17 @@ export const TelegramCreationService = {
   /**
    * Send message or media to Telegram chats
    * @param {Object} options
-   * @param {string} options.message - text message
+   * @param {string} options.message - text message (max 1024 chars if used as caption)
    * @param {string[]} options.chatIds - array of chat IDs
    * @param {string[]} [options.threadIds] - array of thread IDs (optional)
-   * @param {Array} [options.photos] - array of photo file objects (optional)
+   * @param {Array} [options.photos] - array of photo URLs (optional)
    * @returns {Promise<{results: Array}>}
    */
   async sendMessage({ message, chatIds, threadIds = [], photos = [] }) {
+    if (message.length > 1024 && photos.length > 0) {
+      throw new Error("Caption exceeds 1024 characters");
+    }
+
     const results = [];
     for (let i = 0; i < chatIds.length; ++i) {
       const chatId = chatIds[i];
@@ -26,21 +30,39 @@ export const TelegramCreationService = {
       try {
         let result;
         if (photos && photos.length > 0) {
-          // Send as media group if multiple, or single photo if one
-          if (photos.length > 1) {
-            const media = photos.map(photo => ({ type: 'photo', media: photo }));
-            result = await bot.sendMediaGroup(chatId, media, { message_thread_id: threadId });
+          if (photos.length === 1) {
+            // Одно изображение с подписью
+            result = await bot.sendPhoto(chatId, photos[0], {
+              caption: message,
+              parse_mode: "HTML",
+              message_thread_id: threadId,
+            });
           } else {
-            result = await bot.sendPhoto(chatId, photos[0], { caption: message, parse_mode: 'HTML', message_thread_id: threadId });
+            // Несколько изображений — caption только у первого
+            const media = photos.map((photo, index) => ({
+              type: "photo",
+              media: photo,
+              ...(index === 0 ? { caption: message, parse_mode: "HTML" } : {}),
+            }));
+
+            result = await bot.sendMediaGroup(chatId, media, {
+              message_thread_id: threadId,
+            });
           }
         } else {
-          result = await bot.sendMessage(chatId, message, { parse_mode: 'HTML', message_thread_id: threadId });
+          // Только текст
+          result = await bot.sendMessage(chatId, message, {
+            parse_mode: "HTML",
+            message_thread_id: threadId,
+          });
         }
+
         results.push({ chatId, threadId, result });
       } catch (err) {
+        console.error(`Error sending to chat ${chatId}:`, err.message);
         results.push({ chatId, threadId, error: err.message });
       }
     }
     return { results };
-  }
+  },
 };
