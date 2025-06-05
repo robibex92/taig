@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../config/db.js";
+import { authenticateJWT } from "../middlewares/auth.js";
 
 const routerAds = express.Router();
 
@@ -166,7 +167,7 @@ routerAds.post("/api/ads", async (req, res) => {
       subcategory,
       price = null,
       status = "active",
-      images = [] // <-- добавили images
+      images = [], // <-- добавили images
     } = req.body;
 
     // Валидация обязательных полей
@@ -259,61 +260,136 @@ routerAds.patch("/api/ads/:id", async (req, res) => {
 });
 
 // 8. Удалить объявление (мягкое удаление)
-routerAds.delete("/api/ads/:id", async (req, res) => {
+routerAds.delete("/api/ads/:id", authenticateJWT, async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+
     const { id } = req.params;
+    const user_id = req.user?.id || req.user?.user_id;
 
-    const { rows } = await pool.query(
-      `UPDATE ads SET status = 'deleted', updated_at = NOW() 
-       WHERE id = $1 RETURNING *`,
-      [id]
-    );
+    // Проверяем существование объявления и права доступа
+    const {
+      rows: [ad],
+    } = await client.query("SELECT * FROM ads WHERE id = $1", [id]);
 
-    if (rows.length === 0) {
+    if (!ad) {
       return res.status(404).json({ error: "Ad not found" });
     }
 
-    // --- Удаление связанных сообщений из Telegram и БД ---
-    try {
-      // 1. Найти все telegram сообщения по ad_id
-      const { rows: messages } = await pool.query(
-        `SELECT chat_id, message_id FROM telegram_messages WHERE ad_id = $1`,
-        [id]
-      );
+    // Проверяем права доступа
+    if (!user_id || String(ad.user_id) !== String(user_id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
-      let telegramDeleteResults = [];
-      for (const msg of messages) {
+    // Мягкое удаление объявления
+    const {
+      rows: [deletedAd],
+    } = await client.query(
+      `UPDATE ads 
+       SET status = 'deleted', updated_at = NOW() 
+       WHERE id = $1 
+       RETURNING *`,
+      [id]
+    );
+
+    // Удаление связанных сообщений из Telegram и БД
+    const { rows: messages } = await client.query(
+      `SELECT chat_id, message_id, media_group_id 
+       FROM telegram_messages 
+       WHERE ad_id = $1`,
+      [id]
+    );
+
+    const telegramDeleteResults = [];
+
+    // Группируем сообщения по media_group_id для более эффективного удаления
+    const mediaGroups = messages.reduce((acc, msg) => {
+      if (msg.media_group_id) {
+        if (!acc[msg.media_group_id]) {
+          acc[msg.media_group_id] = [];
+        }
+        acc[msg.media_group_id].push(msg);
+      } else {
+        if (!acc.single) {
+          acc.single = [];
+        }
+        acc.single.push(msg);
+      }
+      return acc;
+    }, {});
+
+    // Удаляем сообщения
+    for (const [groupId, groupMessages] of Object.entries(mediaGroups)) {
+      for (const msg of groupMessages) {
         try {
-          // Удалить сообщение через Telegram Bot API
+          console.log(
+            `Deleting message ${msg.message_id} from chat ${msg.chat_id}`
+          );
           const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`;
           const tgRes = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chat_id: msg.chat_id,
-              message_id: msg.message_id
-            })
+              message_id: msg.message_id,
+            }),
           });
+
           const data = await tgRes.json();
-          telegramDeleteResults.push({ chat_id: msg.chat_id, message_id: msg.message_id, ok: data.ok, description: data.description });
           if (!data.ok) {
-            console.error(`[${new Date().toISOString()}] Не удалось удалить сообщение в Telegram:`, data);
+            console.error(`Failed to delete message in Telegram:`, {
+              chat_id: msg.chat_id,
+              message_id: msg.message_id,
+              error: data.description,
+            });
           }
+
+          telegramDeleteResults.push({
+            chat_id: msg.chat_id,
+            message_id: msg.message_id,
+            ok: data.ok,
+            description: data.description,
+          });
+
+          // Добавляем небольшую задержку между удалениями
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (err) {
-          console.error(`[${new Date().toISOString()}] Ошибка при удалении сообщения в Telegram:`, err);
-          telegramDeleteResults.push({ chat_id: msg.chat_id, message_id: msg.message_id, ok: false, error: err.message });
+          console.error(`Error deleting Telegram message:`, err);
+          telegramDeleteResults.push({
+            chat_id: msg.chat_id,
+            message_id: msg.message_id,
+            ok: false,
+            error: err.message,
+          });
         }
       }
-      // 2. Удалить записи из telegram_messages
-      await pool.query(`DELETE FROM telegram_messages WHERE ad_id = $1`, [id]);
-      console.log(`[${new Date().toISOString()}] Объявление #${id} удалено (status=deleted). Telegram messages deleted:`, telegramDeleteResults);
-    } catch (err) {
-      console.error(`[${new Date().toISOString()}] Ошибка при удалении telegram сообщений объявления #${id}:`, err);
     }
-    res.json({ message: "Ad deleted" });
+
+    // Удаляем записи из telegram_messages
+    await client.query(`DELETE FROM telegram_messages WHERE ad_id = $1`, [id]);
+
+    // Удаляем изображения
+    await client.query(`DELETE FROM ad_images WHERE ad_id = $1`, [id]);
+
+    await client.query("COMMIT");
+
+    console.log(`[${new Date().toISOString()}] Ad #${id} deleted:`, {
+      ad: deletedAd,
+      telegramResults: telegramDeleteResults,
+    });
+
+    res.json({
+      message: "Ad deleted successfully",
+      ad: deletedAd,
+      telegram: telegramDeleteResults,
+    });
   } catch (error) {
-    console.error("Error deleting ad:", error);
+    await client.query("ROLLBACK");
+    console.error(`[${new Date().toISOString()}] Error deleting ad:`, error);
     res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 });
 
@@ -339,7 +415,7 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
     const { rows } = await pool.query(query, [hours]);
     res.json({
       message: `Архивировано ${rows.length} объявлений`,
-      archive: rows
+      archive: rows,
     });
   } catch (error) {
     console.error("Error archiving old ads:", error);

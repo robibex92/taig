@@ -1,13 +1,10 @@
+import express from "express";
 import { pool } from "../config/db.js";
 import { TelegramCreationService } from "./telegram.js";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import pLimit from "p-limit";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const router = express.Router();
 
 /**
  * Обновляет сообщения в Telegram для объявления с новым текстом/медиа
@@ -35,23 +32,51 @@ function isValidUrl(url) {
   }
 }
 
-export async function updateTelegramMessagesForAd(ad) {
-  console.log("Starting update for ad:", ad.id);
-
-  // 1. Получить все сообщения из telegram_messages
-  const { rows: messages } = await pool.query(
-    `SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1`,
-    [ad.id]
+// Обновление объявления в БД
+async function updateAd(
+  ad_id,
+  { title, content, category, subcategory, price, status }
+) {
+  const { rows } = await pool.query(
+    `UPDATE ads 
+     SET title = $1, content = $2, category = $3, subcategory = $4, price = $5, status = $6, updated_at = NOW()
+     WHERE id = $7
+     RETURNING *`,
+    [title, content, category, subcategory, price, status, ad_id]
   );
+  return rows[0];
+}
 
+// Обновление изображений
+async function updateImages(ad_id, images) {
+  // Удаляем старые изображения
+  await pool.query(`DELETE FROM ad_images WHERE ad_id = $1`, [ad_id]);
+
+  // Добавляем новые
+  if (Array.isArray(images) && images.length > 0) {
+    for (const img of images) {
+      if (!isValidUrl(img.url || img.image_url)) {
+        console.error("Invalid image URL:", img.url || img.image_url);
+        continue;
+      }
+      await pool.query(
+        `INSERT INTO ad_images (ad_id, image_url, is_main, created_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [ad_id, img.url || img.image_url, !!img.is_main]
+      );
+    }
+  }
+}
+
+// Обновление сообщений в Telegram
+async function updateTelegramMessages(ad_id, ad, messages) {
   if (!messages.length) {
-    console.log("No messages found for ad:", ad.id);
+    console.log("No messages found for ad:", ad_id);
     return [];
   }
 
-  // 2. Сформировать новый текст
   const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
-  const adLink = `${siteUrl}/ads/${ad.id}`;
+  const adLink = `${siteUrl}/ads/${ad_id}`;
   const priceStr =
     ad.price == null ? "💰 Цена: Не указана" : `💰 Цена: ${ad.price} ₽`;
 
@@ -78,30 +103,28 @@ export async function updateTelegramMessagesForAd(ad) {
     `👤 Автор объявления: ${authorLink}\n\n` +
     `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 
-  // 3. Подготовка изображений
-  let photos = [];
-  if (ad.image_url) {
-    let url =
-      typeof ad.image_url === "string"
-        ? ad.image_url
-        : ad.image_url.url || ad.image_url.image_url;
+  // Подготовка изображений
+  const { rows: images } = await pool.query(
+    "SELECT image_url FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+    [ad_id]
+  );
 
-    if (typeof url === "string") {
+  const photos = images
+    .map((img) => {
+      let url = img.image_url;
       if (url.startsWith("/")) {
         const baseUrl =
           process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1";
         url = `${baseUrl}${url}`;
       }
-      if (isValidUrl(url)) {
-        photos = [url];
-      }
-    }
-  }
+      return isValidUrl(url) ? url : null;
+    })
+    .filter(Boolean);
 
   console.log("Prepared photos:", photos);
 
-  // 4. Обработка сообщений
-  const limit = pLimit(5); // Ограничение на 5 параллельных запросов
+  // Обработка сообщений
+  const limit = pLimit(5);
   const results = [];
 
   await Promise.all(
@@ -146,7 +169,7 @@ export async function updateTelegramMessagesForAd(ad) {
                       [
                         message.message_id,
                         message.media_group_id,
-                        ad.id,
+                        ad_id,
                         res.chatId,
                       ]
                     );
@@ -158,7 +181,7 @@ export async function updateTelegramMessagesForAd(ad) {
                   `UPDATE telegram_messages 
                    SET message_id = $1 
                    WHERE ad_id = $2 AND chat_id = $3`,
-                  [res.result.result.message_id, ad.id, res.chatId]
+                  [res.result.result.message_id, ad_id, res.chatId]
                 );
               }
             }
@@ -175,3 +198,86 @@ export async function updateTelegramMessagesForAd(ad) {
 
   return results;
 }
+
+// Роут обновления объявления
+router.put("/api/ads-telegram/:id", authenticateJWT, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const ad_id = parseInt(req.params.id);
+    if (isNaN(ad_id)) {
+      return res.status(400).json({ error: "Invalid ad ID" });
+    }
+
+    const {
+      title,
+      content,
+      category,
+      subcategory,
+      price = null,
+      status = "active",
+      images = [],
+    } = req.body;
+
+    // Проверяем права доступа
+    const {
+      rows: [ad],
+    } = await client.query("SELECT * FROM ads WHERE id = $1", [ad_id]);
+
+    if (!ad) {
+      return res.status(404).json({ error: "Ad not found" });
+    }
+
+    const user_id = req.user?.id || req.user?.user_id;
+    if (!user_id || String(ad.user_id) !== String(user_id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Проверяем обязательные поля
+    if (!title || !content || !category || !subcategory) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Обновляем объявление
+    const updatedAd = await updateAd(ad_id, {
+      title,
+      content,
+      category,
+      subcategory,
+      price,
+      status,
+    });
+
+    // Обновляем изображения
+    await updateImages(ad_id, images);
+
+    // Получаем сообщения для обновления
+    const { rows: messages } = await client.query(
+      `SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1`,
+      [ad_id]
+    );
+
+    // Обновляем сообщения в Telegram
+    const telegramResults = await updateTelegramMessages(
+      ad_id,
+      updatedAd,
+      messages
+    );
+
+    await client.query("COMMIT");
+    res.json({
+      message: "Updated",
+      ad: updatedAd,
+      telegram: telegramResults,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(`[${new Date().toISOString()}] Error updating ad:`, error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+export default router;
