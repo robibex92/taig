@@ -66,7 +66,7 @@ async function saveImages(ad_id, images) {
 // Формирование текста сообщения для Telegram
 function buildMessageText({ title, content, price, username, user_id, ad_id }) {
   const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
-  const adLink = `${siteUrl}/ads/${ad_id}`;
+  const adLink = `${siteUrl}/#/ads/${ad_id}`;
   const priceStr =
     price == null ? "💰 Цена: Не указана" : `💰 Цена: ${price} ₽`;
   const authorLink = username
