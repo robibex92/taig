@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import pLimit from "p-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,16 +25,31 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
+// Валидация URL
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function updateTelegramMessagesForAd(ad) {
+  console.log("Starting update for ad:", ad.id);
+
   // 1. Получить все сообщения из telegram_messages
   const { rows: messages } = await pool.query(
     `SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1`,
     [ad.id]
   );
-  if (!messages.length) return [];
+
+  if (!messages.length) {
+    console.log("No messages found for ad:", ad.id);
+    return [];
+  }
 
   // 2. Сформировать новый текст
-  // Формируем шаблон сообщения для редактированного объявления
   const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
   const adLink = `${siteUrl}/ads/${ad.id}`;
   const priceStr =
@@ -41,9 +57,6 @@ export async function updateTelegramMessagesForAd(ad) {
 
   // Получаем информацию о пользователе
   let username = ad.username;
-  let authorLink = "";
-
-  // Если username не передан в ad, пробуем получить из БД
   if (!username && ad.user_id) {
     const userRes = await pool.query(
       "SELECT username FROM users WHERE user_id = $1",
@@ -54,16 +67,9 @@ export async function updateTelegramMessagesForAd(ad) {
     }
   }
 
-  // Формируем ссылку на автора
-  if (username) {
-    authorLink = `<a href="https://t.me/${username}">${escapeHtml(
-      username
-    )}</a>`;
-  } else if (ad.user_id) {
-    authorLink = ad.user_id;
-  } else {
-    authorLink = "Неизвестный пользователь";
-  }
+  const authorLink = username
+    ? `<a href="https://t.me/${username}">${escapeHtml(username)}</a>`
+    : ad.user_id || "Неизвестный пользователь";
 
   const newText =
     `📢 <b>Объявление (исправлено)</b>: ${escapeHtml(ad.title)} 📢\n\n` +
@@ -72,107 +78,71 @@ export async function updateTelegramMessagesForAd(ad) {
     `👤 Автор объявления: ${authorLink}\n\n` +
     `🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 
-  // 3. Если есть медиа, нужно удалить и пересоздать сообщения. Если только текст — редактировать.
+  // 3. Подготовка изображений
+  let photos = [];
+  if (ad.image_url) {
+    let url =
+      typeof ad.image_url === "string"
+        ? ad.image_url
+        : ad.image_url.url || ad.image_url.image_url;
+
+    if (typeof url === "string") {
+      if (url.startsWith("/")) {
+        const baseUrl =
+          process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1";
+        url = `${baseUrl}${url}`;
+      }
+      if (isValidUrl(url)) {
+        photos = [url];
+      }
+    }
+  }
+
+  console.log("Prepared photos:", photos);
+
+  // 4. Обработка сообщений
+  const limit = pLimit(5); // Ограничение на 5 параллельных запросов
   const results = [];
-  for (const msg of messages) {
-    try {
-      if (ad.image_url) {
-        // 3a. Удалить старое сообщение
-        await fetch(
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: msg.chat_id,
-              message_id: msg.message_id,
-            }),
-          }
-        );
 
-        // 3b. Отправить новое (обновлённое) сообщение с медиа
-        // Формируем photos как массив URL-ов
-        let photos = [];
-        if (ad.image_url) {
-          let url =
-            typeof ad.image_url === "string"
-              ? ad.image_url
-              : ad.image_url.url || ad.image_url.image_url;
-
-          // Убедимся, что URL является строкой и имеет правильный формат
-          if (typeof url !== "string") {
-            console.error("Invalid URL type:", typeof url, url);
-          } else {
-            // Если URL относительный, добавим домен
-            if (url.startsWith("/")) {
-              const baseUrl =
-                process.env.PUBLIC_SITE_URL ||
-                "https://api.asicredinvest.md/api-v1";
-              url = `${baseUrl}${url}`;
+  await Promise.all(
+    messages.map((msg) =>
+      limit(async () => {
+        try {
+          // Удаляем старое сообщение
+          await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: msg.chat_id,
+                message_id: msg.message_id,
+              }),
             }
-
-            console.log("Processing image URL:", url);
-            photos = [url];
-          }
-        }
-
-        console.log("Final photos:", JSON.stringify(photos, null, 2));
-
-        if (photos.length > 0) {
-          // Генерируем уникальный ID для медиа-группы
-          const mediaGroupId = Date.now().toString();
-
-          // Формируем медиа-группу для отправки
-          const mediaGroup = photos.map((photo, index) => ({
-            type: "photo",
-            media: photo,
-            ...(index === 0
-              ? {
-                  caption: newText,
-                  parse_mode: "HTML",
-                  media_group_id: mediaGroupId,
-                }
-              : {}),
-          }));
-
-          console.log(
-            "Sending media group:",
-            JSON.stringify(mediaGroup, null, 2)
           );
 
-          // Добавляем задержку перед отправкой
+          // Добавляем задержку перед отправкой нового сообщения
           await new Promise((resolve) => setTimeout(resolve, 1500));
 
-          // Отправляем медиа-группу
+          // Отправляем новое сообщение
           const sendResult = await TelegramCreationService.sendMessage({
             message: newText,
             chatIds: [msg.chat_id],
             threadIds: msg.thread_id ? [msg.thread_id] : [],
             photos: photos,
-            mediaGroupId: mediaGroupId,
           });
 
-          console.log(
-            "Media group send result:",
-            JSON.stringify(sendResult, null, 2)
-          );
-
-          // 3c. Обновить запись в БД
+          // Обновляем записи в БД
           if (sendResult && Array.isArray(sendResult.results)) {
             for (const res of sendResult.results) {
               if (res.result && Array.isArray(res.result)) {
-                // Для медиа-группы обновляем все сообщения
+                // Для медиа-группы
                 for (const message of res.result) {
                   if (message && message.message_id) {
-                    console.log("Updating message in database:", {
-                      ad_id: ad.id,
-                      chatId: res.chatId,
-                      threadId: res.threadId,
-                      messageId: message.message_id,
-                      mediaGroupId: message.media_group_id,
-                    });
                     await pool.query(
-                      `UPDATE telegram_messages SET message_id = $1, media_group_id = $2 WHERE ad_id = $3 AND chat_id = $4`,
+                      `UPDATE telegram_messages 
+                       SET message_id = $1, media_group_id = $2 
+                       WHERE ad_id = $3 AND chat_id = $4`,
                       [
                         message.message_id,
                         message.media_group_id,
@@ -184,63 +154,24 @@ export async function updateTelegramMessagesForAd(ad) {
                 }
               } else if (res.result?.result?.message_id) {
                 // Для обычного сообщения
-                console.log("Updating message in database:", {
-                  ad_id: ad.id,
-                  chatId: res.chatId,
-                  threadId: res.threadId,
-                  messageId: res.result.result.message_id,
-                });
                 await pool.query(
-                  `UPDATE telegram_messages SET message_id = $1 WHERE ad_id = $2 AND chat_id = $3`,
+                  `UPDATE telegram_messages 
+                   SET message_id = $1 
+                   WHERE ad_id = $2 AND chat_id = $3`,
                   [res.result.result.message_id, ad.id, res.chatId]
                 );
               }
             }
           }
-          results.push({
-            chat_id: msg.chat_id,
-            updated: true,
-            newMsgId: res.result.result.message_id,
-          });
-        } else {
-          // 4. Просто текст — редактировать
-          const editRes = await fetch(
-            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageText`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: msg.chat_id,
-                message_id: msg.message_id,
-                text: newText,
-                parse_mode: "HTML",
-              }),
-            }
-          );
-          const editJson = await editRes.json();
-          results.push({ chat_id: msg.chat_id, edited: editJson.ok });
+
+          results.push({ chat_id: msg.chat_id, updated: true });
+        } catch (err) {
+          console.error(`Error updating message for chat ${msg.chat_id}:`, err);
+          results.push({ chat_id: msg.chat_id, error: err.message });
         }
-      } else {
-        // 4. Просто текст — редактировать
-        const editRes = await fetch(
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageText`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: msg.chat_id,
-              message_id: msg.message_id,
-              text: newText,
-              parse_mode: "HTML",
-            }),
-          }
-        );
-        const editJson = await editRes.json();
-        results.push({ chat_id: msg.chat_id, edited: editJson.ok });
-      }
-    } catch (err) {
-      results.push({ chat_id: msg.chat_id, error: err.message });
-    }
-  }
+      })
+    )
+  );
+
   return results;
 }
