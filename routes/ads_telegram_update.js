@@ -200,7 +200,7 @@ async function updateTelegramMessages(ad_id, ad, messages) {
 }
 
 // Роут обновления объявления
-router.put("/api/ads-telegram/:id", authenticateJWT, async (req, res) => {
+router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
