@@ -70,8 +70,11 @@ export const authenticateUser = async (req, res) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
+      secure: process.env.API_URL && process.env.API_URL.startsWith("https"),
+      sameSite:
+        process.env.API_URL && process.env.API_URL.startsWith("https")
+          ? "None"
+          : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -132,8 +135,11 @@ export const logoutUser = async (req, res) => {
     // Очистка HttpOnly Cookie на клиенте
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Только для HTTPS в проде
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // 'none' для прода, 'lax' для локалки
+      secure: process.env.API_URL && process.env.API_URL.startsWith("https"),
+      sameSite:
+        process.env.API_URL && process.env.API_URL.startsWith("https")
+          ? "None"
+          : "lax",
     });
     res.json({ message: "Logged out successfully" });
   } catch (error) {
@@ -164,8 +170,11 @@ export const refreshAccessToken = async (req, res) => {
     await saveRefreshToken(user.user_id, newRefreshToken);
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
+      secure: process.env.API_URL && process.env.API_URL.startsWith("https"),
+      sameSite:
+        process.env.API_URL && process.env.API_URL.startsWith("https")
+          ? "None"
+          : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.json({ accessToken });
