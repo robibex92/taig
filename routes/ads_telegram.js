@@ -259,4 +259,90 @@ routerAdsTelegram.post(
   }
 );
 
+// Удаление объявления и связанных постов в Telegram
+routerAdsTelegram.delete(
+  "/api/ads-telegram/:id",
+  authenticateJWT,
+  async (req, res) => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const { id } = req.params;
+      const user_id = req.user?.user_id;
+
+      // Проверяем существование объявления и права доступа
+      const adResult = await client.query(
+        "SELECT * FROM ads WHERE id = $1 AND user_id = $2",
+        [id, user_id]
+      );
+
+      if (adResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Ad not found or access denied" });
+      }
+
+      // Получаем все сообщения Telegram, связанные с объявлением
+      const telegramMessages = await client.query(
+        "SELECT * FROM telegram_messages WHERE ad_id = $1",
+        [id]
+      );
+
+      // Удаляем сообщения из Telegram
+      for (const message of telegramMessages.rows) {
+        try {
+          await TelegramCreationService.deleteMessage({
+            chatId: message.chat_id,
+            messageId: message.message_id,
+            threadId: message.thread_id,
+          });
+        } catch (error) {
+          console.error(
+            `Error deleting Telegram message ${message.message_id}:`,
+            error
+          );
+          // Продолжаем удаление даже если не удалось удалить сообщение в Telegram
+        }
+      }
+
+      // Удаляем записи о сообщениях Telegram из БД
+      await client.query("DELETE FROM telegram_messages WHERE ad_id = $1", [
+        id,
+      ]);
+
+      // Получаем все изображения объявления
+      const imagesResult = await client.query(
+        "SELECT * FROM ad_images WHERE ad_id = $1",
+        [id]
+      );
+
+      // Удаляем изображения из хранилища (если они хранятся локально)
+      for (const image of imagesResult.rows) {
+        try {
+          // Здесь можно добавить логику удаления файлов, если они хранятся локально
+          // Например: fs.unlinkSync(path.join(uploadDir, image.filename));
+        } catch (error) {
+          console.error(`Error deleting image ${image.id}:`, error);
+          // Продолжаем удаление даже если не удалось удалить файл
+        }
+      }
+
+      // Удаляем записи об изображениях из БД
+      await client.query("DELETE FROM ad_images WHERE ad_id = $1", [id]);
+
+      // Удаляем само объявление
+      await client.query("DELETE FROM ads WHERE id = $1", [id]);
+
+      await client.query("COMMIT");
+      res.json({ message: "Ad and associated data deleted successfully" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Error deleting ad:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default routerAdsTelegram;

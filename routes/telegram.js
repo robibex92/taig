@@ -65,4 +65,27 @@ export const TelegramCreationService = {
     }
     return { results };
   },
+
+  /**
+   * Delete message from Telegram chat
+   * @param {Object} options
+   * @param {string} options.chatId - chat ID
+   * @param {number} options.messageId - message ID to delete
+   * @param {number} [options.threadId] - thread ID (optional)
+   * @returns {Promise<boolean>}
+   */
+  async deleteMessage({ chatId, messageId, threadId }) {
+    try {
+      await bot.deleteMessage(chatId, messageId, {
+        message_thread_id: threadId,
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Error deleting message ${messageId} from chat ${chatId}:`,
+        error
+      );
+      throw error;
+    }
+  },
 };

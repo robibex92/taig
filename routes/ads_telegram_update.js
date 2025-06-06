@@ -33,17 +33,44 @@ function isValidUrl(url) {
 }
 
 // Обновление объявления в БД
-async function updateAd(
-  ad_id,
-  { title, content, category, subcategory, price, status }
-) {
-  const { rows } = await pool.query(
-    `UPDATE ads 
-     SET title = $1, content = $2, category = $3, subcategory = $4, price = $5, status = $6, updated_at = NOW()
-     WHERE id = $7
-     RETURNING *`,
-    [title, content, category, subcategory, price, status, ad_id]
-  );
+async function updateAd(ad_id, updateFields) {
+  if (Object.keys(updateFields).length === 0) {
+    return null; // Ничего обновлять
+  }
+
+  const params = [];
+  let queryParts = [];
+  let paramIndex = 1;
+
+  const allowedFields = [
+    "title",
+    "content",
+    "category",
+    "subcategory",
+    "price",
+    "status",
+  ];
+
+  for (const field in updateFields) {
+    if (allowedFields.includes(field)) {
+      queryParts.push(`${field} = $${paramIndex}`);
+      params.push(updateFields[field]);
+      paramIndex++;
+    }
+  }
+
+  if (queryParts.length === 0) {
+    return null; // Нет разрешенных полей для обновления
+  }
+
+  queryParts.push(`updated_at = NOW()`);
+
+  const query = `UPDATE ads SET ${queryParts.join(
+    ", "
+  )} WHERE id = $${paramIndex} RETURNING *`;
+  params.push(ad_id);
+
+  const { rows } = await pool.query(query, params);
   return rows[0];
 }
 
@@ -238,15 +265,25 @@ router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Invalid ad ID" });
     }
 
-    const {
-      title,
-      content,
-      category,
-      subcategory,
-      price = null,
-      status = "active",
-      images = [],
-    } = req.body;
+    // Получаем только разрешенные поля из тела запроса
+    const updateFields = {};
+    const allowedFields = [
+      "title",
+      "content",
+      "category",
+      "subcategory",
+      "price",
+      "status",
+      "images", // images will be handled separately by updateImages
+    ];
+
+    for (const field in req.body) {
+      if (allowedFields.includes(field) && field !== "images") {
+        updateFields[field] = req.body[field];
+      }
+    }
+
+    const images = req.body.images; // Отдельно получаем изображения
 
     // Проверяем права доступа
     const {
@@ -262,41 +299,49 @@ router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    // Проверяем обязательные поля
-    if (!title || !content || !category || !subcategory) {
-      return res.status(400).json({ error: "Missing required fields" });
+    let updatedAd = ad; // Начинаем с текущего объявления
+    // Обновляем объявление в БД, если есть поля для обновления
+    if (Object.keys(updateFields).length > 0) {
+      const result = await updateAd(ad_id, updateFields);
+      if (result) updatedAd = result; // Используем результат обновления, если оно было
     }
 
-    // Обновляем объявление
-    const updatedAd = await updateAd(ad_id, {
-      title,
-      content,
-      category,
-      subcategory,
-      price,
-      status,
-    });
+    // Обновляем изображения, если они переданы в запросе
+    if (images !== undefined) {
+      // Проверяем, было ли поле images в теле запроса
+      await updateImages(ad_id, images);
+    }
 
-    // Обновляем изображения
-    await updateImages(ad_id, images);
+    // Получаем актуальные данные объявления после обновления (включая изображения)
+    const {
+      rows: [finalAdData],
+    } = await client.query("SELECT * FROM ads WHERE id = $1", [ad_id]);
+    const { rows: finalImages } = await client.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [ad_id]
+    );
+    finalAdData.images = finalImages; // Добавляем изображения к объекту объявления
 
-    // Получаем сообщения для обновления
+    // Получаем сообщения для обновления (уже после обновления в БД)
     const { rows: messages } = await client.query(
       `SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1`,
       [ad_id]
     );
 
-    // Обновляем сообщения в Telegram
-    const telegramResults = await updateTelegramMessages(
-      ad_id,
-      updatedAd,
-      messages
-    );
+    // Обновляем сообщения в Telegram (даже если обновился только статус)
+    let telegramResults = [];
+    if (messages.length > 0) {
+      telegramResults = await updateTelegramMessages(
+        ad_id,
+        finalAdData, // Передаем актуальные данные объявления
+        messages
+      );
+    }
 
     await client.query("COMMIT");
     res.json({
       message: "Updated",
-      ad: updatedAd,
+      ad: finalAdData, // Возвращаем актуальные данные объявления
       telegram: telegramResults,
     });
   } catch (error) {
