@@ -42,7 +42,7 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["https://test.sibroot.ru", "https://api.asicredinvest.md"],
+    origin: "http://localhost:4000",
     credentials: true,
   })
 );
