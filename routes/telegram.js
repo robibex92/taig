@@ -1,17 +1,20 @@
 // telegram.js
-// This file re-creates the TelegramCreationService and exports it for use in routes.
-// It uses the bot instance from services/telegramBot.js and provides a sendMessage function compatible with previous usage.
-
 import bot from "../services/telegramBot.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-
 import express from "express";
 const router = express.Router();
 
 // Маршрут для отправки сообщений в Telegram
 router.post("/send", authenticateJWT, async (req, res) => {
   try {
-    const { chat_id, message, contextType, contextData, sender_id } = req.body;
+    const {
+      chat_id,
+      message,
+      contextType,
+      contextData,
+      sender_id,
+      parse_mode = "HTML",
+    } = req.body;
 
     if (!chat_id || !message) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -23,6 +26,7 @@ router.post("/send", authenticateJWT, async (req, res) => {
     const result = await TelegramCreationService.sendMessage({
       message: formattedMessage,
       chatIds: [chat_id],
+      parse_mode, // Добавляем параметр parse_mode
     });
 
     if (result.results[0].error) {
@@ -46,9 +50,16 @@ export const TelegramCreationService = {
    * @param {string[]} options.chatIds - array of chat IDs
    * @param {string[]} [options.threadIds] - array of thread IDs (optional)
    * @param {Array} [options.photos] - array of photo URLs (optional)
+   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
    * @returns {Promise<{results: Array}>}
    */
-  async sendMessage({ message, chatIds, threadIds = [], photos = [] }) {
+  async sendMessage({
+    message,
+    chatIds,
+    threadIds = [],
+    photos = [],
+    parse_mode = "HTML",
+  }) {
     if (message.length > 1024 && photos.length > 0) {
       throw new Error("Caption exceeds 1024 characters");
     }
@@ -64,7 +75,7 @@ export const TelegramCreationService = {
             // Одно изображение с подписью
             result = await bot.sendPhoto(chatId, photos[0], {
               caption: message,
-              parse_mode: "HTML",
+              parse_mode,
               message_thread_id: threadId,
             });
           } else {
@@ -72,7 +83,7 @@ export const TelegramCreationService = {
             const media = photos.map((photo, index) => ({
               type: "photo",
               media: photo,
-              ...(index === 0 ? { caption: message, parse_mode: "HTML" } : {}),
+              ...(index === 0 ? { caption: message, parse_mode } : {}),
             }));
 
             result = await bot.sendMediaGroup(chatId, media, {
@@ -82,7 +93,7 @@ export const TelegramCreationService = {
         } else {
           // Только текст
           result = await bot.sendMessage(chatId, message, {
-            parse_mode: "HTML",
+            parse_mode,
             message_thread_id: threadId,
           });
         }
