@@ -40,7 +40,11 @@ dotenv.config();
 const app = express();
 // 4. Middleware
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 // 5. Логирование запросов
 app.use((req, res, next) => {
@@ -123,6 +127,7 @@ cron.schedule("0 */12 * * *", async () => {
 const PORT = process.env.PORT || 4000;
 
 // Create HTTP server
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`HTTP Server running on port ${PORT}`);
 });
