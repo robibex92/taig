@@ -99,14 +99,24 @@ export const authenticateUser = async (req, res) => {
 // Получение данных текущего пользователя для сессии
 export const getSessionUser = async (req, res) => {
   try {
+    console.log("getSessionUser called with req.user:", req.user);
+    console.log("Authorization header:", req.headers.authorization);
+
     // Пользователь добавлен в req.user middleware-ом authenticateJWT
     if (!req.user || !req.user.user_id) {
+      console.log("No user in request or missing user_id");
       return res.status(401).json({ error: "User not authenticated" });
     }
+
+    console.log("Fetching user with user_id:", req.user.user_id);
     const user = await getUserByTelegramId(req.user.user_id);
+    console.log("getUserByTelegramId result:", user);
+
     if (!user) {
+      console.log("User not found in database");
       return res.status(404).json({ error: "User not found" });
     }
+
     // Возвращаем только безопасные поля пользователя
     const safeUser = {
       user_id: user.user_id,
@@ -114,11 +124,11 @@ export const getSessionUser = async (req, res) => {
       first_name: user.first_name,
       last_name: user.last_name,
       avatar: user.avatar,
-      // Добавьте сюда только нужные поля
     };
+    console.log("Returning safe user data:", safeUser);
     res.json(safeUser);
   } catch (error) {
-    console.error("Error fetching session user:", error);
+    console.error("Error in getSessionUser:", error);
     res.status(500).json({ error: "Failed to fetch session user" });
   }
 };
