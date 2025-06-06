@@ -37,10 +37,7 @@ export const authenticateUser = async (req, res) => {
       .sort()
       .map((key) => `${key}=${user_data[key]}`)
       .join("\n");
-    const secretKey = crypto
-      .createHmac("sha256", "WebAppData")
-      .update(botToken)
-      .digest();
+    const secretKey = crypto.createHash("sha256").update(botToken).digest();
     const hash = crypto
       .createHmac("sha256", secretKey)
       .update(dataCheckString)
