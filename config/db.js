@@ -7,8 +7,8 @@ const { Pool } = pg;
 
 export const pool = new Pool({
   user: process.env.DB_USER,
-  //host: '185.219.81.226',
-  host: process.env.DB_HOST,
+  host: "217.26.150.214",
+  //host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,

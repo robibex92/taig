@@ -131,58 +131,86 @@ async function updateTelegramMessages(ad_id, ad, messages) {
     messages.map((msg) =>
       limit(async () => {
         try {
-          // Удаляем старое сообщение
-          await fetch(
-            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
+          // Редактируем существующее сообщение
+          const editResult = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageText`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: msg.chat_id,
                 message_id: msg.message_id,
+                text: newText,
+                parse_mode: "HTML",
+                disable_web_page_preview: false,
               }),
             }
           );
 
-          // Добавляем задержку перед отправкой нового сообщения
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const editData = await editResult.json();
 
-          // Отправляем новое сообщение
-          const sendResult = await TelegramCreationService.sendMessage({
-            message: newText,
-            chatIds: [msg.chat_id],
-            threadIds: msg.thread_id ? [msg.thread_id] : [],
-            photos: photos,
-          });
+          if (!editData.ok) {
+            console.error(`Failed to edit message in Telegram:`, {
+              chat_id: msg.chat_id,
+              message_id: msg.message_id,
+              error: editData.description,
+            });
+            results.push({ chat_id: msg.chat_id, error: editData.description });
+            return;
+          }
 
-          // Обновляем записи в БД
-          if (sendResult && Array.isArray(sendResult.results)) {
-            for (const res of sendResult.results) {
-              if (res.result && Array.isArray(res.result)) {
-                // Для медиа-группы
-                for (const message of res.result) {
-                  if (message && message.message_id) {
-                    await pool.query(
-                      `UPDATE telegram_messages 
-                       SET message_id = $1, media_group_id = $2 
-                       WHERE ad_id = $3 AND chat_id = $4`,
-                      [
-                        message.message_id,
-                        message.media_group_id,
-                        ad_id,
-                        res.chatId,
-                      ]
-                    );
+          // Если есть изображения, обновляем их
+          if (photos.length > 0) {
+            // Удаляем старые медиа-сообщения
+            const { rows: mediaMessages } = await pool.query(
+              `SELECT message_id FROM telegram_messages 
+               WHERE ad_id = $1 AND chat_id = $2 AND media_group_id IS NOT NULL`,
+              [ad_id, msg.chat_id]
+            );
+
+            for (const mediaMsg of mediaMessages) {
+              await fetch(
+                `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: msg.chat_id,
+                    message_id: mediaMsg.message_id,
+                  }),
+                }
+              );
+            }
+
+            // Отправляем новые изображения
+            const sendResult = await TelegramCreationService.sendMessage({
+              message: newText,
+              chatIds: [msg.chat_id],
+              threadIds: msg.thread_id ? [msg.thread_id] : [],
+              photos: photos,
+            });
+
+            // Обновляем записи в БД
+            if (sendResult && Array.isArray(sendResult.results)) {
+              for (const res of sendResult.results) {
+                if (res.result && Array.isArray(res.result)) {
+                  // Для медиа-группы
+                  for (const message of res.result) {
+                    if (message && message.message_id) {
+                      await pool.query(
+                        `UPDATE telegram_messages 
+                         SET message_id = $1, media_group_id = $2 
+                         WHERE ad_id = $3 AND chat_id = $4`,
+                        [
+                          message.message_id,
+                          message.media_group_id,
+                          ad_id,
+                          res.chatId,
+                        ]
+                      );
+                    }
                   }
                 }
-              } else if (res.result?.result?.message_id) {
-                // Для обычного сообщения
-                await pool.query(
-                  `UPDATE telegram_messages 
-                   SET message_id = $1 
-                   WHERE ad_id = $2 AND chat_id = $3`,
-                  [res.result.result.message_id, ad_id, res.chatId]
-                );
               }
             }
           }
