@@ -40,12 +40,7 @@ dotenv.config();
 const app = express();
 // 4. Middleware
 app.use(express.json());
-app.use(
-  cors({
-    origin: "http://localhost:4000",
-    credentials: true,
-  })
-);
+app.use(cors());
 app.use(cookieParser());
 // 5. Логирование запросов
 app.use((req, res, next) => {
