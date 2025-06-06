@@ -38,13 +38,14 @@ dotenv.config();
 // 2. Инициализация приложения
 const app = express();
 // 4. Middleware
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(
   cors({
     credentials: true,
   })
 );
 app.use(cookieParser());
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // 5. Логирование запросов
 app.use((req, res, next) => {
   console.log(
