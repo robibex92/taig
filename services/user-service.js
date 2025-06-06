@@ -9,10 +9,28 @@ const hashData = async (data) => {
 
 // Получение пользователя по Telegram ID
 export const getUserByTelegramId = async (user_id) => {
-  const { rows } = await pool.query("SELECT * FROM users WHERE user_id = $1", [
+  // *** START LOG ***
+  console.log(
+    "getUserByTelegramId called with user_id:",
     user_id,
-  ]);
-  return rows[0];
+    "type:",
+    typeof user_id
+  );
+  // *** END LOG ***
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM users WHERE user_id = $1",
+      [user_id]
+    );
+    // *** START LOG ***
+    console.log("getUserByTelegramId query result rows:", rows);
+    // *** END LOG ***
+    return rows[0];
+  } catch (error) {
+    console.error("Error in getUserByTelegramId query:", error);
+    throw error; // Перебрасываем ошибку для обработки выше
+  }
 };
 
 // Создание нового пользователя

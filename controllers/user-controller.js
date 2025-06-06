@@ -169,27 +169,30 @@ export const refreshAccessToken = async (req, res) => {
     // *** END LOG ***
 
     const decoded = verifyToken(refreshToken);
-    if (!decoded) {
+    if (!decoded || !decoded.id) {
       // *** START LOG ***
-      console.log("Refresh token verification failed");
+      console.log("Refresh token verification failed or missing id");
       // *** END LOG ***
       return res
         .status(401)
         .json({ error: "Invalid or expired refresh token" });
     }
 
-    const storedRefreshToken = await getRefreshToken(decoded.id);
-    // *** START LOG ***
-    console.log("Stored refreshToken from DB:", storedRefreshToken);
+    // *** START LOG - Fetching user ***
+    console.log("Attempting to fetch user with decoded.id:", decoded.id);
     // *** END LOG ***
-    if (storedRefreshToken !== refreshToken) {
-      // *** START LOG ***
-      console.log("Refresh token mismatch");
-      // *** END LOG ***
-      return res.status(401).json({ error: "Invalid refresh token" });
+
+    const user = await getUserByTelegramId(decoded.id);
+
+    // *** START LOG - Result of fetching user ***
+    console.log("Result of getUserByTelegramId:", user);
+    // *** END LOG ***
+
+    if (!user) {
+      console.log("User not found for id:", decoded.id);
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const user = await getUserByTelegramId(decoded.user_id);
     const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
     await saveRefreshToken(user.user_id, newRefreshToken);
 
