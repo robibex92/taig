@@ -68,16 +68,6 @@ export const authenticateUser = async (req, res) => {
     const { accessToken, refreshToken } = generateTokens(user);
     await saveRefreshToken(user.user_id, refreshToken);
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.API_URL && process.env.API_URL.startsWith("https"),
-      sameSite:
-        process.env.API_URL && process.env.API_URL.startsWith("https")
-          ? "None"
-          : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
     const safeUser = {
       user_id: user.user_id,
       username: user.username,
