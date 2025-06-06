@@ -54,19 +54,46 @@ export const createUser = async (userData) => {
 
 // Обновление данных пользователя
 export const updateUser = async (user_id, updates) => {
-  // Не обновляем user_id
-  const allowedFields = ["username", "first_name", "last_name", "avatar"];
+  console.log("updateUser called with updates:", updates);
+
+  // Расширенный список разрешенных полей
+  const allowedFields = [
+    "username",
+    "first_name",
+    "last_name",
+    "avatar",
+    "telegram_first_name",
+    "telegram_last_name",
+    "is_manually_updated",
+    "status",
+  ];
+
   const keys = Object.keys(updates).filter((key) =>
     allowedFields.includes(key)
   );
+
+  console.log("Filtered update fields:", keys);
+
+  if (keys.length === 0) {
+    const receivedFields = Object.keys(updates);
+    throw new Error(
+      `No valid fields to update. Received: ${receivedFields.join(", ")}. ` +
+        `Allowed fields: ${allowedFields.join(", ")}`
+    );
+  }
+
   const values = keys.map((key) => updates[key]);
-  if (keys.length === 0) throw new Error("No valid fields to update");
   const setClause = keys
     .map((key, index) => `${key} = $${index + 1}`)
     .join(", ");
+
   const query = `UPDATE users SET ${setClause} WHERE user_id = $${
     keys.length + 1
   } RETURNING *`;
+
+  console.log("Update query:", query);
+  console.log("Update values:", values);
+
   const { rows } = await pool.query(query, [...values, user_id]);
   return rows[0];
 };
