@@ -3,9 +3,39 @@
 // It uses the bot instance from services/telegramBot.js and provides a sendMessage function compatible with previous usage.
 
 import bot from "../services/telegramBot.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 
 import express from "express";
 const router = express.Router();
+
+// Маршрут для отправки сообщений в Telegram
+router.post("/send", authenticateJWT, async (req, res) => {
+  try {
+    const { chat_id, message, contextType, contextData, sender_id } = req.body;
+
+    if (!chat_id || !message) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Форматируем сообщение с информацией об отправителе
+    const formattedMessage = `${message}\n\nОт: ${sender_id}`;
+
+    const result = await TelegramCreationService.sendMessage({
+      message: formattedMessage,
+      chatIds: [chat_id],
+    });
+
+    if (result.results[0].error) {
+      throw new Error(result.results[0].error);
+    }
+
+    res.json({ success: true, result: result.results[0] });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
 
 export const TelegramCreationService = {
