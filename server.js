@@ -85,7 +85,7 @@ app.use("/upload", uploadRouter);
 app.get("/api/users/me/status", async (req, res) => {
   try {
     // user_id должен быть получен из токена авторизации!
-    const user_id = req.user?.id;
+    const user_id = req.user?.user_id;
     if (!user_id) {
       return res.status(401).json({ error: "Not authenticated" });
     }
