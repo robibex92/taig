@@ -151,33 +151,49 @@ export const logoutUser = async (req, res) => {
 // Обновление Access Token (оставляем как было)
 export const refreshAccessToken = async (req, res) => {
   try {
-    const { refreshToken } = req.cookies || {};
+    // *** START LOG - Received refresh request ***
+    console.log("Received refresh request");
+    console.log("Received headers:", req.headers);
+    // *** END LOG ***
+
+    const refreshToken = req.headers.authorization?.split(" ")[1];
     if (!refreshToken) {
+      // *** START LOG ***
+      console.log("No refresh token found in Authorization header");
+      // *** END LOG ***
       return res.status(401).json({ error: "Refresh token missing" });
     }
+
+    // *** START LOG ***
+    console.log("Extracted refreshToken:", refreshToken);
+    // *** END LOG ***
+
     const decoded = verifyToken(refreshToken);
     if (!decoded) {
+      // *** START LOG ***
+      console.log("Refresh token verification failed");
+      // *** END LOG ***
       return res
         .status(401)
         .json({ error: "Invalid or expired refresh token" });
     }
+
     const storedRefreshToken = await getRefreshToken(decoded.id);
+    // *** START LOG ***
+    console.log("Stored refreshToken from DB:", storedRefreshToken);
+    // *** END LOG ***
     if (storedRefreshToken !== refreshToken) {
+      // *** START LOG ***
+      console.log("Refresh token mismatch");
+      // *** END LOG ***
       return res.status(401).json({ error: "Invalid refresh token" });
     }
+
     const user = await getUserByTelegramId(decoded.user_id);
     const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
     await saveRefreshToken(user.user_id, newRefreshToken);
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.API_URL && process.env.API_URL.startsWith("https"),
-      sameSite:
-        process.env.API_URL && process.env.API_URL.startsWith("https")
-          ? "None"
-          : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-    res.json({ accessToken });
+
+    res.json({ accessToken, refreshToken: newRefreshToken });
   } catch (error) {
     console.error("Error refreshing access token:", error);
     res.status(500).json({ error: "Internal server error" });
