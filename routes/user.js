@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  getCurrentUser,
+  getSessionUser,
   updateCurrentUser,
 } from "../controllers/user-controller.js";
 import { pool } from "../config/db.js";
@@ -9,7 +9,7 @@ const userRouter = express.Router();
 const publicUserRouter = express.Router();
 
 // Protected: получение данных текущего пользователя
-userRouter.get("/api/users/me", getCurrentUser);
+userRouter.get("/api/users/me", getSessionUser);
 
 // Protected: обновление данных текущего пользователя
 userRouter.patch("/api/users/me", updateCurrentUser);

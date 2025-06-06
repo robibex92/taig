@@ -5,7 +5,7 @@ import {
   getSessionUser,
   logoutUser,
 } from "../controllers/user-controller.js";
-import { authenticateJWT } from "../middlewares/authenticateJWT.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 

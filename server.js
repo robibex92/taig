@@ -21,7 +21,6 @@ import uploadRouter from "./routes/upload.js";
 import {
   authenticateUser,
   refreshAccessToken,
-  getCurrentUser,
   updateCurrentUser,
 } from "./controllers/user-controller.js";
 import authRoutes from "./routes/auth.js"; // Роуты для авторизации
@@ -40,7 +39,12 @@ dotenv.config();
 const app = express();
 // 4. Middleware
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: ["https://test.sibroot.ru", "https://api.asicredinvest.md"],
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 // 5. Логирование запросов
 app.use((req, res, next) => {
@@ -100,7 +104,6 @@ app.get("/api/users/me/status", async (req, res) => {
   }
 });
 
-app.get("/api/users/me", getCurrentUser);
 app.patch("/api/users/me", updateCurrentUser);
 app.use(userRoutes); // Все роуты пользователей начинаются с /api/users
 
