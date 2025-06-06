@@ -56,7 +56,7 @@ app.use(routerNearby);
 app.use(routerCars);
 app.use(routerAds);
 app.use(routerAdsTelegram);
-app.use(routerAdsTelegramUpdate);
+app.use("/api", routerAdsTelegramUpdate);
 app.use(routerFaqs);
 app.use(routerFloorRules);
 app.use(routerCategories);
