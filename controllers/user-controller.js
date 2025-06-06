@@ -215,12 +215,14 @@ export const updateCurrentUser = async (req, res) => {
 
     const token = authHeader.split(" ")[1];
     const decoded = verifyToken(token);
-    if (!decoded) {
+    if (!decoded || !decoded.id) {
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    const user = await getUserByTelegramId(decoded.user_id);
+    console.log("Updating user with ID:", decoded.id); // Добавляем лог для отладки
+    const user = await getUserByTelegramId(decoded.id);
     if (!user) {
+      console.log("User not found for ID:", decoded.id); // Добавляем лог для отладки
       return res.status(404).json({ error: "User not found" });
     }
 
