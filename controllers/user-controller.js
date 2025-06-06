@@ -74,6 +74,10 @@ export const authenticateUser = async (req, res) => {
       first_name: user.first_name,
       last_name: user.last_name,
       avatar: user.avatar,
+      status: user.status,
+      telegram_first_name: user.telegram_first_name,
+      telegram_last_name: user.telegram_last_name,
+      is_manually_updated: user.is_manually_updated,
     };
     res.json({
       user: safeUser,
@@ -114,6 +118,10 @@ export const getSessionUser = async (req, res) => {
       first_name: user.first_name,
       last_name: user.last_name,
       avatar: user.avatar,
+      status: user.status,
+      telegram_first_name: user.telegram_first_name,
+      telegram_last_name: user.telegram_last_name,
+      is_manually_updated: user.is_manually_updated,
     };
     console.log("Returning safe user data:", safeUser);
     res.json(safeUser);
