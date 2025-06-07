@@ -19,6 +19,7 @@ const storage = multer.diskStorage({
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
+    console.log(`Attempting to save file to: ${uploadDir}`);
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
