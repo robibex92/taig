@@ -4,40 +4,37 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { pool } from "./config/db.js";
 import routerPosts from "./routes/posts.js";
 import routerNearby from "./routes/nearby.js";
 import routerCars from "./routes/cars.js";
 import routerAds from "./routes/ads.js";
-import routerAdsTelegram from "./routes/ads_telegram.js";
-import routerAdsTelegramUpdate from "./routes/ads_telegram_update.js";
 import routerFaqs from "./routes/faqs.js";
 import routerFloorRules from "./routes/floorRules.js";
 import routerCategories from "./routes/categories.js";
 import routerAdImages from "./routes/adImages.js";
 import uploadRouter from "./routes/upload.js";
+import telegramRoutes from "./routes/telegram.js";
+import authRoutes from "./routes/auth.js";
+import userRoutes, { publicUserRouter } from "./routes/user.js";
 import {
   authenticateUser,
   refreshAccessToken,
   updateCurrentUser,
 } from "./controllers/user-controller.js";
-import authRoutes from "./routes/auth.js"; // Роуты для авторизации
-import userRoutes, { publicUserRouter } from "./routes/user.js"; // Все роуты пользователей начинаются с /api/users
 import { authenticateJWT } from "./middlewares/authMiddleware.js";
-//import bot from './bot.js';
-import telegramRoutes from "./routes/telegram.js";
-import https from "https";
-import fs from "fs";
 import cron from "node-cron";
 import fetch from "node-fetch";
 
-// 1. Загрузка конфигурации
+// Загрузка конфигурации
 dotenv.config();
-// 2. Инициализация приложения
+
+// Инициализация приложения
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
-// 4. Middleware
+
+// Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(
   cors({
@@ -46,7 +43,8 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-// 5. Логирование запросов
+
+// Логирование запросов
 app.use((req, res, next) => {
   console.log(
     `${new Date().toISOString()} ${req.ip} ${req.method} ${req.path}`
@@ -54,38 +52,66 @@ app.use((req, res, next) => {
   next();
 });
 
-// Подключение маршрутов
+// Публичные роуты
 app.use(routerPosts);
 app.use(routerNearby);
 app.use(routerCars);
 app.use(routerAds);
-app.use(routerAdsTelegram);
-app.use("/api", routerAdsTelegramUpdate);
 app.use(routerFaqs);
 app.use(routerFloorRules);
 app.use(routerCategories);
 app.use(routerAdImages);
 app.use("/api/telegram", telegramRoutes);
-app.use("/api/upload", uploadRouter);
-
-// public
+app.use("/api/upload", authenticateJWT, uploadRouter); // Только защищённый /api/upload
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.post("/api/auth/telegram", authenticateUser);
 app.post("/api/auth/refresh", refreshAccessToken);
-app.use(authRoutes); // Все роуты авторизации начинаются с /api/auth
+app.use(authRoutes);
 app.use(publicUserRouter);
 
-// Импорт pool для работы с БД
-import { pool } from "./config/db.js";
-
-// Protected user routes
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Защищённые роуты
 app.use(authenticateJWT);
-app.use("/upload", uploadRouter);
 
-// Защищённый роут: получение статуса текущего пользователя
+// Роут для удаления изображения объявления
+app.post("/api/ads/delete-image", async (req, res) => {
+  try {
+    const { id, ad_id } = req.body;
+    if (!id || !ad_id) {
+      return res.status(400).json({ error: "Missing id or ad_id" });
+    }
+
+    const userId = req.user?.id; // Предполагаем, что user_id из токена
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Проверяем, что объявление принадлежит текущему пользователю
+    const adCheck = await pool.query("SELECT user_id FROM ads WHERE id = $1", [
+      ad_id,
+    ]);
+    if (adCheck.rows.length === 0 || adCheck.rows[0].user_id !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Удаляем изображение из базы
+    const result = await pool.query(
+      "DELETE FROM ad_images WHERE id = $1 AND ad_id = $2 RETURNING id",
+      [id, ad_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    res.json({ message: "Image deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting image:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Роут для статуса текущего пользователя
 app.get("/api/users/me/status", async (req, res) => {
   try {
-    // user_id должен быть получен из токена авторизации!
     const user_id = req.user?.user_id;
     if (!user_id) {
       return res.status(401).json({ error: "Not authenticated" });
@@ -105,9 +131,9 @@ app.get("/api/users/me/status", async (req, res) => {
 });
 
 app.patch("/api/users/me", updateCurrentUser);
-app.use(userRoutes); // Все роуты пользователей начинаются с /api/users
+app.use(userRoutes);
 
-// --- Автоматическая архивация объявлений раз в 12 часов ---
+// Автоматическая архивация объявлений раз в 12 часов
 cron.schedule("0 */12 * * *", async () => {
   try {
     const port = process.env.PORT || 4000;
@@ -124,9 +150,6 @@ cron.schedule("0 */12 * * *", async () => {
 
 // Запуск сервера
 const PORT = process.env.PORT || 4000;
-
-// Create HTTP server
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`HTTP Server running on port ${PORT}`);
 });
