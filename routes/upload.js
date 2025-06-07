@@ -44,6 +44,7 @@ router.post("/", upload.array("photos", 10), (req, res) => {
   const fileUrls = req.files.map(
     (file) => `${API_URL}/api/upload/uploads/${file.filename}`
   );
+  console.log("Uploaded fileUrls (backend):", fileUrls);
   res.json({ success: true, fileUrls });
 });
 
