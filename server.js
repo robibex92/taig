@@ -8,7 +8,7 @@ import { pool } from "./config/db.js";
 import routerPosts from "./routes/posts.js";
 import routerNearby from "./routes/nearby.js";
 import routerCars from "./routes/cars.js";
-import routerAds from "./routes/ads.js";
+import routerAds from "./routes/routerAds.js";
 import routerFaqs from "./routes/faqs.js";
 import routerFloorRules from "./routes/floorRules.js";
 import routerCategories from "./routes/categories.js";
