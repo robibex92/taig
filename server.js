@@ -63,7 +63,9 @@ app.use(routerCategories);
 app.use(routerAdImages);
 app.use("/api/telegram", telegramRoutes);
 app.use("/api/upload", authenticateJWT, uploadRouter); // Только защищённый /api/upload
-app.use("/uploads", express.static(path.join(__dirname, "../Uploads")));
+const uploadsStaticPath = path.join(__dirname, "../Uploads");
+console.log(`Express static serving from: ${uploadsStaticPath}`);
+app.use("/uploads", express.static(uploadsStaticPath));
 app.post("/api/auth/telegram", authenticateUser);
 app.post("/api/auth/refresh", refreshAccessToken);
 app.use(authRoutes);

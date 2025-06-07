@@ -16,7 +16,10 @@ const API_URL = process.env.API_URL || "https://api.asicredinvest.md/api-v1";
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = path.join(__dirname, "../Uploads");
+    console.log(`Current working directory (process.cwd()): ${process.cwd()}`);
+    console.log(`Resolved upload directory: ${uploadDir}`);
     if (!fs.existsSync(uploadDir)) {
+      console.log(`Creating directory: ${uploadDir}`);
       fs.mkdirSync(uploadDir, { recursive: true });
     }
     console.log(`Attempting to save file to: ${uploadDir}`);
