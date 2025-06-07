@@ -338,7 +338,7 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
 
 // Получить сообщения Telegram для объявления
 routerAds.get(
-  "/ads/:id/telegram-messages",
+  "/api/ads/:id/telegram-messages",
   authenticateJWT,
   async (req, res) => {
     try {
@@ -357,9 +357,9 @@ routerAds.get(
       // Получаем сообщения Telegram
       const { rows: messages } = await pool.query(
         `SELECT chat_id, thread_id, message_id, media_group_id, created_at 
-       FROM telegram_messages 
-       WHERE ad_id = $1 
-       ORDER BY created_at DESC`,
+     FROM telegram_messages 
+     WHERE ad_id = $1 
+     ORDER BY created_at DESC`,
         [id]
       );
 
