@@ -20,9 +20,6 @@ router.post("/send", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Сообщение уже отформатировано на фронтенде, просто используем его
-    // const formattedMessage = `${message}\n\nОт: ${sender_id}`;
-
     const result = await TelegramCreationService.sendMessage({
       message: message, // Используем сообщение как есть
       chatIds: [chat_id],
@@ -108,12 +105,121 @@ export const TelegramCreationService = {
   },
 
   /**
+   * Edit message text in Telegram chat
+   * @param {Object} options
+   * @param {string} options.chatId - chat ID
+   * @param {number} options.messageId - message ID to edit
+   * @param {string} options.text - new text message
+   * @param {number} [options.threadId] - thread ID (optional)
+   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
+   * @returns {Promise<boolean>}
+   */
+  async editMessageText({
+    chatId,
+    messageId,
+    text,
+    threadId,
+    parse_mode = "HTML",
+  }) {
+    try {
+      await bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode,
+        message_thread_id: threadId,
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Error editing message text ${messageId} in chat ${chatId}:`,
+        error.message
+      );
+      return false;
+    }
+  },
+
+  /**
+   * Edit message caption in Telegram chat
+   * @param {Object} options
+   * @param {string} options.chatId - chat ID
+   * @param {number} options.messageId - message ID to edit
+   * @param {string} options.caption - new caption text
+   * @param {number} [options.threadId] - thread ID (optional)
+   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
+   * @returns {Promise<boolean>}
+   */
+  async editMessageCaption({
+    chatId,
+    messageId,
+    caption,
+    threadId,
+    parse_mode = "HTML",
+  }) {
+    try {
+      await bot.editMessageCaption(caption, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode,
+        message_thread_id: threadId,
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Error editing message caption ${messageId} in chat ${chatId}:`,
+        error.message
+      );
+      return false;
+    }
+  },
+
+  /**
+   * Edit message media (photo) in Telegram chat
+   * @param {Object} options
+   * @param {string} options.chatId - chat ID
+   * @param {number} options.messageId - message ID to edit
+   * @param {string} options.mediaUrl - new media URL
+   * @param {string} [options.caption] - new caption text (optional)
+   * @param {number} [options.threadId] - thread ID (optional)
+   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
+   * @returns {Promise<boolean>}
+   */
+  async editMessageMedia({
+    chatId,
+    messageId,
+    mediaUrl,
+    caption,
+    threadId,
+    parse_mode = "HTML",
+  }) {
+    try {
+      const media = {
+        type: "photo",
+        media: mediaUrl,
+        caption: caption,
+        parse_mode: parse_mode,
+      };
+      await bot.editMessageMedia(media, {
+        chat_id: chatId,
+        message_id: messageId,
+        message_thread_id: threadId,
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Error editing message media ${messageId} in chat ${chatId}:`,
+        error.message
+      );
+      return false;
+    }
+  },
+
+  /**
    * Delete message from Telegram chat
    * @param {Object} options
    * @param {string} options.chatId - chat ID
    * @param {number} options.messageId - message ID to delete
    * @param {number} [options.threadId] - thread ID (optional)
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>}\
    */
   async deleteMessage({ chatId, messageId, threadId }) {
     try {
@@ -124,9 +230,11 @@ export const TelegramCreationService = {
     } catch (error) {
       console.error(
         `Error deleting message ${messageId} from chat ${chatId}:`,
-        error
+        error.message // Используем error.message для более чистого вывода
       );
-      throw error;
+      // Возвращаем false вместо throw error, чтобы не прерывать общий процесс,
+      // но при этом сигнализировать о неудаче.
+      return false;
     }
   },
 };
