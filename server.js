@@ -63,7 +63,7 @@ app.use(routerCategories);
 app.use(routerAdImages);
 app.use("/api/telegram", telegramRoutes);
 app.use("/api/upload", authenticateJWT, uploadRouter); // Только защищённый /api/upload
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "../Uploads")));
 app.post("/api/auth/telegram", authenticateUser);
 app.post("/api/auth/refresh", refreshAccessToken);
 app.use(authRoutes);
