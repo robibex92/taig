@@ -96,11 +96,33 @@ async function updateImages(ad_id, images) {
 }
 
 // Обновление сообщений в Telegram
-async function updateTelegramMessages(ad_id, ad, messages) {
+async function updateTelegramMessages(
+  ad_id,
+  ad,
+  messages,
+  updateType = "update_text"
+) {
   if (!messages.length) {
     console.log("No messages found for ad:", ad_id);
     return [];
   }
+
+  // Группируем сообщения по чатам для более удобной обработки
+  const messagesByChat = messages.reduce((acc, msg) => {
+    if (!acc[msg.chat_id]) {
+      acc[msg.chat_id] = {
+        chat_id: msg.chat_id,
+        thread_id: msg.thread_id,
+        messages: [],
+      };
+    }
+    acc[msg.chat_id].messages.push(msg);
+    return acc;
+  }, {});
+
+  console.log(
+    `Processing ${Object.keys(messagesByChat).length} chats for ad ${ad_id}`
+  );
 
   const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
   const adLink = `${siteUrl}/ads/${ad_id}`;
@@ -154,19 +176,199 @@ async function updateTelegramMessages(ad_id, ad, messages) {
   const limit = pLimit(5);
   const results = [];
 
-  await Promise.all(
-    messages.map((msg) =>
-      limit(async () => {
-        try {
-          // Редактируем существующее сообщение
+  if (updateType === "repost") {
+    console.log(
+      `Starting repost process for ad ${ad_id} in ${
+        Object.keys(messagesByChat).length
+      } chats`
+    );
+
+    // Сначала удаляем все существующие сообщения
+    for (const chatInfo of Object.values(messagesByChat)) {
+      try {
+        // Получаем все сообщения и их медиа-группы для этого чата
+        const { rows: messageInfo } = await pool.query(
+          `SELECT message_id, media_group_id 
+           FROM telegram_messages 
+           WHERE ad_id = $1 AND chat_id = $2 
+           ORDER BY media_group_id NULLS LAST, message_id ASC`,
+          [ad_id, chatInfo.chat_id]
+        );
+
+        if (messageInfo.length === 0) {
+          console.log(
+            `No messages found to delete in chat ${chatInfo.chat_id}`
+          );
+          continue;
+        }
+
+        console.log(
+          `Deleting ${messageInfo.length} messages in chat ${chatInfo.chat_id}`
+        );
+
+        // Удаляем все сообщения из медиа-группы
+        for (const info of messageInfo) {
+          const deleteResult = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatInfo.chat_id,
+                message_id: info.message_id,
+              }),
+            }
+          );
+
+          const deleteData = await deleteResult.json();
+          if (!deleteData.ok) {
+            console.error(`Failed to delete message in Telegram:`, {
+              chat_id: chatInfo.chat_id,
+              message_id: info.message_id,
+              error: deleteData.description,
+            });
+          } else {
+            console.log(
+              `Successfully deleted message ${info.message_id} in chat ${chatInfo.chat_id}`
+            );
+          }
+        }
+
+        // Удаляем записи из БД
+        await pool.query(
+          `DELETE FROM telegram_messages 
+           WHERE ad_id = $1 AND chat_id = $2`,
+          [ad_id, chatInfo.chat_id]
+        );
+        console.log(`Deleted database records for chat ${chatInfo.chat_id}`);
+      } catch (err) {
+        console.error(
+          `Error deleting messages in chat ${chatInfo.chat_id}:`,
+          err
+        );
+        results.push({ chat_id: chatInfo.chat_id, error: err.message });
+      }
+    }
+
+    // После удаления всех старых сообщений, отправляем новые в те же чаты
+    console.log("Starting to send new messages to all chats");
+
+    const chatIds = Object.keys(messagesByChat);
+    const threadIds = Object.values(messagesByChat)
+      .map((chat) => chat.thread_id)
+      .filter(Boolean);
+
+    console.log(`Sending new messages to ${chatIds.length} chats:`, chatIds);
+    if (threadIds.length > 0) {
+      console.log(`Including ${threadIds.length} thread IDs:`, threadIds);
+    }
+
+    const sendResult = await TelegramCreationService.sendMessage({
+      message: newText,
+      chatIds: chatIds,
+      threadIds: threadIds.length > 0 ? threadIds : [],
+      photos: photos,
+    });
+
+    // Сохраняем новые сообщения в БД
+    if (sendResult && Array.isArray(sendResult.results)) {
+      for (const res of sendResult.results) {
+        if (res.result && Array.isArray(res.result)) {
+          for (const message of res.result) {
+            if (message && message.message_id) {
+              await pool.query(
+                `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW())`,
+                [
+                  ad_id,
+                  res.chatId,
+                  res.threadId,
+                  message.message_id,
+                  message.media_group_id,
+                ]
+              );
+              console.log(
+                `Saved new message ${message.message_id} to database for chat ${res.chatId}`
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Формируем результаты для всех чатов
+    for (const chatId of chatIds) {
+      results.push({
+        chat_id: chatId,
+        updated: true,
+        reposted: true,
+        old_messages_deleted: true,
+      });
+    }
+
+    return results;
+  }
+
+  // Обработка других типов обновлений (update_text и keep)
+  if (updateType === "update_text") {
+    // Обновляем только текст в существующих сообщениях
+    for (const chatInfo of Object.values(messagesByChat)) {
+      try {
+        const { rows: messageInfo } = await pool.query(
+          `SELECT message_id, media_group_id 
+           FROM telegram_messages 
+           WHERE ad_id = $1 AND chat_id = $2 
+           ORDER BY media_group_id NULLS LAST, message_id ASC`,
+          [ad_id, chatInfo.chat_id]
+        );
+
+        if (messageInfo.length === 0) {
+          console.log(`No message info found for chat ${chatInfo.chat_id}`);
+          continue;
+        }
+
+        const isMediaMessage = messageInfo[0].media_group_id != null;
+
+        if (isMediaMessage) {
+          // Для медиа-сообщений обновляем текст в первом сообщении группы
+          const firstMessage = messageInfo[0];
+          const editResult = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageCaption`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: chatInfo.chat_id,
+                message_id: firstMessage.message_id,
+                caption: newText,
+                parse_mode: "HTML",
+              }),
+            }
+          );
+
+          const editData = await editResult.json();
+          if (!editData.ok) {
+            console.error(`Failed to edit message caption in Telegram:`, {
+              chat_id: chatInfo.chat_id,
+              message_id: firstMessage.message_id,
+              error: editData.description,
+            });
+            results.push({
+              chat_id: chatInfo.chat_id,
+              error: editData.description,
+            });
+            continue;
+          }
+        } else {
+          // Для текстовых сообщений обновляем текст
           const editResult = await fetch(
             `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/editMessageText`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                chat_id: msg.chat_id,
-                message_id: msg.message_id,
+                chat_id: chatInfo.chat_id,
+                message_id: chatInfo.messages[0].message_id,
                 text: newText,
                 parse_mode: "HTML",
                 disable_web_page_preview: false,
@@ -175,81 +377,39 @@ async function updateTelegramMessages(ad_id, ad, messages) {
           );
 
           const editData = await editResult.json();
-
           if (!editData.ok) {
             console.error(`Failed to edit message in Telegram:`, {
-              chat_id: msg.chat_id,
-              message_id: msg.message_id,
+              chat_id: chatInfo.chat_id,
+              message_id: chatInfo.messages[0].message_id,
               error: editData.description,
             });
-            results.push({ chat_id: msg.chat_id, error: editData.description });
-            return;
-          }
-
-          // Если есть изображения, обновляем их
-          if (photos.length > 0) {
-            // Удаляем старые медиа-сообщения
-            const { rows: mediaMessages } = await pool.query(
-              `SELECT message_id FROM telegram_messages 
-               WHERE ad_id = $1 AND chat_id = $2 AND media_group_id IS NOT NULL`,
-              [ad_id, msg.chat_id]
-            );
-
-            for (const mediaMsg of mediaMessages) {
-              await fetch(
-                `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: msg.chat_id,
-                    message_id: mediaMsg.message_id,
-                  }),
-                }
-              );
-            }
-
-            // Отправляем новые изображения
-            const sendResult = await TelegramCreationService.sendMessage({
-              message: newText,
-              chatIds: [msg.chat_id],
-              threadIds: msg.thread_id ? [msg.thread_id] : [],
-              photos: photos,
+            results.push({
+              chat_id: chatInfo.chat_id,
+              error: editData.description,
             });
-
-            // Обновляем записи в БД
-            if (sendResult && Array.isArray(sendResult.results)) {
-              for (const res of sendResult.results) {
-                if (res.result && Array.isArray(res.result)) {
-                  // Для медиа-группы
-                  for (const message of res.result) {
-                    if (message && message.message_id) {
-                      await pool.query(
-                        `UPDATE telegram_messages 
-                         SET message_id = $1, media_group_id = $2 
-                         WHERE ad_id = $3 AND chat_id = $4`,
-                        [
-                          message.message_id,
-                          message.media_group_id,
-                          ad_id,
-                          res.chatId,
-                        ]
-                      );
-                    }
-                  }
-                }
-              }
-            }
+            continue;
           }
-
-          results.push({ chat_id: msg.chat_id, updated: true });
-        } catch (err) {
-          console.error(`Error updating message for chat ${msg.chat_id}:`, err);
-          results.push({ chat_id: msg.chat_id, error: err.message });
         }
-      })
-    )
-  );
+
+        results.push({ chat_id: chatInfo.chat_id, updated: true });
+      } catch (err) {
+        console.error(
+          `Error updating message for chat ${chatInfo.chat_id}:`,
+          err
+        );
+        results.push({ chat_id: chatInfo.chat_id, error: err.message });
+      }
+    }
+  } else if (updateType === "keep") {
+    console.log("Keeping existing Telegram messages as is");
+    for (const chatInfo of Object.values(messagesByChat)) {
+      results.push({
+        chat_id: chatInfo.chat_id,
+        updated: true,
+        kept: true,
+      });
+    }
+  }
 
   return results;
 }
@@ -264,6 +424,9 @@ router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
     if (isNaN(ad_id)) {
       return res.status(400).json({ error: "Invalid ad ID" });
     }
+
+    // Получаем тип обновления Telegram из тела запроса
+    const telegramUpdateType = req.body.telegramUpdateType || "update_text";
 
     // Получаем только разрешенные поля из тела запроса
     const updateFields = {};
@@ -308,7 +471,6 @@ router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
 
     // Обновляем изображения, если они переданы в запросе
     if (images !== undefined) {
-      // Проверяем, было ли поле images в теле запроса
       await updateImages(ad_id, images);
     }
 
@@ -328,20 +490,21 @@ router.put("/ads-telegram/:id", authenticateJWT, async (req, res) => {
       [ad_id]
     );
 
-    // Обновляем сообщения в Telegram (даже если обновился только статус)
+    // Обновляем сообщения в Telegram в соответствии с выбранным типом обновления
     let telegramResults = [];
     if (messages.length > 0) {
       telegramResults = await updateTelegramMessages(
         ad_id,
-        finalAdData, // Передаем актуальные данные объявления
-        messages
+        finalAdData,
+        messages,
+        telegramUpdateType
       );
     }
 
     await client.query("COMMIT");
     res.json({
       message: "Updated",
-      ad: finalAdData, // Возвращаем актуальные данные объявления
+      ad: finalAdData,
       telegram: telegramResults,
     });
   } catch (error) {
