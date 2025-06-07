@@ -1,7 +1,20 @@
 import express from "express";
 import { pool } from "../config/db.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { validateAdFields, checkUserAccess, createAd, saveImages, updateAd, updateImages, deleteAd, queueTelegramTask, buildMessageText, sendToTelegram, updateTelegramMessages, deleteTelegramMessages } from "./adUtils.js";
+import {
+  validateAdFields,
+  checkUserAccess,
+  createAd,
+  saveImages,
+  updateAd,
+  updateImages,
+  deleteAd,
+  queueTelegramTask,
+  buildMessageText,
+  sendToTelegram,
+  updateTelegramMessages,
+  deleteTelegramMessages,
+} from "./adUtils.js";
 
 const routerAds = express.Router();
 
@@ -25,8 +38,14 @@ routerAds.get("/api/ads", async (req, res) => {
     const allowedSortFields = ["created_at", "price"];
     const allowedOrders = ["ASC", "DESC"];
     if (sort && allowedSortFields.includes(sort)) {
-      const safeOrder = order && allowedOrders.includes(order.toUpperCase()) ? order.toUpperCase() : "DESC";
-      query += sort === "price" ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST` : ` ORDER BY ${sort} ${safeOrder}`;
+      const safeOrder =
+        order && allowedOrders.includes(order.toUpperCase())
+          ? order.toUpperCase()
+          : "DESC";
+      query +=
+        sort === "price"
+          ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`
+          : ` ORDER BY ${sort} ${safeOrder}`;
     } else {
       query += " ORDER BY created_at DESC";
     }
@@ -44,9 +63,13 @@ routerAds.get("/api/ads/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
-    if (rows.length === 0) return res.status(404).json({ error: "Ad not found" });
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Ad not found" });
 
-    const { rows: images } = await pool.query("SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC", [id]);
+    const { rows: images } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [id]
+    );
     res.json({ data: { ...rows[0], images } });
   } catch (error) {
     console.error("Error fetching ad:", error);
@@ -71,8 +94,14 @@ routerAds.get("/api/ads/user/:user_id", async (req, res) => {
     const allowedSortFields = ["created_at", "price"];
     const allowedOrders = ["ASC", "DESC"];
     if (sort && allowedSortFields.includes(sort)) {
-      const safeOrder = order && allowedOrders.includes(order.toUpperCase()) ? order.toUpperCase() : "DESC";
-      query += sort === "price" ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST` : ` ORDER BY ${sort} ${safeOrder}`;
+      const safeOrder =
+        order && allowedOrders.includes(order.toUpperCase())
+          ? order.toUpperCase()
+          : "DESC";
+      query +=
+        sort === "price"
+          ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`
+          : ` ORDER BY ${sort} ${safeOrder}`;
     } else {
       query += " ORDER BY created_at DESC";
     }
@@ -89,11 +118,18 @@ routerAds.get("/api/ads/user/:user_id", async (req, res) => {
 routerAds.post("/api/ads/:id/view_count", async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows } = await pool.query("SELECT view_count FROM ads WHERE id = $1", [id]);
-    if (rows.length === 0) return res.status(404).json({ error: "Ad not found" });
+    const { rows } = await pool.query(
+      "SELECT view_count FROM ads WHERE id = $1",
+      [id]
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Ad not found" });
 
     const updatedViewCount = (rows[0].view_count || 0) + 1;
-    await pool.query("UPDATE ads SET view_count = $1 WHERE id = $2", [updatedViewCount, id]);
+    await pool.query("UPDATE ads SET view_count = $1 WHERE id = $2", [
+      updatedViewCount,
+      id,
+    ]);
     res.json({ view_count: updatedViewCount });
   } catch (error) {
     console.error("Error updating view count:", error);
@@ -106,22 +142,59 @@ routerAds.post("/api/ads", authenticateJWT, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const { user_id, title, content, category, subcategory, price, status = "active", images = [], isTelegram, selectedChats = [] } = req.body;
+    const {
+      user_id,
+      title,
+      content,
+      category,
+      subcategory,
+      price,
+      status = "active",
+      images = [],
+      isTelegram,
+      selectedChats = [],
+    } = req.body;
     const authUserId = req.user?.id || req.user?.user_id;
 
-    if (String(user_id) !== String(authUserId)) throw new Error("User ID mismatch");
+    if (String(user_id) !== String(authUserId))
+      throw new Error("User ID mismatch");
     validateAdFields({ user_id, title, content, category, subcategory });
 
-    const ad = await createAd({ user_id, title, content, category, subcategory, price, status });
+    const ad = await createAd({
+      user_id,
+      title,
+      content,
+      category,
+      subcategory,
+      price,
+      status,
+    });
     await saveImages(ad.id, images);
 
     if (isTelegram && selectedChats.length > 0) {
-      const messageText = buildMessageText({ title, content, price, username: req.user?.username, user_id, ad_id: ad.id });
-      queueTelegramTask(() => sendToTelegram({ ad_id: ad.id, selectedChats, messageText, photos: images }));
+      const messageText = buildMessageText({
+        title,
+        content,
+        price,
+        username: req.user?.username,
+        user_id,
+        ad_id: ad.id,
+      });
+      queueTelegramTask(() =>
+        sendToTelegram({
+          ad_id: ad.id,
+          selectedChats,
+          messageText,
+          photos: images,
+        })
+      );
     }
 
     await client.query("COMMIT");
-    const { rows: imagesData } = await pool.query("SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC", [ad.id]);
+    const { rows: imagesData } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [ad.id]
+    );
     res.status(201).json({ data: { ...ad, images: imagesData } });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -138,31 +211,66 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
   try {
     await client.query("BEGIN");
     const { id } = req.params;
-    const { title, content, category, subcategory, price, status, images, isTelegram, selectedChats = [], telegramUpdateType = "update_text" } = req.body;
+    const {
+      title,
+      content,
+      category,
+      subcategory,
+      price,
+      status,
+      images,
+      isTelegram,
+      selectedChats = [],
+      telegramUpdateType = "update_text",
+    } = req.body;
     const user_id = req.user?.id || req.user?.user_id;
 
-    const { rows: [ad] } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+    const {
+      rows: [ad],
+    } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
     checkUserAccess(ad, user_id);
 
-    const updateFields = { title, content, category, subcategory, price, status };
-    const updatedAd = await updateAd(id, updateFields) || ad;
+    const updateFields = {
+      title,
+      content,
+      category,
+      subcategory,
+      price,
+      status,
+    };
+    const updatedAd = (await updateAd(id, updateFields)) || ad;
     if (images !== undefined) await updateImages(id, images);
 
     if (isTelegram && selectedChats.length > 0) {
-      const { rows: messages } = await pool.query("SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1", [id]);
+      const { rows: messages } = await pool.query(
+        "SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1",
+        [id]
+      );
       const messageText = buildMessageText({
         title: title || ad.title,
         content: content || ad.content,
         price: price !== undefined ? price : ad.price,
         username: req.user?.username,
         user_id,
-        ad_id: id
+        ad_id: id,
       });
-      queueTelegramTask(() => updateTelegramMessages(id, { ...updatedAd, images }, messages, telegramUpdateType, selectedChats, messageText));
+      queueTelegramTask(() =>
+        updateTelegramMessages(
+          id,
+          { ...updatedAd, images },
+          messages,
+          telegramUpdateType,
+          selectedChats,
+          messageText
+        )
+      );
     }
 
     await client.query("COMMIT");
-    const { rows: imagesData } = await pool.query("SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC", [id]);
+    const { rows: imagesData } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [id]
+    );
     res.json({ data: { ...updatedAd, images: imagesData } });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -181,12 +289,18 @@ routerAds.delete("/api/ads/:id", authenticateJWT, async (req, res) => {
     const { id } = req.params;
     const user_id = req.user?.id || req.user?.user_id;
 
-    const { rows: [ad] } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+    const {
+      rows: [ad],
+    } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
     checkUserAccess(ad, user_id);
 
     await deleteAd(id, true); // Мягкое удаление
-    const { rows: messages } = await pool.query("SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1", [id]);
-    if (messages.length > 0) queueTelegramTask(() => deleteTelegramMessages(id, messages));
+    const { rows: messages } = await pool.query(
+      "SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1",
+      [id]
+    );
+    if (messages.length > 0)
+      queueTelegramTask(() => deleteTelegramMessages(id, messages));
 
     await client.query("COMMIT");
     res.json({ message: "Ad deleted successfully" });
@@ -221,5 +335,40 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// Получить сообщения Telegram для объявления
+routerAds.get(
+  "/ads/:id/telegram-messages",
+  authenticateJWT,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user_id = req.user?.id || req.user?.user_id;
+
+      // Проверяем доступ к объявлению
+      const {
+        rows: [ad],
+      } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+      if (!ad) {
+        return res.status(404).json({ error: "Ad not found" });
+      }
+      checkUserAccess(ad, user_id);
+
+      // Получаем сообщения Telegram
+      const { rows: messages } = await pool.query(
+        `SELECT chat_id, thread_id, message_id, media_group_id, created_at 
+       FROM telegram_messages 
+       WHERE ad_id = $1 
+       ORDER BY created_at DESC`,
+        [id]
+      );
+
+      res.json({ messages });
+    } catch (error) {
+      console.error("Error fetching Telegram messages:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 export default routerAds;
