@@ -19,11 +19,16 @@ const storage = multer.diskStorage({
     cb(null, path.join(__dirname, "../uploads"));
   },
   filename: function (req, file, cb) {
-    // Получаем расширение файла
-    const ext = path.extname(file.originalname) || "";
+    // Получаем расширение файла в нижнем регистре
+    const ext = path.extname(file.originalname).toLowerCase();
     // Генерируем латинское имя: random + дата + расширение
     const random = Math.floor(Math.random() * 1e8);
-    const uniqueName = `${Date.now()}-${random}${ext}`;
+    // Если расширение не определено или это HEIC/HEIF, используем .jpg
+    const finalExt = !ext || /\.(heic|heif)$/i.test(ext) ? ".jpg" : ext;
+    const uniqueName = `${Date.now()}-${random}${finalExt}`;
+    console.log(
+      `Processing file: ${file.originalname}, MIME: ${file.mimetype}, Final ext: ${finalExt}`
+    );
     cb(null, uniqueName);
   },
 });
@@ -35,16 +40,31 @@ const upload = multer({
 
 // Маршрут для загрузки файлов (требует аутентификации)
 router.post("/", upload.array("photos", 10), (req, res) => {
+  console.log(
+    "Upload request received. Files:",
+    req.files
+      ? req.files.map((f) => ({
+          fieldname: f.fieldname,
+          originalname: f.originalname,
+          mimetype: f.mimetype,
+          size: f.size,
+        }))
+      : "No files"
+  );
+
   if (!req.files || req.files.length === 0) {
+    console.log("No files in request");
     return res
       .status(400)
       .json({ success: false, message: "No files uploaded." });
   }
+
   // Формируем полный URL для каждого файла
   const fileUrls = req.files.map(
     (file) => `${API_URL}/api/upload/uploads/${file.filename}`
   );
-  console.log("Uploaded fileUrls (backend):", fileUrls);
+
+  console.log("Successfully processed files. URLs:", fileUrls);
   res.json({ success: true, fileUrls });
 });
 
