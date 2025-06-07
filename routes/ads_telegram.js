@@ -192,6 +192,8 @@ routerAdsTelegram.post(
         isImportant = false,
       } = req.body;
 
+      console.log("Received images in POST /api/ads-telegram:", images);
+
       const user_id = req.user?.id || req.user?.user_id;
       if (!user_id)
         return res.status(401).json({ error: "No user_id in token" });
