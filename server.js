@@ -70,10 +70,10 @@ app.use(authRoutes);
 app.use(publicUserRouter);
 
 // Защищённые роуты
-app.use(authenticateJWT);
+// app.use(authenticateJWT); // <-- Удаляем эту строку
 
 // Роут для удаления изображения объявления
-app.post("/api/ads/delete-image", async (req, res) => {
+app.post("/api/ads/delete-image", authenticateJWT, async (req, res) => {
   try {
     const { id, ad_id } = req.body;
     if (!id || !ad_id) {
@@ -110,7 +110,7 @@ app.post("/api/ads/delete-image", async (req, res) => {
 });
 
 // Роут для статуса текущего пользователя
-app.get("/api/users/me/status", async (req, res) => {
+app.get("/api/users/me/status", authenticateJWT, async (req, res) => {
   try {
     const user_id = req.user?.user_id;
     if (!user_id) {
@@ -130,7 +130,7 @@ app.get("/api/users/me/status", async (req, res) => {
   }
 });
 
-app.patch("/api/users/me", updateCurrentUser);
+app.patch("/api/users/me", authenticateJWT, updateCurrentUser);
 app.use(userRoutes);
 
 // Автоматическая архивация объявлений раз в 12 часов

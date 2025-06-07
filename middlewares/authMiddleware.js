@@ -4,7 +4,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export const authenticateJWT = async (req, res, next) => {
   try {
-    console.log("authenticateJWT middleware called");
+    console.log(
+      `authenticateJWT middleware called for path: ${req.path}, URL: ${req.url}`
+    );
     console.log("Headers:", req.headers);
 
     const authHeader = req.headers.authorization;
