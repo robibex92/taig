@@ -82,7 +82,7 @@ app.post("/api/ads/delete-image", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Missing id or ad_id" });
     }
 
-    const userId = req.user?.id; // Предполагаем, что user_id из токена
+    const userId = req.user?.user_id; // Предполагаем, что user_id из токена
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
