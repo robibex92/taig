@@ -34,10 +34,17 @@ const upload = multer({
 });
 
 // Маршрут для загрузки файлов (требует аутентификации)
-router.post("/", upload.single("file"), (req, res) => {
-  // Формируем полный URL для файла
-  const fileUrl = `${API_URL}/api/upload/uploads/${req.file.filename}`;
-  res.json({ success: true, fileUrl });
+router.post("/", upload.array("photos", 10), (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res
+      .status(400)
+      .json({ success: false, message: "No files uploaded." });
+  }
+  // Формируем полный URL для каждого файла
+  const fileUrls = req.files.map(
+    (file) => `${API_URL}/api/upload/uploads/${file.filename}`
+  );
+  res.json({ success: true, fileUrls });
 });
 
 // Маршрут для публичного доступа к файлам (без аутентификации)
