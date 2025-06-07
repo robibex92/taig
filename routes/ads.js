@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../config/db.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { TelegramCreationService } from "./telegram.js";
 
 const routerAds = express.Router();
 
@@ -324,36 +325,34 @@ routerAds.delete("/api/ads/:id", authenticateJWT, async (req, res) => {
       for (const msg of groupMessages) {
         try {
           console.log(
-            `Deleting message ${msg.message_id} from chat ${msg.chat_id}`
+            `Attempting to delete message ${msg.message_id} from chat ${msg.chat_id}`
           );
-          const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`;
-          const tgRes = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: msg.chat_id,
-              message_id: msg.message_id,
-            }),
+          // Используем TelegramCreationService для удаления сообщения
+          const deleteSuccess = await TelegramCreationService.deleteMessage({
+            chatId: msg.chat_id,
+            messageId: msg.message_id,
+            threadId: msg.thread_id, // Передаем threadId, если есть
           });
 
-          const data = await tgRes.json();
-          if (!data.ok) {
-            console.error(`Failed to delete message in Telegram:`, {
+          if (!deleteSuccess) {
+            console.error(`Failed to delete message via service:`, {
               chat_id: msg.chat_id,
               message_id: msg.message_id,
-              error: data.description,
+              error: "Unknown error or API rejection",
             });
           }
 
           telegramDeleteResults.push({
             chat_id: msg.chat_id,
             message_id: msg.message_id,
-            ok: data.ok,
-            description: data.description,
+            ok: deleteSuccess,
+            description: deleteSuccess
+              ? "Message deleted successfully"
+              : "Failed to delete message",
           });
 
-          // Добавляем небольшую задержку между удалениями
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          // Удаляем небольшую задержку, так как сервис должен управлять этим сам
+          // await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (err) {
           console.error(`Error deleting Telegram message:`, err);
           telegramDeleteResults.push({

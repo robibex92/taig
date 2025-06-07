@@ -75,13 +75,38 @@ async function updateAd(ad_id, updateFields) {
 }
 
 // Обновление изображений
-async function updateImages(ad_id, images) {
-  // Удаляем старые изображения
+async function updateImages(ad_id, newImages) {
+  // Получаем текущие изображения из БД
+  const { rows: currentImages } = await pool.query(
+    "SELECT image_url FROM ad_images WHERE ad_id = $1 ORDER BY created_at ASC",
+    [ad_id]
+  );
+
+  const currentImageUrls = currentImages.map((img) => img.image_url);
+  const newImageUrls = newImages
+    .map((img) => img.url || img.image_url)
+    .filter(Boolean);
+
+  // Сравниваем текущие и новые URL изображений
+  const currentSet = new Set(currentImageUrls);
+  const newSet = new Set(newImageUrls);
+
+  // Если наборы идентичны, изменений в изображениях нет, ничего не делаем
+  if (
+    currentSet.size === newSet.size &&
+    [...currentSet].every((url) => newSet.has(url))
+  ) {
+    console.log(`Images for ad ${ad_id} are identical. No update needed.`);
+    return;
+  }
+
+  // Если есть различия, продолжаем обновление
+  // Удаляем все старые изображения
   await pool.query(`DELETE FROM ad_images WHERE ad_id = $1`, [ad_id]);
 
-  // Добавляем новые
-  if (Array.isArray(images) && images.length > 0) {
-    for (const img of images) {
+  // Добавляем новые изображения, если newImages не пуст
+  if (Array.isArray(newImages) && newImages.length > 0) {
+    for (const img of newImages) {
       if (!isValidUrl(img.url || img.image_url)) {
         console.error("Invalid image URL:", img.url || img.image_url);
         continue;

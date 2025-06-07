@@ -9,10 +9,10 @@ router.post("/send", authenticateJWT, async (req, res) => {
   try {
     const {
       chat_id,
-      message,
+      message, // Это уже полностью отформатированное сообщение с фронтенда
       contextType,
       contextData,
-      sender_id,
+      sender_id, // Этот sender_id больше не нужен для форматирования сообщения
       parse_mode = "HTML",
     } = req.body;
 
@@ -20,13 +20,13 @@ router.post("/send", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Форматируем сообщение с информацией об отправителе
-    const formattedMessage = `${message}\n\nОт: ${sender_id}`;
+    // Сообщение уже отформатировано на фронтенде, просто используем его
+    // const formattedMessage = `${message}\n\nОт: ${sender_id}`;
 
     const result = await TelegramCreationService.sendMessage({
-      message: formattedMessage,
+      message: message, // Используем сообщение как есть
       chatIds: [chat_id],
-      parse_mode, // Добавляем параметр parse_mode
+      parse_mode,
     });
 
     if (result.results[0].error) {
