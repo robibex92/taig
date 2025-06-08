@@ -175,145 +175,40 @@ export const sendToTelegram = async ({
   messageText,
   photos,
 }) => {
-  if (!selectedChats.length) return [];
-  const limit = pLimit(1);
-  const uniqueChats = [...new Set(selectedChats)]; // Удаление дубликатов
-  const chatTargets = getTelegramChatTargets(uniqueChats);
-  const photosToSend = photos
-    .map((img) => {
-      let url = img.url || img.image_url;
-      if (!url) return null;
-      if (url.startsWith("/"))
-        url = `${
-          process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
-        }${url}`;
-      return isValidUrl(url) ? url : null;
-    })
-    .filter(Boolean);
-
-  console.log("Sending to Telegram:", {
-    ad_id,
-    selectedChats: uniqueChats,
-    photosToSend,
-    messageText,
-  });
-
-  return Promise.all(
-    chatTargets.map((chat) =>
-      limit(async () => {
-        try {
-          let result;
-          const isMedia = photosToSend.length > 0;
-          const mediaGroup = isMedia
-            ? photosToSend.map((photo, index) => ({
-                type: "photo",
-                media: photo,
-                ...(index === 0
-                  ? { caption: messageText, parse_mode: "HTML" }
-                  : {}),
-              }))
-            : null;
-
-          result = await TelegramCreationService.sendMessage({
-            message: messageText,
-            chatIds: [chat.chatId],
-            threadIds: chat.threadId ? [chat.threadId] : [],
-            photos: photosToSend,
-            mediaGroup,
-            parse_mode: "HTML",
-          });
-
-          if (result && Array.isArray(result.results)) {
-            for (const res of result.results) {
-              if (res.result && Array.isArray(res.result)) {
-                let isFirst = true;
-                for (const message of res.result) {
-                  if (message && message.message_id) {
-                    try {
-                      const isMediaMessage = isMedia && !isFirst;
-                      console.log("Inserting message:", {
-                        ad_id,
-                        chatId: res.chatId,
-                        threadId: res.threadId,
-                        messageId: message.message_id,
-                        mediaGroupId: message.media_group_id || null,
-                        isMedia: isMediaMessage,
-                      });
-                      await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, price, created_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-                        [
-                          ad_id,
-                          res.chatId,
-                          res.threadId,
-                          message.message_id,
-                          message.media_group_id || null,
-                          isFirst ? messageText : null,
-                          isMediaMessage,
-                          isFirst
-                            ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
-                              null
-                            : null,
-                        ]
-                      );
-                      isFirst = false;
-                    } catch (dbErr) {
-                      console.error("Error inserting media message:", dbErr);
-                    }
-                  }
-                }
-              } else if (res.result?.message_id) {
-                try {
-                  console.log("Inserting single message:", {
-                    ad_id,
-                    chatId: res.chatId,
-                    threadId: res.threadId,
-                    messageId: res.result.message_id,
-                  });
-                  await pool.query(
-                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, price, created_at)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-                    [
-                      ad_id,
-                      res.chatId,
-                      res.threadId,
-                      res.result.message_id,
-                      messageText,
-                      false,
-                      (messageText.match(/Цена: (\d+)/) || [])[1] || null,
-                    ]
-                  );
-                } catch (dbErr) {
-                  console.error("Error inserting single message:", dbErr);
-                }
-              }
-            }
-          }
-          return { chat: chat.chatId, ok: true };
-        } catch (err) {
-          if (err.message.includes("429 Too Many Requests")) {
-            const retryAfter = 44; // Извлечь из err.response если доступно
-            console.warn(
-              `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryAfter * 1000)
-            );
-            return sendToTelegram({
-              ad_id,
-              selectedChats: [chat.chatId],
-              messageText,
-              photos,
-            });
-          }
-          console.error(`Error sending to chat ${chat.chatId}:`, err);
-          return { chat: chat.chatId, ok: false, error: err.message };
-        }
-      })
-    )
-  );
+  const results = [];
+  for (const chat of selectedChats) {
+    const chatTarget = getTelegramChatTargets([chat])[0];
+    const response = await TelegramCreationService.sendMessage({
+      chatId: chatTarget.chatId,
+      text: messageText,
+      threadId: chatTarget.threadId,
+      parse_mode: "HTML",
+      photos: photos,
+    });
+    if (response && response.message_id) {
+      const imageUrls = photos ? photos.map((p) => p.url || p.image_url) : [];
+      await pool.query(
+        "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [
+          ad_id,
+          chatTarget.chatId,
+          chatTarget.threadId,
+          response.message_id,
+          messageText,
+          !!photos.length,
+          imageUrls,
+        ]
+      );
+      results.push({
+        chat_id: chatTarget.chatId,
+        thread_id: chatTarget.threadId,
+        message_id: response.message_id,
+        success: true,
+      });
+    }
+  }
+  return results;
 };
-
 export const updateTelegramMessages = async (
   ad_id,
   ad,
@@ -341,35 +236,55 @@ export const updateTelegramMessages = async (
   const chatTargets = getTelegramChatTargets(uniqueSelectedChats);
 
   if (telegramUpdateType === "repost" && ad.images) {
-    const currentImages = await pool
-      .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
-      .then((res) => res.rows.map((r) => r.image_url));
-    const newImages = ad.images.map((img) => img.url || img.image_url);
-    const hasImageChanges = !areImageSetsEqual(currentImages, newImages);
-    if (hasImageChanges) {
-      console.log(`Image changes detected for ad ${ad_id}`);
-      const deleteResults = await deleteTelegramMessages(ad_id, messages);
-      results.push(...deleteResults);
+    const newImages = ad.images.map((img) => img.url || img.image_url).sort();
+    for (const chatInfo of Object.values(
+      messages.reduce((acc, msg) => {
+        const key = `${msg.chat_id}_${msg.thread_id || "null"}`;
+        acc[key] = acc[key] || {
+          chat_id: msg.chat_id,
+          thread_id: msg.thread_id,
+          messages: [],
+        };
+        acc[key].messages.push(msg);
+        return acc;
+      }, {})
+    )) {
+      const chatMessages = chatInfo.messages;
+      const currentImages = await pool
+        .query(
+          "SELECT url_img FROM telegram_messages WHERE ad_id = $1 AND chat_id = $2 AND (thread_id = $3 OR ($3 IS NULL AND thread_id IS NULL))",
+          [ad_id, chatInfo.chat_id, chatInfo.thread_id]
+        )
+        .then((res) => (res.rows.length ? res.rows[0].url_img || [] : []));
+      const hasImageChanges = !areImageArraysEqual(
+        currentImages.sort(),
+        newImages
+      );
+      if (hasImageChanges) {
+        console.log(
+          `Image changes detected for ad ${ad_id} in chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id})`
+        );
+        const deleteResults = await deleteTelegramMessages(ad_id, chatMessages);
+        results.push(...deleteResults);
 
-      const sendResults = await sendToTelegram({
-        ad_id,
-        selectedChats: uniqueSelectedChats,
-        messageText,
-        photos: ad.images,
-      });
-      results.push(...sendResults);
-    } else {
-      console.log(
-        `No image changes detected for ad ${ad_id}, switching to update_text`
-      );
-      return await updateExistingMessages(
-        ad_id,
-        messages,
-        messageText,
-        chatTargets
-      );
+        const sendResults = await sendToTelegram({
+          ad_id,
+          selectedChats: [
+            chatTargets.find(
+              (ct) =>
+                String(ct.chatId) === String(chatInfo.chat_id) &&
+                String(ct.threadId) === String(chatInfo.thread_id || null)
+            )?.name,
+          ],
+          messageText,
+          photos: ad.images,
+        });
+        results.push(...sendResults);
+      }
     }
-    return results;
+    return results.length
+      ? results
+      : await updateExistingMessages(ad_id, messages, messageText, chatTargets);
   }
 
   return await updateExistingMessages(
@@ -380,13 +295,12 @@ export const updateTelegramMessages = async (
   );
 };
 
-// Обновлённая функция для сравнения наборов изображений
-function areImageSetsEqual(arr1, arr2) {
-  if (arr1.length !== arr2.length) return false; // Проверка длины
-  const set1 = new Set(arr1);
-  const set2 = new Set(arr2);
-  return set1.size === set2.size && [...set1].every((item) => set2.has(item));
+// Функция сравнения массивов
+function areImageArraysEqual(arr1, arr2) {
+  if (arr1.length !== arr2.length) return false;
+  return arr1.every((item, index) => item === arr2[index]);
 }
+
 async function updateExistingMessages(
   ad_id,
   messages,
