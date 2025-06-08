@@ -36,7 +36,7 @@ function escapeHtml(text) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/'/g, "&#039;");
 }
 
 function isValidUrl(url) {
@@ -176,7 +176,7 @@ export const sendToTelegram = async ({
   photos,
 }) => {
   if (!selectedChats.length) return [];
-  const limit = pLimit(5);
+  const limit = pLimit(1); // Уменьшен параллелизм до 1 для избежания лимитов
   const chatTargets = getTelegramChatTargets(selectedChats);
   const photosToSend = photos
     .map((img) => {
@@ -225,7 +225,7 @@ export const sendToTelegram = async ({
           if (result && Array.isArray(result.results)) {
             for (const res of result.results) {
               if (res.result && Array.isArray(res.result)) {
-                let isFirst = true; // Флаг для первого сообщения в медиа-группе
+                let isFirst = true;
                 for (const message of res.result) {
                   if (message && message.message_id) {
                     try {
@@ -255,7 +255,7 @@ export const sendToTelegram = async ({
                             : null,
                         ]
                       );
-                      isFirst = false; // Сбрасываем флаг после первого сообщения
+                      isFirst = false;
                     } catch (dbErr) {
                       console.error("Error inserting media message:", dbErr);
                     }
@@ -290,6 +290,21 @@ export const sendToTelegram = async ({
           }
           return { chat: chat.chatId, ok: true };
         } catch (err) {
+          if (err.message.includes("429 Too Many Requests")) {
+            const retryAfter = 5; // Извлечь из err.response если доступно
+            console.warn(
+              `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryAfter * 1000)
+            );
+            return sendToTelegram({
+              ad_id,
+              selectedChats: [chat.chatId],
+              messageText,
+              photos,
+            });
+          }
           console.error(`Error sending to chat ${chat.chatId}:`, err);
           return { chat: chat.chatId, ok: false, error: err.message };
         }
@@ -307,7 +322,7 @@ export const updateTelegramMessages = async (
   messageText
 ) => {
   if (!messages.length && telegramUpdateType !== "repost") return [];
-  const limit = pLimit(5);
+  const limit = pLimit(1);
   const results = [];
 
   console.log("Updating Telegram messages:", {
@@ -469,7 +484,7 @@ export const updateTelegramMessages = async (
 };
 
 export const deleteTelegramMessages = async (ad_id, messages) => {
-  const limit = pLimit(5);
+  const limit = pLimit(1);
   const results = [];
   const messagesByChat = messages.reduce((acc, msg) => {
     acc[msg.chat_id] = acc[msg.chat_id] || [];
