@@ -1,54 +1,51 @@
 import express from "express";
 import { pool } from "../config/db.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { TelegramCreationService } from "./telegram.js";
 import {
   validateAdFields,
   checkUserAccess,
+  createAd,
+  saveImages,
   updateAd,
   updateImages,
-  buildMessageText,
+  deleteAd,
   queueTelegramTask,
+  buildMessageText,
+  sendToTelegram,
   updateTelegramMessages,
+  deleteTelegramMessages,
 } from "./adUtils.js";
 
 const routerAds = express.Router();
 
-// 1. Получить все объявления по статусу
+// Получить все объявления
 routerAds.get("/api/ads", async (req, res) => {
   try {
     const { status = "active", category, subcategory, sort, order } = req.query;
-
     let query = "SELECT * FROM ads WHERE status = $1";
     let params = [status];
     let paramIndex = 2;
 
     if (category) {
-      query += ` AND category = $${paramIndex}`;
+      query += ` AND category = $${paramIndex++}`;
       params.push(category);
-      paramIndex++;
     }
-
     if (subcategory) {
-      query += ` AND subcategory = $${paramIndex}`;
+      query += ` AND subcategory = $${paramIndex++}`;
       params.push(subcategory);
-      paramIndex++;
     }
 
     const allowedSortFields = ["created_at", "price"];
     const allowedOrders = ["ASC", "DESC"];
-
     if (sort && allowedSortFields.includes(sort)) {
       const safeOrder =
         order && allowedOrders.includes(order.toUpperCase())
           ? order.toUpperCase()
           : "DESC";
-
-      if (sort === "price") {
-        query += ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`;
-      } else {
-        query += ` ORDER BY ${sort} ${safeOrder}`;
-      }
+      query +=
+        sort === "price"
+          ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`
+          : ` ORDER BY ${sort} ${safeOrder}`;
     } else {
       query += " ORDER BY created_at DESC";
     }
@@ -61,80 +58,50 @@ routerAds.get("/api/ads", async (req, res) => {
   }
 });
 
-// 2. Получить конкретное объявление по id
+// Получить объявление по ID
 routerAds.get("/api/ads/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
-
-    if (rows.length === 0) {
+    if (rows.length === 0)
       return res.status(404).json({ error: "Ad not found" });
-    }
 
-    res.json({ data: rows[0] });
+    const { rows: images } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [id]
+    );
+    res.json({ data: { ...rows[0], images } });
   } catch (error) {
     console.error("Error fetching ad:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-// 9. Увеличить счетчик просмотров объявления
-routerAds.post("/api/ads/:id/view_count", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { rows } = await pool.query(
-      "SELECT view_count FROM ads WHERE id = $1",
-      [id]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Ad not found" });
-    }
-
-    const currentViewCount = rows[0].view_count || 0;
-    const updatedViewCount = currentViewCount + 1;
-
-    await pool.query("UPDATE ads SET view_count = $1 WHERE id = $2", [
-      updatedViewCount,
-      id,
-    ]);
-
-    res.json({ view_count: updatedViewCount });
-  } catch (error) {
-    console.error("Error updating view count:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-// 5. Получить объявления пользователя
+// Получить объявления пользователя
 routerAds.get("/api/ads/user/:user_id", async (req, res) => {
   try {
     const { user_id } = req.params;
     const { status, sort, order } = req.query;
-
     let query = "SELECT * FROM ads WHERE user_id = $1";
     const params = [user_id];
+    let paramIndex = 2;
 
     if (status) {
-      query += " AND status = $2";
+      query += ` AND status = $${paramIndex++}`;
       params.push(status);
     }
 
     const allowedSortFields = ["created_at", "price"];
     const allowedOrders = ["ASC", "DESC"];
-
     if (sort && allowedSortFields.includes(sort)) {
       const safeOrder =
         order && allowedOrders.includes(order.toUpperCase())
           ? order.toUpperCase()
           : "DESC";
-
-      if (sort === "price") {
-        query += ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`;
-      } else {
-        query += ` ORDER BY ${sort} ${safeOrder}`;
-      }
+      query +=
+        sort === "price"
+          ? ` ORDER BY CAST(price AS INTEGER) ${safeOrder} NULLS LAST`
+          : ` ORDER BY ${sort} ${safeOrder}`;
     } else {
       query += " ORDER BY created_at DESC";
     }
@@ -147,30 +114,51 @@ routerAds.get("/api/ads/user/:user_id", async (req, res) => {
   }
 });
 
-// 6. Создать новое объявление
+// Увеличить счетчик просмотров
+routerAds.post("/api/ads/:id/view_count", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      "SELECT view_count FROM ads WHERE id = $1",
+      [id]
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: "Ad not found" });
+
+    const updatedViewCount = (rows[0].view_count || 0) + 1;
+    await pool.query("UPDATE ads SET view_count = $1 WHERE id = $2", [
+      updatedViewCount,
+      id,
+    ]);
+    res.json({ view_count: updatedViewCount });
+  } catch (error) {
+    console.error("Error updating view count:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Создать объявление
 routerAds.post("/api/ads", authenticateJWT, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-
     const {
       user_id,
       title,
       content,
       category,
       subcategory,
-      price = null,
+      price,
       status = "active",
       images = [],
-      isTelegram = false,
+      isTelegram,
       selectedChats = [],
     } = req.body;
+    const authUserId = req.user?.id || req.user?.user_id;
 
+    if (String(user_id) !== String(authUserId))
+      throw new Error("User ID mismatch");
     validateAdFields({ user_id, title, content, category, subcategory });
-
-    if (String(user_id) !== String(req.user.id)) {
-      return res.status(403).json({ error: "Access denied" });
-    }
 
     const ad = await createAd({
       user_id,
@@ -181,51 +169,49 @@ routerAds.post("/api/ads", authenticateJWT, async (req, res) => {
       price,
       status,
     });
-
-    if (Array.isArray(images) && images.length > 0) {
-      await updateImages(ad.id, images);
-    }
+    await saveImages(ad.id, images);
 
     if (isTelegram && selectedChats.length > 0) {
       const messageText = buildMessageText({
         title,
         content,
         price,
-        username: req.user.username,
+        username: req.user?.username,
         user_id,
         ad_id: ad.id,
       });
-
-      queueTelegramTask(async () => {
-        await sendToTelegram({
+      queueTelegramTask(() =>
+        sendToTelegram({
           ad_id: ad.id,
           selectedChats,
           messageText,
           photos: images,
-        });
-      });
+        })
+      );
     }
 
     await client.query("COMMIT");
-    res.status(201).json({ data: ad });
+    const { rows: imagesData } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [ad.id]
+    );
+    res.status(201).json({ data: { ...ad, images: imagesData } });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error creating ad:", error);
-    res.status(500).json({ error: error.message || "Internal Server Error" });
+    res.status(500).json({ error: error.message });
   } finally {
     client.release();
   }
 });
 
-// 7. Изменить объявление
+// Обновить объявление
 routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-
     const { id } = req.params;
     const {
-      user_id,
       title,
       content,
       category,
@@ -234,23 +220,15 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
       status,
       images,
       isTelegram,
-      selectedChats,
-      telegramUpdateType,
+      selectedChats = [],
+      telegramUpdateType = "update_text",
     } = req.body;
+    const user_id = req.user?.id || req.user?.user_id;
 
-    if (String(user_id) !== String(req.user.id)) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-
-    const { rows: ads } = await client.query(
-      "SELECT * FROM ads WHERE id = $1",
-      [id]
-    );
-    if (ads.length === 0) {
-      return res.status(404).json({ error: "Ad not found" });
-    }
-
-    checkUserAccess(ads[0], user_id);
+    const {
+      rows: [ad],
+    } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+    checkUserAccess(ad, user_id);
 
     const updateFields = {
       title,
@@ -260,173 +238,90 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
       price,
       status,
     };
+    const updatedAd = (await updateAd(id, updateFields)) || ad;
+    if (images !== undefined) await updateImages(id, images);
 
-    const updatedAd = await updateAd(id, updateFields);
-    if (!updatedAd) {
-      return res.status(400).json({ error: "No valid fields to update" });
-    }
-
-    if (Array.isArray(images)) {
-      await updateImages(id, images);
-    }
-
-    if (isTelegram && selectedChats && telegramUpdateType) {
-      const { rows: messages } = await client.query(
-        "SELECT chat_id, message_id, thread_id, media_group_id FROM telegram_messages WHERE ad_id = $1",
+    if (isTelegram && selectedChats.length > 0) {
+      const { rows: messages } = await pool.query(
+        "SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1",
         [id]
       );
-
       const messageText = buildMessageText({
-        title: updatedAd.title,
-        content: updatedAd.content,
-        price: updatedAd.price,
-        username: req.user.username,
+        title: title || ad.title,
+        content: content || ad.content,
+        price: price !== undefined ? price : ad.price,
+        username: req.user?.username,
         user_id,
         ad_id: id,
       });
-
-      queueTelegramTask(async () => {
-        await updateTelegramMessages(
+      queueTelegramTask(() =>
+        updateTelegramMessages(
           id,
           { ...updatedAd, images },
           messages,
           telegramUpdateType,
           selectedChats,
           messageText
-        );
-      });
+        )
+      );
     }
 
     await client.query("COMMIT");
-    res.json({ data: updatedAd });
+    const { rows: imagesData } = await pool.query(
+      "SELECT * FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+      [id]
+    );
+    res.json({ data: { ...updatedAd, images: imagesData } });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("Error updating ad:", error);
-    res.status(500).json({ error: error.message || "Internal Server Error" });
+    res.status(500).json({ error: error.message });
   } finally {
     client.release();
   }
 });
 
-// 8. Удалить объявление (мягкое удаление)
+// Удалить объявление
 routerAds.delete("/api/ads/:id", authenticateJWT, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-
     const { id } = req.params;
     const user_id = req.user?.id || req.user?.user_id;
 
     const {
       rows: [ad],
-    } = await client.query("SELECT * FROM ads WHERE id = $1", [id]);
+    } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+    checkUserAccess(ad, user_id);
 
-    if (!ad) {
-      return res.status(404).json({ error: "Ad not found" });
-    }
-
-    if (!user_id || String(ad.user_id) !== String(user_id)) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-
-    const {
-      rows: [deletedAd],
-    } = await client.query(
-      `UPDATE ads 
-       SET status = 'deleted', updated_at = NOW() 
-       WHERE id = $1 
-       RETURNING *`,
+    await deleteAd(id, true); // Мягкое удаление
+    const { rows: messages } = await pool.query(
+      "SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1",
       [id]
     );
-
-    const { rows: messages } = await client.query(
-      `SELECT chat_id, message_id, media_group_id 
-       FROM telegram_messages 
-       WHERE ad_id = $1`,
-      [id]
-    );
-
-    const telegramDeleteResults = [];
-
-    const mediaGroups = messages.reduce((acc, msg) => {
-      if (msg.media_group_id) {
-        if (!acc[msg.media_group_id]) {
-          acc[msg.media_group_id] = [];
-        }
-        acc[msg.media_group_id].push(msg);
-      } else {
-        if (!acc.single) {
-          acc.single = [];
-        }
-        acc.single.push(msg);
-      }
-      return acc;
-    }, {});
-
-    for (const [groupId, groupMessages] of Object.entries(mediaGroups)) {
-      for (const msg of groupMessages) {
-        try {
-          console.log(
-            `Attempting to delete message ${msg.message_id} from chat ${msg.chat_id}`
-          );
-          const deleteSuccess = await TelegramCreationService.deleteMessage({
-            chatId: msg.chat_id,
-            messageId: msg.message_id,
-            threadId: msg.thread_id,
-          });
-
-          telegramDeleteResults.push({
-            chat_id: msg.chat_id,
-            message_id: msg.message_id,
-            ok: deleteSuccess,
-            description: deleteSuccess
-              ? "Message deleted successfully"
-              : "Failed to delete message",
-          });
-        } catch (err) {
-          console.error(`Error deleting Telegram message:`, err);
-          telegramDeleteResults.push({
-            chat_id: msg.chat_id,
-            message_id: msg.message_id,
-            ok: false,
-            error: err.message,
-          });
-        }
-      }
-    }
-
-    await client.query(`DELETE FROM telegram_messages WHERE ad_id = $1`, [id]);
-    await client.query(`DELETE FROM ad_images WHERE ad_id = $1`, [id]);
+    if (messages.length > 0)
+      queueTelegramTask(() => deleteTelegramMessages(id, messages));
 
     await client.query("COMMIT");
-
-    console.log(`[${new Date().toISOString()}] Ad #${id} deleted:`, {
-      ad: deletedAd,
-      telegramResults: telegramDeleteResults,
-    });
-
-    res.json({
-      message: "Ad deleted successfully",
-      ad: deletedAd,
-      telegram: telegramDeleteResults,
-    });
+    res.json({ message: "Ad deleted successfully" });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error(`[${new Date().toISOString()}] Error deleting ad:`, error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error deleting ad:", error);
+    res.status(500).json({ error: error.message });
   } finally {
     client.release();
   }
 });
 
-// 10. Архивировать старые объявления (старше 720 часов)
+// Архивировать старые объявления
 routerAds.post("/api/ads/archive-old", async (req, res) => {
   try {
     const hours = 720;
     const query = `
       UPDATE ads
-      SET status = 'архивед', updated_at = NOW()
-      WHERE status != 'архивед'
+      SET status = 'Archived', updated_at = NOW()
+      WHERE status != 'Archived'
+        AND (created_at IS NOT NULL OR updated_at IS NOT NULL)
         AND EXTRACT(EPOCH FROM (NOW() - GREATEST(
           COALESCE(updated_at, '1970-01-01'),
           COALESCE(created_at, '1970-01-01')
@@ -434,10 +329,7 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
       RETURNING id, title, created_at, updated_at, status;
     `;
     const { rows } = await pool.query(query, [hours]);
-    res.json({
-      message: `Архивировано ${rows.length} объявлений`,
-      archive: rows,
-    });
+    res.json({ message: `Archived ${rows.length} ads`, archive: rows });
   } catch (error) {
     console.error("Error archiving old ads:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -465,9 +357,9 @@ routerAds.get(
       // Получаем сообщения Telegram
       const { rows: messages } = await pool.query(
         `SELECT chat_id, thread_id, message_id, media_group_id, created_at 
-       FROM telegram_messages 
-       WHERE ad_id = $1 
-       ORDER BY created_at DESC`,
+     FROM telegram_messages 
+     WHERE ad_id = $1 
+     ORDER BY created_at DESC`,
         [id]
       );
 
