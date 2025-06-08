@@ -123,11 +123,12 @@ export const deleteAd = async (ad_id, soft = true) => {
 export const saveImages = async (ad_id, images) => {
   if (!Array.isArray(images) || images.length === 0) return;
   for (const img of images) {
-    if (!isValidUrl(img.url || img.image_url)) continue;
+    const imageUrl = img.url || img.image_url;
+    if (!isValidUrl(imageUrl)) continue;
     await pool.query(
       `INSERT INTO ad_images (ad_id, image_url, is_main, created_at)
        VALUES ($1, $2, $3, NOW())`,
-      [ad_id, img.url || img.image_url, !!img.is_main]
+      [ad_id, imageUrl, !!img.is_main]
     );
   }
 };
@@ -138,7 +139,10 @@ export const updateImages = async (ad_id, images) => {
     [ad_id]
   );
   const currentUrls = currentImages.map((img) => img.image_url).sort();
-  const newUrls = images.map((img) => img.url || img.image_url).sort();
+  const newUrls = images
+    .map((img) => img.url || img.image_url)
+    .filter(Boolean)
+    .sort();
   if (JSON.stringify(currentUrls) !== JSON.stringify(newUrls)) {
     await pool.query("DELETE FROM ad_images WHERE ad_id = $1", [ad_id]);
     await saveImages(ad_id, images);
@@ -177,6 +181,7 @@ export const sendToTelegram = async ({
   const photosToSend = photos
     .map((img) => {
       let url = img.url || img.image_url;
+      if (!url) return null;
       if (url.startsWith("/"))
         url = `${
           process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
@@ -310,9 +315,10 @@ export const updateTelegramMessages = async (
     return acc;
   }, {});
 
-  const photos = ad.images
+  const photos = (ad.images || [])
     .map((img) => {
-      let url = img.image_url;
+      let url = img.image_url || img.url;
+      if (!url) return null;
       if (url.startsWith("/"))
         url = `${
           process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
