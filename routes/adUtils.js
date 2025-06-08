@@ -329,28 +329,60 @@ export const updateTelegramMessages = async (
   console.log("Updating Telegram messages:", {
     ad_id,
     telegramUpdateType,
-    selectedChats: [...new Set(selectedChats)], // Логирование уникальных чатов
+    selectedChats: [...new Set(selectedChats)],
     messages: messages.map((m) => ({
       chat_id: m.chat_id,
       message_id: m.message_id,
     })),
   });
 
-  const uniqueSelectedChats = [...new Set(selectedChats)]; // Удаление дубликатов
+  const uniqueSelectedChats = [...new Set(selectedChats)];
   if (telegramUpdateType === "repost" && ad.images) {
-    const deleteResults = await deleteTelegramMessages(ad_id, messages);
-    results.push(...deleteResults);
+    const currentImages = await pool
+      .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
+      .then((res) => res.rows.map((r) => r.image_url).sort());
+    const newImages = ad.images.map((img) => img.url || img.image_url).sort();
+    if (JSON.stringify(currentImages) !== JSON.stringify(newImages)) {
+      const deleteResults = await deleteTelegramMessages(ad_id, messages);
+      results.push(...deleteResults);
 
-    const sendResults = await sendToTelegram({
-      ad_id,
-      selectedChats: uniqueSelectedChats,
-      messageText,
-      photos: ad.images,
-    });
-    results.push(...sendResults);
+      const sendResults = await sendToTelegram({
+        ad_id,
+        selectedChats: uniqueSelectedChats,
+        messageText,
+        photos: ad.images,
+      });
+      results.push(...sendResults);
+    } else {
+      console.log(`No image changes detected for ad ${ad_id}, skipping repost`);
+      results.push(
+        ...(await updateExistingMessages(
+          ad_id,
+          messages,
+          messageText,
+          uniqueSelectedChats
+        ))
+      );
+    }
     return results;
   }
 
+  return await updateExistingMessages(
+    ad_id,
+    messages,
+    messageText,
+    uniqueSelectedChats
+  );
+};
+
+async function updateExistingMessages(
+  ad_id,
+  messages,
+  messageText,
+  selectedChats
+) {
+  const limit = pLimit(1);
+  const results = [];
   const messagesByChat = messages.reduce((acc, msg) => {
     acc[msg.chat_id] = acc[msg.chat_id] || {
       chat_id: msg.chat_id,
@@ -361,22 +393,10 @@ export const updateTelegramMessages = async (
     return acc;
   }, {});
 
-  const photos = (ad.images || [])
-    .map((img) => {
-      let url = img.image_url || img.url;
-      if (!url) return null;
-      if (url.startsWith("/"))
-        url = `${
-          process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
-        }${url}`;
-      return isValidUrl(url) ? url : null;
-    })
-    .filter(Boolean);
-
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        if (!uniqueSelectedChats.includes(String(chatInfo.chat_id))) {
+        if (!selectedChats.includes(String(chatInfo.chat_id))) {
           console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
           return;
         }
@@ -398,10 +418,7 @@ export const updateTelegramMessages = async (
         const currentCaption =
           messageInfo.find((m) => !m.is_media)?.caption || "";
 
-        if (
-          currentCaption === messageText &&
-          telegramUpdateType === "update_text"
-        ) {
+        if (currentCaption === messageText) {
           console.log(
             `Skipping update for chat ${chatInfo.chat_id}: caption unchanged`
           );
@@ -414,56 +431,26 @@ export const updateTelegramMessages = async (
           return;
         }
 
-        if (telegramUpdateType === "update_text") {
-          let success;
-          if (isMediaGroup) {
-            const firstMessage = messageInfo.find((m) => !m.is_media);
-            if (firstMessage) {
-              success = await TelegramCreationService.editMessageCaption({
-                chatId: chatInfo.chat_id,
-                messageId: firstMessage.message_id,
-                caption: messageText,
-                threadId: chatInfo.thread_id,
-                parse_mode: "HTML",
-              });
-              results.push({
-                chat_id: chatInfo.chat_id,
-                updated: success,
-                type: "caption_edited",
-              });
-              if (success) {
-                await pool.query(
-                  `UPDATE telegram_messages 
-                   SET caption = $1, price = $2 
-                   WHERE ad_id = $3 AND chat_id = $4 AND is_media = false`,
-                  [
-                    messageText,
-                    (messageText.match(/Цена: (\d+)/) || [])[1] || null,
-                    ad_id,
-                    chatInfo.chat_id,
-                  ]
-                );
-              }
-            }
-          } else {
-            const firstMessage = messageInfo[0];
-            success = await TelegramCreationService.editMessageText({
+        if (isMediaGroup) {
+          const firstMessage = messageInfo.find((m) => !m.is_media);
+          if (firstMessage) {
+            const success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: firstMessage.message_id,
-              text: messageText,
+              caption: messageText,
               threadId: chatInfo.thread_id,
               parse_mode: "HTML",
             });
             results.push({
               chat_id: chatInfo.chat_id,
               updated: success,
-              type: "text_edited",
+              type: "caption_edited",
             });
             if (success) {
               await pool.query(
                 `UPDATE telegram_messages 
                  SET caption = $1, price = $2 
-                 WHERE ad_id = $3 AND chat_id = $4`,
+                 WHERE ad_id = $3 AND chat_id = $4 AND is_media = false`,
                 [
                   messageText,
                   (messageText.match(/Цена: (\d+)/) || [])[1] || null,
@@ -473,12 +460,33 @@ export const updateTelegramMessages = async (
               );
             }
           }
-        } else if (telegramUpdateType === "keep") {
+        } else {
+          const firstMessage = messageInfo[0];
+          const success = await TelegramCreationService.editMessageText({
+            chatId: chatInfo.chat_id,
+            messageId: firstMessage.message_id,
+            text: messageText,
+            threadId: chatInfo.thread_id,
+            parse_mode: "HTML",
+          });
           results.push({
             chat_id: chatInfo.chat_id,
-            updated: true,
-            kept: true,
+            updated: success,
+            type: "text_edited",
           });
+          if (success) {
+            await pool.query(
+              `UPDATE telegram_messages 
+               SET caption = $1, price = $2 
+               WHERE ad_id = $3 AND chat_id = $4`,
+              [
+                messageText,
+                (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                ad_id,
+                chatInfo.chat_id,
+              ]
+            );
+          }
         }
       } catch (err) {
         console.error(`Error updating chat ${chatInfo.chat_id}:`, err);
@@ -487,22 +495,8 @@ export const updateTelegramMessages = async (
     });
   }
 
-  const existingChats = Object.keys(messagesByChat);
-  const newChats = uniqueSelectedChats.filter(
-    (chat) => !existingChats.includes(String(chat))
-  );
-  if (newChats.length > 0) {
-    const newResults = await sendToTelegram({
-      ad_id,
-      selectedChats: newChats,
-      messageText,
-      photos,
-    });
-    results.push(...newResults);
-  }
-
   return results;
-};
+}
 
 export const deleteTelegramMessages = async (ad_id, messages) => {
   const limit = pLimit(1);
