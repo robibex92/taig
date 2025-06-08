@@ -1,4 +1,3 @@
-// telegram.js
 import bot from "../services/telegramBot.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import express from "express";
@@ -9,10 +8,9 @@ router.post("/send", authenticateJWT, async (req, res) => {
   try {
     const {
       chat_id,
-      message, // Это уже полностью отформатированное сообщение с фронтенда
+      message, // Исходный текст сообщения
       contextType,
       contextData,
-      sender_id, // Этот sender_id больше не нужен для форматирования сообщения
       parse_mode = "HTML",
     } = req.body;
 
@@ -20,8 +18,55 @@ router.post("/send", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // Получаем user_id из токена
+    const user_id = req.user.user_id;
+
+    // Формируем заголовок на основе contextType и contextData
+    let header = "";
+    if (contextType === "announcement") {
+      header = `📢 <b>Вам отправлено сообщение по объявлению "${escapeHtml(
+        contextData?.title || ""
+      )}"</b> 📢\n\n`;
+    } else if (contextType === "car") {
+      header = `🚗 <b>Вам отправлено сообщение по автомобилю ${escapeHtml(
+        contextData?.car_brand || ""
+      )} ${escapeHtml(contextData?.car_model || "")}</b> 🚗\n\n`;
+    } else if (contextType === "apartment") {
+      header = `🏠 <b>Вам отправлено сообщение соседу из кв. ${escapeHtml(
+        contextData?.number || ""
+      )}</b> 🏠\n\n`;
+    }
+
+    // Получаем имя пользователя из базы
+    let dbUsername = null;
+    try {
+      const result = await pool.query(
+        "SELECT username FROM users WHERE user_id = $1",
+        [user_id]
+      );
+      dbUsername = result.rows[0]?.username || null;
+    } catch (error) {
+      console.error(
+        `[telegram/send] Error fetching username for user_id ${user_id}:`,
+        error
+      );
+    }
+
+    // Формируем информацию об авторе
+    const authorLink =
+      dbUsername && dbUsername.trim() !== ""
+        ? `Сообщение от: <b>@${escapeHtml(dbUsername)}</b>`
+        : user_id
+        ? `Сообщение от: <a href="tg://user?id=${escapeHtml(
+            user_id
+          )}"><b>ID ${escapeHtml(user_id)}</b></a>`
+        : `Сообщение от: <b>Не определен</b>`;
+
+    // Финальное сообщение
+    const finalMessage = `${header}${escapeHtml(message)}\n\n${authorLink}`;
+
     const result = await TelegramCreationService.sendMessage({
-      message: message, // Используем сообщение как есть
+      message: finalMessage,
       chatIds: [chat_id],
       parse_mode,
     });
@@ -36,6 +81,16 @@ router.post("/send", authenticateJWT, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 export default router;
 
@@ -58,7 +113,6 @@ export const TelegramCreationService = {
           result = await bot.sendMediaGroup(chatId, mediaGroup, {
             message_thread_id: threadId,
           });
-          // Возвращаем массив с message_id и media_group_id
           result = result.map((msg) => ({
             message_id: msg.message_id,
             media_group_id: msg.media_group_id || null,
@@ -86,16 +140,6 @@ export const TelegramCreationService = {
     return { results };
   },
 
-  /**
-   * Edit message text in Telegram chat
-   * @param {Object} options
-   * @param {string} options.chatId - chat ID
-   * @param {number} options.messageId - message ID to edit
-   * @param {string} options.text - new text message
-   * @param {number} [options.threadId] - thread ID (optional)
-   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
-   * @returns {Promise<boolean>}
-   */
   async editMessageText({
     chatId,
     messageId,
@@ -120,16 +164,6 @@ export const TelegramCreationService = {
     }
   },
 
-  /**
-   * Edit message caption in Telegram chat
-   * @param {Object} options
-   * @param {string} options.chatId - chat ID
-   * @param {number} options.messageId - message ID to edit
-   * @param {string} options.caption - new caption text
-   * @param {number} [options.threadId] - thread ID (optional)
-   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
-   * @returns {Promise<boolean>}
-   */
   async editMessageCaption({
     chatId,
     messageId,
@@ -154,17 +188,6 @@ export const TelegramCreationService = {
     }
   },
 
-  /**
-   * Edit message media (photo) in Telegram chat
-   * @param {Object} options
-   * @param {string} options.chatId - chat ID
-   * @param {number} options.messageId - message ID to edit
-   * @param {string} options.mediaUrl - new media URL
-   * @param {string} [options.caption] - new caption text (optional)
-   * @param {number} [options.threadId] - thread ID (optional)
-   * @param {string} [options.parse_mode="HTML"] - parse mode (HTML or Markdown)
-   * @returns {Promise<boolean>}
-   */
   async editMessageMedia({
     chatId,
     messageId,
@@ -195,14 +218,6 @@ export const TelegramCreationService = {
     }
   },
 
-  /**
-   * Delete message from Telegram chat
-   * @param {Object} options
-   * @param {string} options.chatId - chat ID
-   * @param {number} options.messageId - message ID to delete
-   * @param {number} [options.threadId] - thread ID (optional)
-   * @returns {Promise<boolean>}\
-   */
   async deleteMessage({ chatId, messageId, threadId }) {
     try {
       await bot.deleteMessage(chatId, messageId, {
@@ -212,10 +227,8 @@ export const TelegramCreationService = {
     } catch (error) {
       console.error(
         `Error deleting message ${messageId} from chat ${chatId}:`,
-        error.message // Используем error.message для более чистого вывода
+        error.message
       );
-      // Возвращаем false вместо throw error, чтобы не прерывать общий процесс,
-      // но при этом сигнализировать о неудаче.
       return false;
     }
   },
