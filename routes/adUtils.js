@@ -195,6 +195,9 @@ export const buildMessageText = async ({
     }
   }
 
+  const safeTitle = title?.trim() || "Без заголовка";
+  const safeContent = content?.trim() || "Без описания";
+
   const authorLink =
     dbUsername && dbUsername.trim() !== ""
       ? `👤 Автор объявления: @${escapeHtml(dbUsername)}`
@@ -204,8 +207,8 @@ export const buildMessageText = async ({
         )}">${escapeHtml(user_id)}</a>`
       : `👤 Автор объявления: Не определен`;
 
-  return `📢 <b>Объявление</b>: ${escapeHtml(title)} 📢\n\n${escapeHtml(
-    content
+  return `📢 <b>Объявление</b>: ${escapeHtml(safeTitle)} 📢\n\n${escapeHtml(
+    safeContent
   )}\n\n${priceStr}\n\n${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 };
 
@@ -566,10 +569,12 @@ async function updateExistingMessages(
         if (isMediaGroup) {
           const firstMessage = messageInfo.find((m) => !m.is_media);
           if (firstMessage) {
+            const finalCaption =
+              messageText || currentCaption || "Сообщение без текста";
             const success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: firstMessage.message_id,
-              caption: messageText || currentCaption, // Используем текущий caption, если messageText пуст
+              caption: finalCaption,
               threadId: chatInfo.thread_id,
               parse_mode: "HTML",
             });
@@ -581,12 +586,12 @@ async function updateExistingMessages(
             });
             if (success) {
               await pool.query(
-                `UPDATE telegram_messages 
-                 SET caption = $1, price = $2 
+                `UPDATE telegram_messages
+                 SET caption = $1, price = $2
                  WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5 AND is_media = false`,
                 [
-                  messageText || currentCaption,
-                  (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                  finalCaption,
+                  (finalCaption.match(/Цена: (\d+)/) || [])[1] || null,
                   ad_id,
                   chatInfo.chat_id,
                   chatInfo.thread_id,
@@ -596,10 +601,12 @@ async function updateExistingMessages(
           }
         } else {
           const firstMessage = messageInfo[0];
+          const finalMessageText =
+            messageText || currentCaption || "Сообщение без текста";
           const success = await TelegramCreationService.editMessageText({
             chatId: chatInfo.chat_id,
             messageId: firstMessage.message_id,
-            text: messageText || currentCaption, // Используем текущий caption, если messageText пуст
+            text: finalMessageText,
             threadId: chatInfo.thread_id,
             parse_mode: "HTML",
           });
@@ -611,12 +618,12 @@ async function updateExistingMessages(
           });
           if (success) {
             await pool.query(
-              `UPDATE telegram_messages 
-               SET caption = $1, price = $2 
+              `UPDATE telegram_messages
+               SET caption = $1, price = $2
                WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5`,
               [
-                messageText || currentCaption,
-                (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                finalMessageText,
+                (finalMessageText.match(/Цена: (\d+)/) || [])[1] || null,
                 ad_id,
                 chatInfo.chat_id,
                 chatInfo.thread_id,
