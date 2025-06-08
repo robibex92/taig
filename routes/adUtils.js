@@ -169,6 +169,7 @@ export const buildMessageText = ({
   )}\n\n${priceStr}\n\n👤 Автор объявления: ${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 };
 
+// В sendToTelegram, обновите вставку в telegram_messages
 export const sendToTelegram = async ({
   ad_id,
   selectedChats,
@@ -224,21 +225,22 @@ export const sendToTelegram = async ({
                   if (message && message.message_id) {
                     try {
                       console.log("Attempting to insert media message:", {
-                        ad_id: ad_id,
+                        ad_id,
                         chatId: res.chatId,
                         threadId: res.threadId,
                         messageId: message.message_id,
                         mediaGroupId: message.media_group_id || null,
                       });
                       await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, created_at)
-                   VALUES ($1, $2, $3, $4, $5, NOW())`,
+                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
                         [
                           ad_id,
                           res.chatId,
                           res.threadId,
                           message.message_id,
                           message.media_group_id || null,
+                          messageText, // Сохраняем подпись
                         ]
                       );
                       console.log("Successfully inserted media message.");
@@ -253,15 +255,21 @@ export const sendToTelegram = async ({
               } else if (res.result?.message_id) {
                 try {
                   console.log("Attempting to insert single message:", {
-                    ad_id: ad_id,
+                    ad_id,
                     chatId: res.chatId,
                     threadId: res.threadId,
                     messageId: res.result.message_id,
                   });
                   await pool.query(
-                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, created_at)
-               VALUES ($1, $2, $3, $4, NOW())`,
-                    [ad_id, res.chatId, res.threadId, res.result.message_id]
+                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, created_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW())`,
+                    [
+                      ad_id,
+                      res.chatId,
+                      res.threadId,
+                      res.result.message_id,
+                      messageText,
+                    ]
                   );
                   console.log("Successfully inserted single message.");
                 } catch (dbErr) {
@@ -283,6 +291,7 @@ export const sendToTelegram = async ({
   );
 };
 
+// Полностью замените updateTelegramMessages
 export const updateTelegramMessages = async (
   ad_id,
   ad,
@@ -331,16 +340,40 @@ export const updateTelegramMessages = async (
     await limit(async () => {
       try {
         const { rows: messageInfo } = await pool.query(
-          `SELECT message_id, media_group_id FROM telegram_messages WHERE ad_id = $1 AND chat_id = $2 ORDER BY media_group_id NULLS LAST, message_id ASC`,
+          `SELECT message_id, media_group_id, caption FROM telegram_messages 
+           WHERE ad_id = $1 AND chat_id = $2 
+           ORDER BY media_group_id NULLS LAST, message_id ASC`,
           [ad_id, chatInfo.chat_id]
         );
 
-        if (!messageInfo.length) return;
+        if (!messageInfo.length || !selectedChats.includes(chatInfo.chat_id)) {
+          console.log(
+            `Skipping chat ${chatInfo.chat_id}: no messages or not selected`
+          );
+          return;
+        }
 
         const isMediaMessage = messageInfo[0].media_group_id != null;
+        const currentCaption = messageInfo[0].caption || "";
+
+        // Проверяем, изменилась ли подпись
+        if (currentCaption === messageText) {
+          console.log(
+            `Skipping update for message ${messageInfo[0].message_id} in chat ${chatInfo.chat_id}: caption unchanged`
+          );
+          results.push({
+            chat_id: chatInfo.chat_id,
+            updated: true,
+            skipped: true,
+            type: isMediaMessage ? "caption_unchanged" : "text_unchanged",
+          });
+          return;
+        }
+
         if (telegramUpdateType === "update_text") {
+          let success;
           if (isMediaMessage) {
-            const success = await TelegramCreationService.editMessageCaption({
+            success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: messageInfo[0].message_id,
               caption: messageText,
@@ -352,7 +385,7 @@ export const updateTelegramMessages = async (
               type: "caption_edited",
             });
           } else {
-            const success = await TelegramCreationService.editMessageText({
+            success = await TelegramCreationService.editMessageText({
               chatId: chatInfo.chat_id,
               messageId: messageInfo[0].message_id,
               text: messageText,
@@ -363,6 +396,14 @@ export const updateTelegramMessages = async (
               updated: success,
               type: "text_edited",
             });
+          }
+          // Обновляем подпись в базе
+          if (success) {
+            await pool.query(
+              `UPDATE telegram_messages SET caption = $1 
+               WHERE ad_id = $2 AND chat_id = $3 AND message_id = $4`,
+              [messageText, ad_id, chatInfo.chat_id, messageInfo[0].message_id]
+            );
           }
         } else if (telegramUpdateType === "keep") {
           results.push({
@@ -380,6 +421,22 @@ export const updateTelegramMessages = async (
       }
     });
   }
+
+  // Отправляем новые сообщения в чаты, которых нет в messages
+  const existingChats = Object.keys(messagesByChat);
+  const newChats = selectedChats.filter(
+    (chat) => !existingChats.includes(chat)
+  );
+  if (newChats.length > 0) {
+    const newResults = await sendToTelegram({
+      ad_id,
+      selectedChats: newChats,
+      messageText,
+      photos,
+    });
+    results.push(...newResults);
+  }
+
   return results;
 };
 
