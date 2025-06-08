@@ -337,6 +337,8 @@ export const updateTelegramMessages = async (
   });
 
   const uniqueSelectedChats = [...new Set(selectedChats)];
+  const chatTargets = getTelegramChatTargets(uniqueSelectedChats);
+
   if (telegramUpdateType === "repost" && ad.images) {
     const currentImages = await pool
       .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
@@ -354,14 +356,14 @@ export const updateTelegramMessages = async (
       });
       results.push(...sendResults);
     } else {
-      console.log(`No image changes detected for ad ${ad_id}, skipping repost`);
-      results.push(
-        ...(await updateExistingMessages(
-          ad_id,
-          messages,
-          messageText,
-          uniqueSelectedChats
-        ))
+      console.log(
+        `No image changes detected for ad ${ad_id}, switching to update_text`
+      );
+      return await updateExistingMessages(
+        ad_id,
+        messages,
+        messageText,
+        chatTargets.map((ct) => ct.chatId)
       );
     }
     return results;
@@ -371,7 +373,7 @@ export const updateTelegramMessages = async (
     ad_id,
     messages,
     messageText,
-    uniqueSelectedChats
+    chatTargets.map((ct) => ct.chatId)
   );
 };
 
@@ -379,7 +381,7 @@ async function updateExistingMessages(
   ad_id,
   messages,
   messageText,
-  selectedChats
+  selectedChatIds
 ) {
   const limit = pLimit(1);
   const results = [];
@@ -396,7 +398,7 @@ async function updateExistingMessages(
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        if (!selectedChats.includes(String(chatInfo.chat_id))) {
+        if (!selectedChatIds.includes(String(chatInfo.chat_id))) {
           console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
           return;
         }
@@ -497,7 +499,6 @@ async function updateExistingMessages(
 
   return results;
 }
-
 export const deleteTelegramMessages = async (ad_id, messages) => {
   const limit = pLimit(1);
   const results = [];
