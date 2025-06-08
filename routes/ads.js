@@ -180,6 +180,10 @@ routerAds.post("/api/ads", authenticateJWT, async (req, res) => {
         user_id,
         ad_id: ad.id,
       });
+      console.log(`Creating Telegram post for ad ${ad.id}:`, {
+        selectedChats,
+        images,
+      });
       queueTelegramTask(() =>
         sendToTelegram({
           ad_id: ad.id,
@@ -243,7 +247,7 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
 
     if (isTelegram && selectedChats.length > 0) {
       const { rows: messages } = await pool.query(
-        "SELECT chat_id, thread_id, message_id FROM telegram_messages WHERE ad_id = $1",
+        "SELECT chat_id, thread_id, message_id, caption, is_media FROM telegram_messages WHERE ad_id = $1",
         [id]
       );
       const messageText = buildMessageText({
@@ -254,12 +258,20 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
         user_id,
         ad_id: id,
       });
+      const finalUpdateType =
+        images !== undefined ? "repost" : telegramUpdateType;
+      console.log(`Updating Telegram for ad ${id}:`, {
+        selectedChats,
+        finalUpdateType,
+        images,
+        messages,
+      });
       queueTelegramTask(() =>
         updateTelegramMessages(
           id,
           { ...updatedAd, images },
           messages,
-          telegramUpdateType,
+          finalUpdateType,
           selectedChats,
           messageText
         )
@@ -345,7 +357,6 @@ routerAds.get(
       const { id } = req.params;
       const user_id = req.user?.id || req.user?.user_id;
 
-      // Проверяем доступ к объявлению
       const {
         rows: [ad],
       } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
@@ -354,12 +365,11 @@ routerAds.get(
       }
       checkUserAccess(ad, user_id);
 
-      // Получаем сообщения Telegram
       const { rows: messages } = await pool.query(
-        `SELECT chat_id, thread_id, message_id, media_group_id, created_at 
-     FROM telegram_messages 
-     WHERE ad_id = $1 
-     ORDER BY created_at DESC`,
+        `SELECT chat_id, thread_id, message_id, media_group_id, caption, is_media, created_at 
+         FROM telegram_messages 
+         WHERE ad_id = $1 
+         ORDER BY created_at DESC`,
         [id]
       );
 

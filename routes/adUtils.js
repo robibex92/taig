@@ -3,7 +3,6 @@ import { TelegramCreationService } from "./telegram.js";
 import { getTelegramChatTargets } from "../utils/telegramChatTargets.js";
 import pLimit from "p-limit";
 
-// Queue for Telegram tasks
 const telegramQueue = [];
 let isProcessing = false;
 
@@ -27,17 +26,17 @@ async function processTelegramQueue() {
   } catch (error) {
     console.error("Error processing Telegram task:", error);
   }
-  setTimeout(processTelegramQueue, 100); // Delay between tasks
+  setTimeout(processTelegramQueue, 100);
 }
 
 function escapeHtml(text) {
   if (!text) return "";
   return text
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, '"')
-    .replace(/'/g, "'");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function isValidUrl(url) {
@@ -146,6 +145,7 @@ export const updateImages = async (ad_id, images) => {
   if (JSON.stringify(currentUrls) !== JSON.stringify(newUrls)) {
     await pool.query("DELETE FROM ad_images WHERE ad_id = $1", [ad_id]);
     await saveImages(ad_id, images);
+    console.log(`Images updated for ad ${ad_id}:`, newUrls);
   }
 };
 
@@ -169,7 +169,6 @@ export const buildMessageText = ({
   )}\n\n${priceStr}\n\n👤 Автор объявления: ${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 };
 
-// В sendToTelegram, обновляем вставку в telegram_messages
 export const sendToTelegram = async ({
   ad_id,
   selectedChats,
@@ -191,33 +190,37 @@ export const sendToTelegram = async ({
     })
     .filter(Boolean);
 
+  console.log("Sending to Telegram:", {
+    ad_id,
+    selectedChats,
+    photosToSend,
+    messageText,
+  });
+
   return Promise.all(
     chatTargets.map((chat) =>
       limit(async () => {
         try {
           let result;
           const isMedia = photosToSend.length > 0;
-          if (isMedia) {
-            const mediaGroup = photosToSend.map((photo, index) => ({
-              type: "photo",
-              media: photo,
-              ...(index === 0
-                ? { caption: messageText, parse_mode: "HTML" }
-                : {}),
-            }));
-            result = await TelegramCreationService.sendMessage({
-              message: messageText,
-              chatIds: [chat.chatId],
-              threadIds: chat.threadId ? [chat.threadId] : [],
-              photos: photosToSend,
-            });
-          } else {
-            result = await TelegramCreationService.sendMessage({
-              message: messageText,
-              chatIds: [chat.chatId],
-              threadIds: chat.threadId ? [chat.threadId] : [],
-            });
-          }
+          const mediaGroup = isMedia
+            ? photosToSend.map((photo, index) => ({
+                type: "photo",
+                media: photo,
+                ...(index === 0
+                  ? { caption: messageText, parse_mode: "HTML" }
+                  : {}),
+              }))
+            : null;
+
+          result = await TelegramCreationService.sendMessage({
+            message: messageText,
+            chatIds: [chat.chatId],
+            threadIds: chat.threadId ? [chat.threadId] : [],
+            photos: photosToSend,
+            mediaGroup,
+            parse_mode: "HTML",
+          });
 
           if (result && Array.isArray(result.results)) {
             for (const res of result.results) {
@@ -225,7 +228,7 @@ export const sendToTelegram = async ({
                 for (const message of res.result) {
                   if (message && message.message_id) {
                     try {
-                      console.log("Attempting to insert media message:", {
+                      console.log("Inserting media message:", {
                         ad_id,
                         chatId: res.chatId,
                         threadId: res.threadId,
@@ -245,18 +248,14 @@ export const sendToTelegram = async ({
                           isMedia,
                         ]
                       );
-                      console.log("Successfully inserted media message.");
                     } catch (dbErr) {
-                      console.error(
-                        "Error inserting media message into DB:",
-                        dbErr
-                      );
+                      console.error("Error inserting media message:", dbErr);
                     }
                   }
                 }
               } else if (res.result?.message_id) {
                 try {
-                  console.log("Attempting to insert single message:", {
+                  console.log("Inserting single message:", {
                     ad_id,
                     chatId: res.chatId,
                     threadId: res.threadId,
@@ -274,19 +273,15 @@ export const sendToTelegram = async ({
                       false,
                     ]
                   );
-                  console.log("Successfully inserted single message.");
                 } catch (dbErr) {
-                  console.error(
-                    "Error inserting single message into DB:",
-                    dbErr
-                  );
+                  console.error("Error inserting single message:", dbErr);
                 }
               }
             }
           }
           return { chat: chat.chatId, ok: true };
         } catch (err) {
-          console.error("Error sending to Telegram:", err);
+          console.error(`Error sending to chat ${chat.chatId}:`, err);
           return { chat: chat.chatId, ok: false, error: err.message };
         }
       })
@@ -294,51 +289,6 @@ export const sendToTelegram = async ({
   );
 };
 
-// Обновляем deleteTelegramMessages
-export const deleteTelegramMessages = async (ad_id, messages) => {
-  const limit = pLimit(5);
-  const results = [];
-  const messagesByChat = messages.reduce((acc, msg) => {
-    acc[msg.chat_id] = acc[msg.chat_id] || [];
-    acc[msg.chat_id].push(msg);
-    return acc;
-  }, {});
-
-  for (const chat_id of Object.keys(messagesByChat)) {
-    await limit(async () => {
-      try {
-        // Удаляем все сообщения в чате
-        for (const msg of messagesByChat[chat_id]) {
-          const success = await TelegramCreationService.deleteMessage({
-            chatId: msg.chat_id,
-            messageId: msg.message_id,
-            threadId: msg.thread_id,
-          });
-          results.push({
-            chat_id: msg.chat_id,
-            message_id: msg.message_id,
-            ok: success,
-          });
-        }
-      } catch (err) {
-        console.error(`Error deleting messages in chat ${chat_id}:`, err);
-        results.push({ chat_id, ok: false, error: err.message });
-      }
-    });
-  }
-
-  // Удаляем записи из базы данных
-  try {
-    await pool.query("DELETE FROM telegram_messages WHERE ad_id = $1", [ad_id]);
-    console.log(`Deleted telegram_messages for ad_id ${ad_id}`);
-  } catch (dbErr) {
-    console.error("Error deleting telegram_messages from DB:", dbErr);
-  }
-
-  return results;
-};
-
-// Полностью заменяем updateTelegramMessages
 export const updateTelegramMessages = async (
   ad_id,
   ad,
@@ -351,18 +301,28 @@ export const updateTelegramMessages = async (
   const limit = pLimit(5);
   const results = [];
 
+  console.log("Updating Telegram messages:", {
+    ad_id,
+    telegramUpdateType,
+    selectedChats,
+    messages: messages.map((m) => ({
+      chat_id: m.chat_id,
+      message_id: m.message_id,
+    })),
+  });
+
   if (telegramUpdateType === "repost") {
-    // Удаляем старые сообщения
     const deleteResults = await deleteTelegramMessages(ad_id, messages);
     results.push(...deleteResults);
 
-    // Отправляем новые сообщения
-    return sendToTelegram({
+    const sendResults = await sendToTelegram({
       ad_id,
       selectedChats,
       messageText,
       photos: ad.images,
     });
+    results.push(...sendResults);
+    return results;
   }
 
   const messagesByChat = messages.reduce((acc, msg) => {
@@ -390,7 +350,7 @@ export const updateTelegramMessages = async (
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        if (!selectedChats.includes(chatInfo.chat_id)) {
+        if (!selectedChats.includes(String(chatInfo.chat_id))) {
           console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
           return;
         }
@@ -411,13 +371,12 @@ export const updateTelegramMessages = async (
         const isMediaMessage = messageInfo[0].is_media;
         const currentCaption = messageInfo[0].caption || "";
 
-        // Проверяем, изменилась ли подпись
         if (
           currentCaption === messageText &&
           telegramUpdateType === "update_text"
         ) {
           console.log(
-            `Skipping update for message ${messageInfo[0].message_id} in chat ${chatInfo.chat_id}: caption unchanged`
+            `Skipping update for message ${messageInfo[0].message_id}: caption unchanged`
           );
           results.push({
             chat_id: chatInfo.chat_id,
@@ -431,12 +390,12 @@ export const updateTelegramMessages = async (
         if (telegramUpdateType === "update_text") {
           let success;
           if (isMediaMessage) {
-            // Для медиа-группы редактируем только первое сообщение
             success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: messageInfo[0].message_id,
               caption: messageText,
               threadId: chatInfo.thread_id,
+              parse_mode: "HTML",
             });
             results.push({
               chat_id: chatInfo.chat_id,
@@ -449,6 +408,7 @@ export const updateTelegramMessages = async (
               messageId: messageInfo[0].message_id,
               text: messageText,
               threadId: chatInfo.thread_id,
+              parse_mode: "HTML",
             });
             results.push({
               chat_id: chatInfo.chat_id,
@@ -456,7 +416,6 @@ export const updateTelegramMessages = async (
               type: "text_edited",
             });
           }
-          // Обновляем подпись в базе для всех сообщений в чате
           if (success) {
             await pool.query(
               `UPDATE telegram_messages SET caption = $1 
@@ -472,19 +431,15 @@ export const updateTelegramMessages = async (
           });
         }
       } catch (err) {
-        console.error(
-          `Error updating message for chat ${chatInfo.chat_id}:`,
-          err
-        );
+        console.error(`Error updating chat ${chatInfo.chat_id}:`, err);
         results.push({ chat_id: chatInfo.chat_id, error: err.message });
       }
     });
   }
 
-  // Отправляем новые сообщения в чаты, которых нет в messages
   const existingChats = Object.keys(messagesByChat);
   const newChats = selectedChats.filter(
-    (chat) => !existingChats.includes(chat)
+    (chat) => !existingChats.includes(String(chat))
   );
   if (newChats.length > 0) {
     const newResults = await sendToTelegram({
@@ -494,6 +449,47 @@ export const updateTelegramMessages = async (
       photos,
     });
     results.push(...newResults);
+  }
+
+  return results;
+};
+
+export const deleteTelegramMessages = async (ad_id, messages) => {
+  const limit = pLimit(5);
+  const results = [];
+  const messagesByChat = messages.reduce((acc, msg) => {
+    acc[msg.chat_id] = acc[msg.chat_id] || [];
+    acc[msg.chat_id].push(msg);
+    return acc;
+  }, {});
+
+  for (const chat_id of Object.keys(messagesByChat)) {
+    await limit(async () => {
+      try {
+        for (const msg of messagesByChat[chat_id]) {
+          const success = await TelegramCreationService.deleteMessage({
+            chatId: msg.chat_id,
+            messageId: msg.message_id,
+            threadId: msg.thread_id,
+          });
+          results.push({
+            chat_id: msg.chat_id,
+            message_id: msg.message_id,
+            ok: success,
+          });
+        }
+      } catch (err) {
+        console.error(`Error deleting messages in chat ${chat_id}:`, err);
+        results.push({ chat_id, ok: false, error: err.message });
+      }
+    });
+  }
+
+  try {
+    await pool.query("DELETE FROM telegram_messages WHERE ad_id = $1", [ad_id]);
+    console.log(`Deleted telegram_messages for ad_id ${ad_id}`);
+  } catch (dbErr) {
+    console.error("Error deleting telegram_messages from DB:", dbErr);
   }
 
   return results;
