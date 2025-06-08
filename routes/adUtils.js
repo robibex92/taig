@@ -177,7 +177,8 @@ export const sendToTelegram = async ({
 }) => {
   if (!selectedChats.length) return [];
   const limit = pLimit(1);
-  const chatTargets = getTelegramChatTargets(selectedChats);
+  const uniqueChats = [...new Set(selectedChats)]; // Удаление дубликатов
+  const chatTargets = getTelegramChatTargets(uniqueChats);
   const photosToSend = photos
     .map((img) => {
       let url = img.url || img.image_url;
@@ -192,7 +193,7 @@ export const sendToTelegram = async ({
 
   console.log("Sending to Telegram:", {
     ad_id,
-    selectedChats,
+    selectedChats: uniqueChats,
     photosToSend,
     messageText,
   });
@@ -291,7 +292,7 @@ export const sendToTelegram = async ({
           return { chat: chat.chatId, ok: true };
         } catch (err) {
           if (err.message.includes("429 Too Many Requests")) {
-            const retryAfter = 5;
+            const retryAfter = 44; // Извлечь из err.response если доступно
             console.warn(
               `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
             );
@@ -328,20 +329,21 @@ export const updateTelegramMessages = async (
   console.log("Updating Telegram messages:", {
     ad_id,
     telegramUpdateType,
-    selectedChats,
+    selectedChats: [...new Set(selectedChats)], // Логирование уникальных чатов
     messages: messages.map((m) => ({
       chat_id: m.chat_id,
       message_id: m.message_id,
     })),
   });
 
-  if (telegramUpdateType === "repost") {
+  const uniqueSelectedChats = [...new Set(selectedChats)]; // Удаление дубликатов
+  if (telegramUpdateType === "repost" && ad.images) {
     const deleteResults = await deleteTelegramMessages(ad_id, messages);
     results.push(...deleteResults);
 
     const sendResults = await sendToTelegram({
       ad_id,
-      selectedChats,
+      selectedChats: uniqueSelectedChats,
       messageText,
       photos: ad.images,
     });
@@ -374,7 +376,7 @@ export const updateTelegramMessages = async (
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        if (!selectedChats.includes(String(chatInfo.chat_id))) {
+        if (!uniqueSelectedChats.includes(String(chatInfo.chat_id))) {
           console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
           return;
         }
@@ -486,7 +488,7 @@ export const updateTelegramMessages = async (
   }
 
   const existingChats = Object.keys(messagesByChat);
-  const newChats = selectedChats.filter(
+  const newChats = uniqueSelectedChats.filter(
     (chat) => !existingChats.includes(String(chat))
   );
   if (newChats.length > 0) {
