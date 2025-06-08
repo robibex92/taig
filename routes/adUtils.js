@@ -363,21 +363,32 @@ export const updateTelegramMessages = async (
   });
 
   // Функция для проверки изменений изображений
-  const hasImageChanges = async () => {
+  const hasImageChanges = async (ad_id, ad) => {
+    // Логирование входных данных
+    console.log(
+      `[hasImageChanges] Starting for ad_id: ${ad_id}, ad.images:`,
+      ad.images
+    );
+
     if (!ad_id || isNaN(ad_id)) {
-      console.error(`Invalid ad_id: ${ad_id}`);
+      console.error(`[hasImageChanges] Invalid ad_id: ${ad_id}`);
       return false;
     }
 
     try {
+      // Выполняем запрос к базе данных
       const { rows: dbMessages } = await pool.query(
         `SELECT array_agg(DISTINCT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url))) AS url_imgs
          FROM telegram_messages, unnest(url_img) AS unnested_url
          WHERE ad_id = $1 
-           AND is_media = true
-         ORDER BY created_at ASC
-         LIMIT 1`,
+           AND is_media = true`,
         [Number(ad_id)]
+      );
+
+      // Логирование результата запроса
+      console.log(
+        `[hasImageChanges] DB query result for ad_id ${ad_id}:`,
+        dbMessages
       );
 
       const currentUrls =
@@ -387,26 +398,28 @@ export const updateTelegramMessages = async (
         .filter(Boolean)
         .sort();
 
+      // Логирование перед сравнением
+      console.log(`[hasImageChanges] Comparing images for ad_id ${ad_id}:`, {
+        currentUrls,
+        newImages,
+      });
+
       const hasChanges =
         currentUrls.length !== newImages.length ||
         !currentUrls.every((url) => newImages.includes(url)) ||
         !newImages.every((url) => currentUrls.includes(url));
 
-      console.log(`Image comparison for ad ${ad_id}:`, {
-        currentUrls,
-        newImages,
-        hasChanges,
-      });
+      console.log(`[hasImageChanges] Image changes detected: ${hasChanges}`);
       return hasChanges;
     } catch (error) {
-      console.error(`Error checking image changes for ad ${ad_id}:`, error);
+      console.error(`[hasImageChanges] Error for ad_id ${ad_id}:`, error);
       return false;
     }
   };
 
   // Логика для случая с репостом
   if (telegramUpdateType === "repost" && ad.images && ad.images.length > 0) {
-    const imageChangesDetected = await hasImageChanges(ad_id);
+    const imageChangesDetected = await hasImageChanges(ad_id, ad);
     if (imageChangesDetected) {
       console.log(`Image changes detected for ad ${ad_id}. Performing repost.`);
       const deleteResults = await deleteTelegramMessages(ad_id, messages);
