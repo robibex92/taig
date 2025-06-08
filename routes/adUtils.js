@@ -36,7 +36,7 @@ function escapeHtml(text) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/'/g, "&#39;");
 }
 
 function isValidUrl(url) {
@@ -225,15 +225,18 @@ export const sendToTelegram = async ({
           if (result && Array.isArray(result.results)) {
             for (const res of result.results) {
               if (res.result && Array.isArray(res.result)) {
+                let isFirst = true; // Флаг для первого сообщения в медиа-группе
                 for (const message of res.result) {
                   if (message && message.message_id) {
                     try {
-                      console.log("Inserting media message:", {
+                      const isMediaMessage = isMedia && !isFirst;
+                      console.log("Inserting message:", {
                         ad_id,
                         chatId: res.chatId,
                         threadId: res.threadId,
                         messageId: message.message_id,
                         mediaGroupId: message.media_group_id || null,
+                        isMedia: isMediaMessage,
                       });
                       await pool.query(
                         `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, price, created_at)
@@ -244,14 +247,15 @@ export const sendToTelegram = async ({
                           res.threadId,
                           message.message_id,
                           message.media_group_id || null,
-                          messageText,
-                          isMedia,
-                          photos.length > 0
+                          isFirst ? messageText : null,
+                          isMediaMessage,
+                          isFirst
                             ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
                               null
                             : null,
                         ]
                       );
+                      isFirst = false; // Сбрасываем флаг после первого сообщения
                     } catch (dbErr) {
                       console.error("Error inserting media message:", dbErr);
                     }
