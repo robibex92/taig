@@ -212,7 +212,7 @@ export const buildMessageText = async ({
 export const sendToTelegram = async ({
   ad_id,
   selectedChats,
-  messageText: messageTextPromise, // Переименуем параметр для ясности
+  messageText: messageTextPromise,
   photos,
 }) => {
   if (!selectedChats.length) return [];
@@ -224,7 +224,10 @@ export const sendToTelegram = async ({
   const photosToSend = photos
     .map((img) => {
       let url = img.url || img.image_url;
-      if (!url) return null;
+      if (!url || url.startsWith("blob:")) {
+        console.warn(`[sendToTelegram] Ignoring invalid or blob URL: ${url}`);
+        return null;
+      }
       if (url.startsWith("/"))
         url = `${
           process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
@@ -233,7 +236,6 @@ export const sendToTelegram = async ({
     })
     .filter(Boolean);
 
-  // Ждем разрешения Promise от buildMessageText
   const safeMessageText = await messageTextPromise;
 
   console.log("[sendToTelegram] Sending to Telegram:", {
@@ -366,7 +368,7 @@ export const sendToTelegram = async ({
             return sendToTelegram({
               ad_id,
               selectedChats: [chat.chatId],
-              messageText: safeMessageText, // Передаем уже разрешенное значение
+              messageText: safeMessageText,
               photos,
             });
           }
@@ -380,6 +382,7 @@ export const sendToTelegram = async ({
     )
   );
 };
+
 export const updateTelegramMessages = async (
   ad_id,
   ad,
@@ -388,7 +391,6 @@ export const updateTelegramMessages = async (
   selectedChats,
   messageText
 ) => {
-  // Если нет сообщений и тип не "repost", ничего не делаем
   if (!messages.length && telegramUpdateType !== "repost") {
     console.log(
       `No messages to update for ad ${ad_id}, and not a repost. Skipping.`
