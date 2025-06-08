@@ -332,6 +332,7 @@ export const updateTelegramMessages = async (
     selectedChats: [...new Set(selectedChats)],
     messages: messages.map((m) => ({
       chat_id: m.chat_id,
+      thread_id: m.thread_id,
       message_id: m.message_id,
     })),
   });
@@ -363,7 +364,7 @@ export const updateTelegramMessages = async (
         ad_id,
         messages,
         messageText,
-        chatTargets.map((ct) => ct.chatId)
+        chatTargets
       );
     }
     return results;
@@ -373,7 +374,7 @@ export const updateTelegramMessages = async (
     ad_id,
     messages,
     messageText,
-    chatTargets.map((ct) => ct.chatId)
+    chatTargets
   );
 };
 
@@ -381,38 +382,51 @@ async function updateExistingMessages(
   ad_id,
   messages,
   messageText,
-  selectedChatIds
+  chatTargets
 ) {
   const limit = pLimit(1);
   const results = [];
   const messagesByChat = messages.reduce((acc, msg) => {
-    acc[msg.chat_id] = acc[msg.chat_id] || {
+    const key = `${msg.chat_id}_${msg.thread_id || "null"}`;
+    acc[key] = acc[key] || {
       chat_id: msg.chat_id,
       thread_id: msg.thread_id,
       messages: [],
     };
-    acc[msg.chat_id].messages.push(msg);
+    acc[key].messages.push(msg);
     return acc;
   }, {});
 
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        if (!selectedChatIds.includes(String(chatInfo.chat_id))) {
-          console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
+        const target = chatTargets.find(
+          (ct) =>
+            String(ct.chatId) === String(chatInfo.chat_id) &&
+            String(ct.threadId) === String(chatInfo.thread_id || null)
+        );
+        if (!target) {
+          console.log(
+            `Skipping chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id}): not selected`
+          );
           return;
         }
 
+        console.log(
+          `Processing chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id})`
+        );
         const { rows: messageInfo } = await pool.query(
           `SELECT message_id, media_group_id, caption, is_media 
            FROM telegram_messages 
-           WHERE ad_id = $1 AND chat_id = $2 
+           WHERE ad_id = $1 AND chat_id = $2 AND (thread_id = $3 OR ($3 IS NULL AND thread_id IS NULL))
            ORDER BY is_media ASC, message_id ASC`,
-          [ad_id, chatInfo.chat_id]
+          [ad_id, chatInfo.chat_id, chatInfo.thread_id]
         );
 
         if (!messageInfo.length) {
-          console.log(`No messages found for chat ${chatInfo.chat_id}`);
+          console.log(
+            `No messages found for chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id})`
+          );
           return;
         }
 
@@ -422,10 +436,11 @@ async function updateExistingMessages(
 
         if (currentCaption === messageText) {
           console.log(
-            `Skipping update for chat ${chatInfo.chat_id}: caption unchanged`
+            `Skipping update for chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id}): caption unchanged`
           );
           results.push({
             chat_id: chatInfo.chat_id,
+            thread_id: chatInfo.thread_id,
             updated: true,
             skipped: true,
             type: isMediaGroup ? "caption_unchanged" : "text_unchanged",
@@ -445,6 +460,7 @@ async function updateExistingMessages(
             });
             results.push({
               chat_id: chatInfo.chat_id,
+              thread_id: chatInfo.thread_id,
               updated: success,
               type: "caption_edited",
             });
@@ -452,12 +468,13 @@ async function updateExistingMessages(
               await pool.query(
                 `UPDATE telegram_messages 
                  SET caption = $1, price = $2 
-                 WHERE ad_id = $3 AND chat_id = $4 AND is_media = false`,
+                 WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5 AND is_media = false`,
                 [
                   messageText,
                   (messageText.match(/Цена: (\d+)/) || [])[1] || null,
                   ad_id,
                   chatInfo.chat_id,
+                  chatInfo.thread_id,
                 ]
               );
             }
@@ -473,6 +490,7 @@ async function updateExistingMessages(
           });
           results.push({
             chat_id: chatInfo.chat_id,
+            thread_id: chatInfo.thread_id,
             updated: success,
             type: "text_edited",
           });
@@ -480,19 +498,27 @@ async function updateExistingMessages(
             await pool.query(
               `UPDATE telegram_messages 
                SET caption = $1, price = $2 
-               WHERE ad_id = $3 AND chat_id = $4`,
+               WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5`,
               [
                 messageText,
                 (messageText.match(/Цена: (\d+)/) || [])[1] || null,
                 ad_id,
                 chatInfo.chat_id,
+                chatInfo.thread_id,
               ]
             );
           }
         }
       } catch (err) {
-        console.error(`Error updating chat ${chatInfo.chat_id}:`, err);
-        results.push({ chat_id: chatInfo.chat_id, error: err.message });
+        console.error(
+          `Error updating chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id}):`,
+          err
+        );
+        results.push({
+          chat_id: chatInfo.chat_id,
+          thread_id: chatInfo.thread_id,
+          error: err.message,
+        });
       }
     });
   }

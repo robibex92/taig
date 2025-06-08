@@ -1,5 +1,5 @@
 // Utility to map selected chat keys to chat ids and thread ids
-import pkg from '../config/telegramChats.cjs';
+import pkg from "../config/telegramChats.cjs";
 const { TELEGRAM_CHATS } = pkg;
 
 /**
@@ -8,13 +8,18 @@ const { TELEGRAM_CHATS } = pkg;
  */
 export function getTelegramChatTargets(chatKeys) {
   if (!Array.isArray(chatKeys)) return [];
-  return chatKeys.map(key => {
+  const uniqueTargets = new Map();
+  chatKeys.forEach((key) => {
     const chat = TELEGRAM_CHATS[key];
-    if (!chat) return null;
-    return {
-      chatId: chat.id,
-      threadId: chat.threadId || null,
-      name: chat.name || key
-    };
-  }).filter(Boolean);
+    if (!chat) return;
+    const keyStr = `${chat.id}_${chat.threadId || "null"}`;
+    if (!uniqueTargets.has(keyStr)) {
+      uniqueTargets.set(keyStr, {
+        chatId: chat.id,
+        threadId: chat.threadId || null,
+        name: chat.name || key,
+      });
+    }
+  });
+  return Array.from(uniqueTargets.values());
 }
