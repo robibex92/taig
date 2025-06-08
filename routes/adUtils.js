@@ -158,7 +158,7 @@ export const updateImages = async (ad_id, images) => {
   return false;
 };
 
-export const buildMessageText = ({
+export const buildMessageText = async ({
   title,
   content,
   price,
@@ -166,17 +166,44 @@ export const buildMessageText = ({
   user_id,
   ad_id,
 }) => {
+  console.log(
+    `[buildMessageText] Input - username: "${username}", user_id: "${user_id}"`
+  );
   const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
   const adLink = `${siteUrl}/#/ads/${ad_id}`;
   const priceStr =
     price == null ? "💰 Цена: Не указана" : `💰 Цена: ${price} ₽`;
-  const authorLink = username
-    ? `👤 Автор объявления: @${escapeHtml(username)}`
-    : user_id
-    ? `👤 Автор объявления: [${escapeHtml(user_id)}](tg://user?id=${escapeHtml(
-        user_id
-      )})`
-    : `👤 Автор объявления: Не определен`;
+
+  // Получаем username из БД, если он не передан
+  let dbUsername = username;
+  if (!username && user_id) {
+    try {
+      const result = await pool.query(
+        "SELECT username FROM users WHERE id = $1",
+        [user_id]
+      );
+      dbUsername = result.rows[0]?.username || null;
+      console.log(
+        `[buildMessageText] Fetched username from DB: "${dbUsername}" for user_id: "${user_id}"`
+      );
+    } catch (error) {
+      console.error(
+        `[buildMessageText] Error fetching username for user_id ${user_id}:`,
+        error
+      );
+      dbUsername = null;
+    }
+  }
+
+  const authorLink =
+    dbUsername && dbUsername.trim() !== ""
+      ? `👤 Автор объявления: @${escapeHtml(dbUsername)}`
+      : user_id
+      ? `👤 Автор объявления: <a href="tg://user?id=${escapeHtml(
+          user_id
+        )}">${escapeHtml(user_id)}</a>`
+      : `👤 Автор объявления: Не определен`;
+
   return `📢 <b>Объявление</b>: ${escapeHtml(title)} 📢\n\n${escapeHtml(
     content
   )}\n\n${priceStr}\n\n${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
