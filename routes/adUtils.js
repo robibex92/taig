@@ -176,7 +176,7 @@ export const sendToTelegram = async ({
   photos,
 }) => {
   if (!selectedChats.length) return [];
-  const limit = pLimit(1); // Уменьшен параллелизм до 1 для избежания лимитов
+  const limit = pLimit(1);
   const chatTargets = getTelegramChatTargets(selectedChats);
   const photosToSend = photos
     .map((img) => {
@@ -291,7 +291,7 @@ export const sendToTelegram = async ({
           return { chat: chat.chatId, ok: true };
         } catch (err) {
           if (err.message.includes("429 Too Many Requests")) {
-            const retryAfter = 5; // Извлечь из err.response если доступно
+            const retryAfter = 5;
             console.warn(
               `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
             );
@@ -383,7 +383,7 @@ export const updateTelegramMessages = async (
           `SELECT message_id, media_group_id, caption, is_media 
            FROM telegram_messages 
            WHERE ad_id = $1 AND chat_id = $2 
-           ORDER BY is_media DESC, message_id ASC`,
+           ORDER BY is_media ASC, message_id ASC`,
           [ad_id, chatInfo.chat_id]
         );
 
@@ -392,44 +392,62 @@ export const updateTelegramMessages = async (
           return;
         }
 
-        const isMediaMessage = messageInfo[0].is_media;
-        const currentCaption = messageInfo[0].caption || "";
+        const isMediaGroup = messageInfo.some((m) => m.media_group_id);
+        const currentCaption =
+          messageInfo.find((m) => !m.is_media)?.caption || "";
 
         if (
           currentCaption === messageText &&
           telegramUpdateType === "update_text"
         ) {
           console.log(
-            `Skipping update for message ${messageInfo[0].message_id}: caption unchanged`
+            `Skipping update for chat ${chatInfo.chat_id}: caption unchanged`
           );
           results.push({
             chat_id: chatInfo.chat_id,
             updated: true,
             skipped: true,
-            type: isMediaMessage ? "caption_unchanged" : "text_unchanged",
+            type: isMediaGroup ? "caption_unchanged" : "text_unchanged",
           });
           return;
         }
 
         if (telegramUpdateType === "update_text") {
           let success;
-          if (isMediaMessage) {
-            success = await TelegramCreationService.editMessageCaption({
-              chatId: chatInfo.chat_id,
-              messageId: messageInfo[0].message_id,
-              caption: messageText,
-              threadId: chatInfo.thread_id,
-              parse_mode: "HTML",
-            });
-            results.push({
-              chat_id: chatInfo.chat_id,
-              updated: success,
-              type: "caption_edited",
-            });
+          if (isMediaGroup) {
+            const firstMessage = messageInfo.find((m) => !m.is_media);
+            if (firstMessage) {
+              success = await TelegramCreationService.editMessageCaption({
+                chatId: chatInfo.chat_id,
+                messageId: firstMessage.message_id,
+                caption: messageText,
+                threadId: chatInfo.thread_id,
+                parse_mode: "HTML",
+              });
+              results.push({
+                chat_id: chatInfo.chat_id,
+                updated: success,
+                type: "caption_edited",
+              });
+              if (success) {
+                await pool.query(
+                  `UPDATE telegram_messages 
+                   SET caption = $1, price = $2 
+                   WHERE ad_id = $3 AND chat_id = $4 AND is_media = false`,
+                  [
+                    messageText,
+                    (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                    ad_id,
+                    chatInfo.chat_id,
+                  ]
+                );
+              }
+            }
           } else {
+            const firstMessage = messageInfo[0];
             success = await TelegramCreationService.editMessageText({
               chatId: chatInfo.chat_id,
-              messageId: messageInfo[0].message_id,
+              messageId: firstMessage.message_id,
               text: messageText,
               threadId: chatInfo.thread_id,
               parse_mode: "HTML",
@@ -439,18 +457,19 @@ export const updateTelegramMessages = async (
               updated: success,
               type: "text_edited",
             });
-          }
-          if (success) {
-            await pool.query(
-              `UPDATE telegram_messages SET caption = $1, price = $2 
-               WHERE ad_id = $3 AND chat_id = $4`,
-              [
-                messageText,
-                (messageText.match(/Цена: (\d+)/) || [])[1] || null,
-                ad_id,
-                chatInfo.chat_id,
-              ]
-            );
+            if (success) {
+              await pool.query(
+                `UPDATE telegram_messages 
+                 SET caption = $1, price = $2 
+                 WHERE ad_id = $3 AND chat_id = $4`,
+                [
+                  messageText,
+                  (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                  ad_id,
+                  chatInfo.chat_id,
+                ]
+              );
+            }
           }
         } else if (telegramUpdateType === "keep") {
           results.push({
