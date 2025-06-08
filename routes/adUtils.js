@@ -236,8 +236,8 @@ export const sendToTelegram = async ({
                         mediaGroupId: message.media_group_id || null,
                       });
                       await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, created_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, price, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
                         [
                           ad_id,
                           res.chatId,
@@ -246,6 +246,10 @@ export const sendToTelegram = async ({
                           message.media_group_id || null,
                           messageText,
                           isMedia,
+                          photos.length > 0
+                            ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
+                              null
+                            : null,
                         ]
                       );
                     } catch (dbErr) {
@@ -262,8 +266,8 @@ export const sendToTelegram = async ({
                     messageId: res.result.message_id,
                   });
                   await pool.query(
-                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, created_at)
-                     VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, price, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                     [
                       ad_id,
                       res.chatId,
@@ -271,6 +275,7 @@ export const sendToTelegram = async ({
                       res.result.message_id,
                       messageText,
                       false,
+                      (messageText.match(/Цена: (\d+)/) || [])[1] || null,
                     ]
                   );
                 } catch (dbErr) {
@@ -418,9 +423,14 @@ export const updateTelegramMessages = async (
           }
           if (success) {
             await pool.query(
-              `UPDATE telegram_messages SET caption = $1 
-               WHERE ad_id = $2 AND chat_id = $3`,
-              [messageText, ad_id, chatInfo.chat_id]
+              `UPDATE telegram_messages SET caption = $1, price = $2 
+               WHERE ad_id = $3 AND chat_id = $4`,
+              [
+                messageText,
+                (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                ad_id,
+                chatInfo.chat_id,
+              ]
             );
           }
         } else if (telegramUpdateType === "keep") {

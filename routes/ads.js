@@ -366,7 +366,7 @@ routerAds.get(
       checkUserAccess(ad, user_id);
 
       const { rows: messages } = await pool.query(
-        `SELECT chat_id, thread_id, message_id, media_group_id, caption, is_media, created_at 
+        `SELECT chat_id, thread_id, message_id, media_group_id, caption, is_media, price, created_at 
          FROM telegram_messages 
          WHERE ad_id = $1 
          ORDER BY created_at DESC`,
