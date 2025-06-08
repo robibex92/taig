@@ -177,7 +177,9 @@ export const sendToTelegram = async ({
 }) => {
   if (!selectedChats.length) return [];
   const limit = pLimit(1);
-  const uniqueChats = [...new Set(selectedChats)];
+  const uniqueChats = [...new Set(selectedChats)].map((chat) =>
+    chat.toUpperCase()
+  ); // Нормализация и удаление дубликатов
   const chatTargets = getTelegramChatTargets(uniqueChats);
   const photosToSend = photos
     .map((img) => {
@@ -258,7 +260,7 @@ export const sendToTelegram = async ({
                             ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
                               null
                             : null,
-                          [url], // Сохраняем URL как массив
+                          [url],
                         ]
                       );
                       isFirst = false;
@@ -286,7 +288,7 @@ export const sendToTelegram = async ({
                       messageText,
                       false,
                       (messageText.match(/Цена: (\d+)/) || [])[1] || null,
-                      photosToSend, // Сохраняем все URL для одиночного сообщения
+                      photosToSend,
                     ]
                   );
                 } catch (dbErr) {
@@ -334,7 +336,7 @@ export const updateTelegramMessages = async (
   console.log("Updating Telegram messages:", {
     ad_id,
     telegramUpdateType,
-    selectedChats: [...new Set(selectedChats)],
+    selectedChats: [...new Set(selectedChats)], // Удаление дубликатов
     messages: messages.map((m) => ({
       chat_id: m.chat_id,
       thread_id: m.thread_id,
@@ -342,59 +344,43 @@ export const updateTelegramMessages = async (
     })),
   });
 
-  const uniqueSelectedChats = [...new Set(selectedChats)];
+  const uniqueSelectedChats = [...new Set(selectedChats)].map(
+    (chat) => chat.toUpperCase() // Нормализация названий чатов
+  );
   const chatTargets = getTelegramChatTargets(uniqueSelectedChats);
 
   if (telegramUpdateType === "repost" && ad.images) {
-    const newImages = ad.images.map((img) => img.url || img.image_url).sort();
-    for (const chatInfo of Object.values(
-      messages.reduce((acc, msg) => {
-        const key = `${msg.chat_id}_${msg.thread_id || "null"}`;
-        acc[key] = acc[key] || {
-          chat_id: msg.chat_id,
-          thread_id: msg.thread_id,
-          messages: [],
-        };
-        acc[key].messages.push(msg);
-        return acc;
-      }, {})
-    )) {
-      const chatMessages = chatInfo.messages;
-      const currentImages = await pool
-        .query(
-          "SELECT url_img FROM telegram_messages WHERE ad_id = $1 AND chat_id = $2 AND (thread_id = $3 OR ($3 IS NULL AND thread_id IS NULL))",
-          [ad_id, chatInfo.chat_id, chatInfo.thread_id]
-        )
-        .then((res) => (res.rows.length ? res.rows[0].url_img || [] : []));
-      const hasImageChanges = !areImageArraysEqual(
-        currentImages.sort(),
-        newImages
-      );
-      if (hasImageChanges) {
-        console.log(
-          `Image changes detected for ad ${ad_id} in chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id})`
-        );
-        const deleteResults = await deleteTelegramMessages(ad_id, chatMessages);
-        results.push(...deleteResults);
+    const currentImages = await pool
+      .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
+      .then((res) => res.rows.map((r) => r.image_url).sort());
+    const newImages = ad.images
+      .map((img) => img.url || img.image_url)
+      .filter(Boolean)
+      .sort();
+    if (JSON.stringify(currentImages) !== JSON.stringify(newImages)) {
+      console.log(`Image changes detected for ad ${ad_id}`);
+      const deleteResults = await deleteTelegramMessages(ad_id, messages);
+      results.push(...deleteResults);
 
-        const sendResults = await sendToTelegram({
-          ad_id,
-          selectedChats: [
-            chatTargets.find(
-              (ct) =>
-                String(ct.chatId) === String(chatInfo.chat_id) &&
-                String(ct.threadId) === String(chatInfo.thread_id || null)
-            )?.name,
-          ],
-          messageText,
-          photos: ad.images,
-        });
-        results.push(...sendResults);
-      }
+      const sendResults = await sendToTelegram({
+        ad_id,
+        selectedChats: uniqueSelectedChats,
+        messageText,
+        photos: ad.images,
+      });
+      results.push(...sendResults);
+    } else {
+      console.log(
+        `No image changes detected for ad ${ad_id}, switching to update_text`
+      );
+      return await updateExistingMessages(
+        ad_id,
+        messages,
+        messageText,
+        chatTargets
+      );
     }
-    return results.length
-      ? results
-      : await updateExistingMessages(ad_id, messages, messageText, chatTargets);
+    return results;
   }
 
   return await updateExistingMessages(
