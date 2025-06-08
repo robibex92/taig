@@ -343,11 +343,9 @@ export const updateTelegramMessages = async (
   if (telegramUpdateType === "repost" && ad.images) {
     const currentImages = await pool
       .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
-      .then((res) => res.rows.map((r) => r.image_url).sort());
-    const newImages = ad.images.map((img) => img.url || img.image_url).sort();
-    const hasImageChanges =
-      !arraysEqual(currentImages, newImages) ||
-      currentImages.length !== newImages.length;
+      .then((res) => res.rows.map((r) => r.image_url));
+    const newImages = ad.images.map((img) => img.url || img.image_url);
+    const hasImageChanges = !areImageSetsEqual(currentImages, newImages);
     if (hasImageChanges) {
       console.log(`Image changes detected for ad ${ad_id}`);
       const deleteResults = await deleteTelegramMessages(ad_id, messages);
@@ -382,14 +380,17 @@ export const updateTelegramMessages = async (
   );
 };
 
-// Вспомогательная функция для сравнения массивов
-function arraysEqual(arr1, arr2) {
-  if (arr1.length !== arr2.length) return false;
-  for (let i = 0; i < arr1.length; i++) {
-    if (arr1[i] !== arr2[i]) return false;
+// Новая вспомогательная функция для сравнения наборов изображений
+function areImageSetsEqual(arr1, arr2) {
+  const set1 = new Set(arr1);
+  const set2 = new Set(arr2);
+  if (set1.size !== set2.size) return false;
+  for (let item of set1) {
+    if (!set2.has(item)) return false;
   }
   return true;
 }
+
 async function updateExistingMessages(
   ad_id,
   messages,
