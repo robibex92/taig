@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 import routerPosts from "./routes/posts.js";
 import routerNearby from "./routes/nearby.js";
 import routerCars from "./routes/cars.js";
-import routerAds from "./routes/ads.js";
+import routerAds from "./routes/routerAds.js";
 import routerAdsTelegram from "./routes/ads_telegram.js";
 import routerAdsTelegramUpdate from "./routes/ads_telegram_update.js";
 import routerFaqs from "./routes/faqs.js";
