@@ -345,7 +345,11 @@ export const updateTelegramMessages = async (
       .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
       .then((res) => res.rows.map((r) => r.image_url).sort());
     const newImages = ad.images.map((img) => img.url || img.image_url).sort();
-    if (JSON.stringify(currentImages) !== JSON.stringify(newImages)) {
+    const hasImageChanges =
+      !arraysEqual(currentImages, newImages) ||
+      currentImages.length !== newImages.length;
+    if (hasImageChanges) {
+      console.log(`Image changes detected for ad ${ad_id}`);
       const deleteResults = await deleteTelegramMessages(ad_id, messages);
       results.push(...deleteResults);
 
@@ -378,6 +382,14 @@ export const updateTelegramMessages = async (
   );
 };
 
+// Вспомогательная функция для сравнения массивов
+function arraysEqual(arr1, arr2) {
+  if (arr1.length !== arr2.length) return false;
+  for (let i = 0; i < arr1.length; i++) {
+    if (arr1[i] !== arr2[i]) return false;
+  }
+  return true;
+}
 async function updateExistingMessages(
   ad_id,
   messages,
