@@ -134,19 +134,28 @@ export const saveImages = async (ad_id, images) => {
 
 export const updateImages = async (ad_id, images) => {
   const { rows: currentImages } = await pool.query(
-    "SELECT image_url FROM ad_images WHERE ad_id = $1",
+    "SELECT image_url FROM ad_images WHERE ad_id = $1 ORDER BY created_at ASC",
     [ad_id]
   );
-  const currentUrls = currentImages.map((img) => img.image_url).sort();
-  const newUrls = images
+
+  const newImages = images
     .map((img) => img.url || img.image_url)
     .filter(Boolean)
     .sort();
-  if (JSON.stringify(currentUrls) !== JSON.stringify(newUrls)) {
+
+  const currentUrls = currentImages.map((img) => img.image_url);
+  const hasChanges =
+    currentUrls.length !== newImages.length ||
+    !currentUrls.every((url) => newImages.includes(url)) ||
+    !newImages.every((url) => currentUrls.includes(url));
+
+  if (hasChanges) {
     await pool.query("DELETE FROM ad_images WHERE ad_id = $1", [ad_id]);
     await saveImages(ad_id, images);
-    console.log(`Images updated for ad ${ad_id}:`, newUrls);
+    console.log(`Images updated for ad ${ad_id}:`, newImages);
+    return true;
   }
+  return false;
 };
 
 export const buildMessageText = ({
@@ -330,13 +339,16 @@ export const updateTelegramMessages = async (
   messageText
 ) => {
   if (!messages.length && telegramUpdateType !== "repost") return [];
-  const limit = pLimit(1);
-  const results = [];
+
+  const uniqueSelectedChats = [...new Set(selectedChats)].map((chat) =>
+    chat.toUpperCase()
+  );
+  const chatTargets = getTelegramChatTargets(uniqueSelectedChats);
 
   console.log("Updating Telegram messages:", {
     ad_id,
     telegramUpdateType,
-    selectedChats: [...new Set(selectedChats)], // Удаление дубликатов
+    selectedChats: uniqueSelectedChats,
     messages: messages.map((m) => ({
       chat_id: m.chat_id,
       thread_id: m.thread_id,
@@ -344,31 +356,46 @@ export const updateTelegramMessages = async (
     })),
   });
 
-  const uniqueSelectedChats = [...new Set(selectedChats)].map(
-    (chat) => chat.toUpperCase() // Нормализация названий чатов
-  );
-  const chatTargets = getTelegramChatTargets(uniqueSelectedChats);
+  const hasImageChanges = async () => {
+    const { rows: dbMessages } = await pool.query(
+      `SELECT url_img, media_group_id 
+       FROM telegram_messages 
+       WHERE ad_id = $1 
+       GROUP BY media_group_id 
+       HAVING media_group_id IS NOT NULL 
+       ORDER BY created_at ASC 
+       LIMIT 1`,
+      [ad_id]
+    );
 
-  if (telegramUpdateType === "repost" && ad.images) {
-    const currentImages = await pool
-      .query("SELECT image_url FROM ad_images WHERE ad_id = $1", [ad_id])
-      .then((res) => res.rows.map((r) => r.image_url).sort());
-    const newImages = ad.images
+    const currentUrls =
+      dbMessages.length > 0
+        ? dbMessages[0].url_img.map((url) => url.replace(/[{}]/g, "")) // Удаляем фигурные скобки
+        : [];
+    const newImages = (ad.images || [])
       .map((img) => img.url || img.image_url)
       .filter(Boolean)
       .sort();
-    if (JSON.stringify(currentImages) !== JSON.stringify(newImages)) {
+
+    return (
+      currentUrls.length !== newImages.length ||
+      !currentUrls.every((url) => newImages.includes(url)) ||
+      !newImages.every((url) => currentUrls.includes(url))
+    );
+  };
+
+  if (telegramUpdateType === "repost" && ad.images) {
+    const imageChangesDetected = await hasImageChanges();
+    if (imageChangesDetected) {
       console.log(`Image changes detected for ad ${ad_id}`);
       const deleteResults = await deleteTelegramMessages(ad_id, messages);
-      results.push(...deleteResults);
-
       const sendResults = await sendToTelegram({
         ad_id,
         selectedChats: uniqueSelectedChats,
         messageText,
         photos: ad.images,
       });
-      results.push(...sendResults);
+      return [...deleteResults, ...sendResults];
     } else {
       console.log(
         `No image changes detected for ad ${ad_id}, switching to update_text`
@@ -380,7 +407,6 @@ export const updateTelegramMessages = async (
         chatTargets
       );
     }
-    return results;
   }
 
   return await updateExistingMessages(
@@ -390,12 +416,6 @@ export const updateTelegramMessages = async (
     chatTargets
   );
 };
-
-// Функция сравнения массивов
-function areImageArraysEqual(arr1, arr2) {
-  if (arr1.length !== arr2.length) return false;
-  return arr1.every((item, index) => item === arr2[index]);
-}
 
 async function updateExistingMessages(
   ad_id,
