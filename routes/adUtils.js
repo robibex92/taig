@@ -188,9 +188,11 @@ export const sendToTelegram = async ({
         ? photos.map((p) => p.url || p.image_url)
         : [];
     const isMedia = !!imageUrls.length;
-    const text = isMedia ? "" : messageText || "";
+    const text = messageText || ""; // Сохраняем текст, даже если есть изображения
 
-    console.log(`Sending to ${chatTarget.chatId} with photos:`, imageUrls); // Отладочный лог
+    console.log(
+      `Sending to ${chatTarget.chatId} with photos: ${imageUrls}, text: ${text}`
+    );
 
     try {
       const response = await TelegramCreationService.sendMessage({
@@ -201,13 +203,14 @@ export const sendToTelegram = async ({
         parse_mode: "HTML",
       });
       if (response.results[0].result && response.results[0].result.message_id) {
+        const messageId = response.results[0].result.message_id;
         await pool.query(
           "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
           [
             ad_id,
             chatTarget.chatId,
             chatTarget.threadId,
-            response.results[0].result.message_id,
+            messageId,
             text,
             isMedia,
             imageUrls,
@@ -216,7 +219,7 @@ export const sendToTelegram = async ({
         results.push({
           chat_id: chatTarget.chatId,
           thread_id: chatTarget.threadId,
-          message_id: response.results[0].result.message_id,
+          message_id: messageId,
           success: true,
         });
       } else if (response.results[0].error) {
