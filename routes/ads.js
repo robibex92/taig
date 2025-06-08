@@ -172,7 +172,7 @@ routerAds.post("/api/ads", authenticateJWT, async (req, res) => {
     await saveImages(ad.id, images);
 
     if (isTelegram && selectedChats.length > 0) {
-      const messageText = buildMessageText({
+      const messageText = await buildMessageText({
         title,
         content,
         price,
@@ -250,31 +250,30 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
         "SELECT chat_id, thread_id, message_id, caption, is_media FROM telegram_messages WHERE ad_id = $1",
         [id]
       );
-      const messageText = buildMessageText({
-        title: title || ad.title,
-        content: content || ad.content,
-        price: price !== undefined ? price : ad.price,
+
+      const messageText = await buildMessageText({
+        title: updatedAd.title,
+        content: updatedAd.content,
+        price: updatedAd.price,
         username: req.user?.username,
         user_id,
         ad_id: id,
       });
-      const finalUpdateType =
-        images !== undefined ? "repost" : telegramUpdateType;
+
       console.log(`Updating Telegram for ad ${id}:`, {
         selectedChats,
-        finalUpdateType,
+        finalUpdateType: telegramUpdateType,
         images,
         messages,
       });
-      queueTelegramTask(() =>
-        updateTelegramMessages(
-          id,
-          { ...updatedAd, images },
-          messages,
-          finalUpdateType,
-          selectedChats,
-          messageText
-        )
+
+      await updateTelegramMessages(
+        id,
+        updatedAd,
+        messages,
+        telegramUpdateType,
+        selectedChats,
+        messageText
       );
     }
 
