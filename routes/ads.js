@@ -243,7 +243,21 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
       status,
     };
     const updatedAd = (await updateAd(id, updateFields)) || ad;
-    if (images !== undefined) await updateImages(id, images);
+    let finalImages = [];
+    if (images !== undefined) {
+      await updateImages(id, images);
+      const { rows: fetchedImages } = await pool.query(
+        "SELECT image_url AS url, is_main FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+        [id]
+      );
+      finalImages = fetchedImages;
+    } else {
+      const { rows: currentImages } = await pool.query(
+        "SELECT image_url AS url, is_main FROM ad_images WHERE ad_id = $1 ORDER BY is_main DESC, created_at ASC",
+        [id]
+      );
+      finalImages = currentImages;
+    }
 
     if (isTelegram && selectedChats.length > 0) {
       const { rows: messages } = await pool.query(
@@ -263,13 +277,13 @@ routerAds.patch("/api/ads/:id", authenticateJWT, async (req, res) => {
       console.log(`Updating Telegram for ad ${id}:`, {
         selectedChats,
         finalUpdateType: telegramUpdateType,
-        images,
+        images: finalImages,
         messages,
       });
 
       await updateTelegramMessages(
         id,
-        updatedAd,
+        { ...updatedAd, images: finalImages },
         messages,
         telegramUpdateType,
         selectedChats,

@@ -343,7 +343,7 @@ export const sendToTelegram = async ({
                       res.threadId,
                       res.result.message_id,
                       safeMessageText,
-                      false,
+                      isMedia,
                       (safeMessageText.match(/Цена: (\d+)/) || [])[1] || null,
                       photosToSend,
                     ]
@@ -534,7 +534,7 @@ async function updateExistingMessages(
           `Processing chat ${chatInfo.chat_id} (thread_id: ${chatInfo.thread_id})`
         );
         const { rows: messageInfo } = await pool.query(
-          `SELECT message_id, media_group_id, caption, is_media 
+          `SELECT message_id, media_group_id, caption, is_media, url_img 
            FROM telegram_messages 
            WHERE ad_id = $1 AND chat_id = $2 AND (thread_id = $3 OR ($3 IS NULL AND thread_id IS NULL))
            ORDER BY is_media ASC, message_id ASC`,
@@ -549,6 +549,12 @@ async function updateExistingMessages(
         }
 
         const isMediaGroup = messageInfo.some((m) => m.media_group_id);
+        const isActualMediaMessage = messageInfo.some(
+          (m) =>
+            m.is_media ||
+            (m.url_img && m.url_img.length > 0 && m.url_img[0] !== null)
+        );
+
         const currentCaption =
           messageInfo.find((m) => !m.is_media)?.caption || "";
 
@@ -566,7 +572,7 @@ async function updateExistingMessages(
           return;
         }
 
-        if (isMediaGroup) {
+        if (isActualMediaMessage) {
           const firstMessage = messageInfo.find((m) => !m.is_media);
           if (firstMessage) {
             const finalCaption =
@@ -589,8 +595,8 @@ async function updateExistingMessages(
             });
             if (success) {
               await pool.query(
-                `UPDATE telegram_messages
-                 SET caption = $1, price = $2
+                `UPDATE telegram_messages 
+                 SET caption = $1, price = $2 
                  WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5 AND is_media = false`,
                 [
                   finalCaption,
@@ -624,8 +630,8 @@ async function updateExistingMessages(
           });
           if (success) {
             await pool.query(
-              `UPDATE telegram_messages
-               SET caption = $1, price = $2
+              `UPDATE telegram_messages 
+               SET caption = $1, price = $2 
                WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5`,
               [
                 finalMessageText,
