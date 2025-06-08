@@ -370,19 +370,11 @@ export const updateTelegramMessages = async (
     }
 
     try {
-      // Получаем текущие URL изображений из telegram_messages
       const { rows: dbMessages } = await pool.query(
-        `SELECT url_imgs
-         FROM (
-           SELECT array_agg(clean_url) AS url_imgs, MIN(created_at) AS created_at
-           FROM (
-             SELECT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url)) AS clean_url, created_at
-             FROM telegram_messages, unnest(url_img) AS unnested_url
-             WHERE ad_id = $1 
-               AND (media_group_id IS NOT NULL OR is_media = true)
-           ) AS cleaned_urls
-           GROUP BY media_group_id
-         ) AS grouped_urls
+        `SELECT array_agg(DISTINCT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url))) AS url_imgs
+         FROM telegram_messages, unnest(url_img) AS unnested_url
+         WHERE ad_id = $1 
+           AND is_media = true
          ORDER BY created_at ASC
          LIMIT 1`,
         [Number(ad_id)]
@@ -395,7 +387,6 @@ export const updateTelegramMessages = async (
         .filter(Boolean)
         .sort();
 
-      // Сравниваем массивы URL без учета порядка
       const hasChanges =
         currentUrls.length !== newImages.length ||
         !currentUrls.every((url) => newImages.includes(url)) ||
@@ -409,7 +400,7 @@ export const updateTelegramMessages = async (
       return hasChanges;
     } catch (error) {
       console.error(`Error checking image changes for ad ${ad_id}:`, error);
-      return false; // В случае ошибки считаем, что изменений нет
+      return false;
     }
   };
 
