@@ -444,4 +444,39 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
   }
 });
 
+// Получить сообщения Telegram для объявления
+routerAds.get(
+  "/api/ads/:id/telegram-messages",
+  authenticateJWT,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user_id = req.user?.id || req.user?.user_id;
+
+      // Проверяем доступ к объявлению
+      const {
+        rows: [ad],
+      } = await pool.query("SELECT * FROM ads WHERE id = $1", [id]);
+      if (!ad) {
+        return res.status(404).json({ error: "Ad not found" });
+      }
+      checkUserAccess(ad, user_id);
+
+      // Получаем сообщения Telegram
+      const { rows: messages } = await pool.query(
+        `SELECT chat_id, thread_id, message_id, media_group_id, created_at 
+       FROM telegram_messages 
+       WHERE ad_id = $1 
+       ORDER BY created_at DESC`,
+        [id]
+      );
+
+      res.json({ messages });
+    } catch (error) {
+      console.error("Error fetching Telegram messages:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 export default routerAds;
