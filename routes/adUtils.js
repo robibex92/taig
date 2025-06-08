@@ -571,6 +571,9 @@ async function updateExistingMessages(
           if (firstMessage) {
             const finalCaption =
               messageText || currentCaption || "Сообщение без текста";
+            console.log(
+              `[updateExistingMessages] Отправляется подпись для медиагруппы: '${finalCaption}'`
+            );
             const success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: firstMessage.message_id,
@@ -603,6 +606,9 @@ async function updateExistingMessages(
           const firstMessage = messageInfo[0];
           const finalMessageText =
             messageText || currentCaption || "Сообщение без текста";
+          console.log(
+            `[updateExistingMessages] Отправляется текст для обычного сообщения: '${finalMessageText}'`
+          );
           const success = await TelegramCreationService.editMessageText({
             chatId: chatInfo.chat_id,
             messageId: firstMessage.message_id,
