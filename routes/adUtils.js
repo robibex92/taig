@@ -178,32 +178,60 @@ export const sendToTelegram = async ({
   const results = [];
   for (const chat of selectedChats) {
     const chatTarget = getTelegramChatTargets([chat])[0];
-    const response = await TelegramCreationService.sendMessage({
-      chatId: chatTarget.chatId,
-      text: messageText,
-      threadId: chatTarget.threadId,
-      parse_mode: "HTML",
-      photos: photos,
-    });
-    if (response && response.message_id) {
-      const imageUrls = photos ? photos.map((p) => p.url || p.image_url) : [];
-      await pool.query(
-        "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        [
-          ad_id,
-          chatTarget.chatId,
-          chatTarget.threadId,
-          response.message_id,
-          messageText,
-          !!photos.length,
-          imageUrls,
-        ]
+    if (!chatTarget) {
+      console.log(`Chat target not found for ${chat}`);
+      continue;
+    }
+
+    const imageUrls =
+      photos && Array.isArray(photos)
+        ? photos.map((p) => p.url || p.image_url)
+        : [];
+    const isMedia = !!imageUrls.length;
+    const text = isMedia ? "" : messageText || "";
+
+    console.log(`Sending to ${chatTarget.chatId} with photos:`, imageUrls); // Отладочный лог
+
+    try {
+      const response = await TelegramCreationService.sendMessage({
+        chatIds: [chatTarget.chatId],
+        threadIds: [chatTarget.threadId],
+        message: text,
+        photos: imageUrls,
+        parse_mode: "HTML",
+      });
+      if (response.results[0].result && response.results[0].result.message_id) {
+        await pool.query(
+          "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [
+            ad_id,
+            chatTarget.chatId,
+            chatTarget.threadId,
+            response.results[0].result.message_id,
+            text,
+            isMedia,
+            imageUrls,
+          ]
+        );
+        results.push({
+          chat_id: chatTarget.chatId,
+          thread_id: chatTarget.threadId,
+          message_id: response.results[0].result.message_id,
+          success: true,
+        });
+      } else if (response.results[0].error) {
+        throw new Error(response.results[0].error);
+      }
+    } catch (error) {
+      console.log(
+        `Error sending to Telegram for ${chatTarget.chatId}:`,
+        error.message
       );
       results.push({
         chat_id: chatTarget.chatId,
         thread_id: chatTarget.threadId,
-        message_id: response.message_id,
-        success: true,
+        success: false,
+        error: error.message,
       });
     }
   }

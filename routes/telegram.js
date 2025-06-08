@@ -57,7 +57,7 @@ export const TelegramCreationService = {
     photos = [],
     parse_mode = "HTML",
   }) {
-    if (message.length > 1024 && photos.length > 0) {
+    if (message && message.length > 1024 && photos && photos.length > 0) {
       throw new Error("Caption exceeds 1024 characters");
     }
 
@@ -67,16 +67,14 @@ export const TelegramCreationService = {
       const threadId = threadIds[i] || undefined;
       try {
         let result;
-        if (photos && photos.length > 0) {
+        if (photos && Array.isArray(photos) && photos.length > 0) {
           if (photos.length === 1) {
-            // Одно изображение с подписью
             result = await bot.sendPhoto(chatId, photos[0], {
               caption: message,
               parse_mode,
               message_thread_id: threadId,
             });
           } else {
-            // Несколько изображений — caption только у первого
             const media = photos.map((photo, index) => ({
               type: "photo",
               media: photo,
@@ -88,7 +86,6 @@ export const TelegramCreationService = {
             });
           }
         } else {
-          // Только текст
           result = await bot.sendMessage(chatId, message, {
             parse_mode,
             message_thread_id: threadId,
