@@ -188,7 +188,7 @@ export const sendToTelegram = async ({
         ? photos.map((p) => p.url || p.image_url)
         : [];
     const isMedia = !!imageUrls.length;
-    const text = messageText || ""; // Сохраняем текст, даже если есть изображения
+    const text = messageText || "";
 
     console.log(
       `Sending to ${chatTarget.chatId} with photos: ${imageUrls}, text: ${text}`
@@ -202,26 +202,51 @@ export const sendToTelegram = async ({
         photos: imageUrls,
         parse_mode: "HTML",
       });
-      if (response.results[0].result && response.results[0].result.message_id) {
-        const messageId = response.results[0].result.message_id;
-        await pool.query(
-          "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-          [
-            ad_id,
-            chatTarget.chatId,
-            chatTarget.threadId,
-            messageId,
-            text,
-            isMedia,
-            imageUrls,
-          ]
-        );
-        results.push({
-          chat_id: chatTarget.chatId,
-          thread_id: chatTarget.threadId,
-          message_id: messageId,
-          success: true,
-        });
+      const result = response.results[0].result;
+      if (result) {
+        if (Array.isArray(result)) {
+          // Обработка медиа-группы
+          for (const msg of result) {
+            await pool.query(
+              "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+              [
+                ad_id,
+                chatTarget.chatId,
+                chatTarget.threadId,
+                msg.message_id,
+                text,
+                isMedia,
+                [msg.url],
+              ]
+            );
+            results.push({
+              chat_id: chatTarget.chatId,
+              thread_id: chatTarget.threadId,
+              message_id: msg.message_id,
+              success: true,
+            });
+          }
+        } else {
+          // Одиночное сообщение или фото
+          await pool.query(
+            "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            [
+              ad_id,
+              chatTarget.chatId,
+              chatTarget.threadId,
+              result.message_id,
+              text,
+              isMedia,
+              imageUrls,
+            ]
+          );
+          results.push({
+            chat_id: chatTarget.chatId,
+            thread_id: chatTarget.threadId,
+            message_id: result.message_id,
+            success: true,
+          });
+        }
       } else if (response.results[0].error) {
         throw new Error(response.results[0].error);
       }

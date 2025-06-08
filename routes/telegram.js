@@ -70,7 +70,7 @@ export const TelegramCreationService = {
         if (photos && Array.isArray(photos) && photos.length > 0) {
           if (photos.length === 1) {
             result = await bot.sendPhoto(chatId, photos[0], {
-              caption: message || "", // Убедимся, что caption всегда есть
+              caption: message || "",
               parse_mode,
               message_thread_id: threadId,
             });
@@ -84,8 +84,11 @@ export const TelegramCreationService = {
             result = await bot.sendMediaGroup(chatId, media, {
               message_thread_id: threadId,
             });
-            // Берем message_id из первого сообщения медиа-группы
-            result = result && result[0] ? result[0] : result;
+            // result — массив объектов с message_id для каждого изображения
+            result = result.map((msg, index) => ({
+              message_id: msg.message_id,
+              url: photos[index],
+            }));
           }
         } else {
           result = await bot.sendMessage(chatId, message || "", {
