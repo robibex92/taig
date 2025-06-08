@@ -569,7 +569,7 @@ async function updateExistingMessages(
             const success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: firstMessage.message_id,
-              caption: messageText,
+              caption: messageText || currentCaption, // Используем текущий caption, если messageText пуст
               threadId: chatInfo.thread_id,
               parse_mode: "HTML",
             });
@@ -585,7 +585,7 @@ async function updateExistingMessages(
                  SET caption = $1, price = $2 
                  WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5 AND is_media = false`,
                 [
-                  messageText,
+                  messageText || currentCaption,
                   (messageText.match(/Цена: (\d+)/) || [])[1] || null,
                   ad_id,
                   chatInfo.chat_id,
@@ -599,7 +599,7 @@ async function updateExistingMessages(
           const success = await TelegramCreationService.editMessageText({
             chatId: chatInfo.chat_id,
             messageId: firstMessage.message_id,
-            text: messageText,
+            text: messageText || currentCaption, // Используем текущий caption, если messageText пуст
             threadId: chatInfo.thread_id,
             parse_mode: "HTML",
           });
@@ -615,7 +615,7 @@ async function updateExistingMessages(
                SET caption = $1, price = $2 
                WHERE ad_id = $3 AND chat_id = $4 AND thread_id = $5`,
               [
-                messageText,
+                messageText || currentCaption,
                 (messageText.match(/Цена: (\d+)/) || [])[1] || null,
                 ad_id,
                 chatInfo.chat_id,
