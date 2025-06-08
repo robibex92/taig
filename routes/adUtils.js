@@ -169,7 +169,7 @@ export const buildMessageText = ({
   )}\n\n${priceStr}\n\n👤 Автор объявления: ${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 };
 
-// В sendToTelegram, обновите вставку в telegram_messages
+// В sendToTelegram, обновляем вставку в telegram_messages
 export const sendToTelegram = async ({
   ad_id,
   selectedChats,
@@ -196,7 +196,8 @@ export const sendToTelegram = async ({
       limit(async () => {
         try {
           let result;
-          if (photosToSend.length > 0) {
+          const isMedia = photosToSend.length > 0;
+          if (isMedia) {
             const mediaGroup = photosToSend.map((photo, index) => ({
               type: "photo",
               media: photo,
@@ -232,15 +233,16 @@ export const sendToTelegram = async ({
                         mediaGroupId: message.media_group_id || null,
                       });
                       await pool.query(
-                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, created_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
                         [
                           ad_id,
                           res.chatId,
                           res.threadId,
                           message.message_id,
                           message.media_group_id || null,
-                          messageText, // Сохраняем подпись
+                          messageText,
+                          isMedia,
                         ]
                       );
                       console.log("Successfully inserted media message.");
@@ -261,14 +263,15 @@ export const sendToTelegram = async ({
                     messageId: res.result.message_id,
                   });
                   await pool.query(
-                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, created_at)
-                     VALUES ($1, $2, $3, $4, $5, NOW())`,
+                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
                     [
                       ad_id,
                       res.chatId,
                       res.threadId,
                       res.result.message_id,
                       messageText,
+                      false,
                     ]
                   );
                   console.log("Successfully inserted single message.");
@@ -281,17 +284,61 @@ export const sendToTelegram = async ({
               }
             }
           }
-          return { chat, ok: true };
+          return { chat: chat.chatId, ok: true };
         } catch (err) {
           console.error("Error sending to Telegram:", err);
-          return { chat, ok: false, error: err.message };
+          return { chat: chat.chatId, ok: false, error: err.message };
         }
       })
     )
   );
 };
 
-// Полностью замените updateTelegramMessages
+// Обновляем deleteTelegramMessages
+export const deleteTelegramMessages = async (ad_id, messages) => {
+  const limit = pLimit(5);
+  const results = [];
+  const messagesByChat = messages.reduce((acc, msg) => {
+    acc[msg.chat_id] = acc[msg.chat_id] || [];
+    acc[msg.chat_id].push(msg);
+    return acc;
+  }, {});
+
+  for (const chat_id of Object.keys(messagesByChat)) {
+    await limit(async () => {
+      try {
+        // Удаляем все сообщения в чате
+        for (const msg of messagesByChat[chat_id]) {
+          const success = await TelegramCreationService.deleteMessage({
+            chatId: msg.chat_id,
+            messageId: msg.message_id,
+            threadId: msg.thread_id,
+          });
+          results.push({
+            chat_id: msg.chat_id,
+            message_id: msg.message_id,
+            ok: success,
+          });
+        }
+      } catch (err) {
+        console.error(`Error deleting messages in chat ${chat_id}:`, err);
+        results.push({ chat_id, ok: false, error: err.message });
+      }
+    });
+  }
+
+  // Удаляем записи из базы данных
+  try {
+    await pool.query("DELETE FROM telegram_messages WHERE ad_id = $1", [ad_id]);
+    console.log(`Deleted telegram_messages for ad_id ${ad_id}`);
+  } catch (dbErr) {
+    console.error("Error deleting telegram_messages from DB:", dbErr);
+  }
+
+  return results;
+};
+
+// Полностью заменяем updateTelegramMessages
 export const updateTelegramMessages = async (
   ad_id,
   ad,
@@ -305,7 +352,11 @@ export const updateTelegramMessages = async (
   const results = [];
 
   if (telegramUpdateType === "repost") {
-    await deleteTelegramMessages(ad_id, messages);
+    // Удаляем старые сообщения
+    const deleteResults = await deleteTelegramMessages(ad_id, messages);
+    results.push(...deleteResults);
+
+    // Отправляем новые сообщения
     return sendToTelegram({
       ad_id,
       selectedChats,
@@ -339,25 +390,32 @@ export const updateTelegramMessages = async (
   for (const chatInfo of Object.values(messagesByChat)) {
     await limit(async () => {
       try {
-        const { rows: messageInfo } = await pool.query(
-          `SELECT message_id, media_group_id, caption FROM telegram_messages 
-           WHERE ad_id = $1 AND chat_id = $2 
-           ORDER BY media_group_id NULLS LAST, message_id ASC`,
-          [ad_id, chatInfo.chat_id]
-        );
-
-        if (!messageInfo.length || !selectedChats.includes(chatInfo.chat_id)) {
-          console.log(
-            `Skipping chat ${chatInfo.chat_id}: no messages or not selected`
-          );
+        if (!selectedChats.includes(chatInfo.chat_id)) {
+          console.log(`Skipping chat ${chatInfo.chat_id}: not selected`);
           return;
         }
 
-        const isMediaMessage = messageInfo[0].media_group_id != null;
+        const { rows: messageInfo } = await pool.query(
+          `SELECT message_id, media_group_id, caption, is_media 
+           FROM telegram_messages 
+           WHERE ad_id = $1 AND chat_id = $2 
+           ORDER BY is_media DESC, message_id ASC`,
+          [ad_id, chatInfo.chat_id]
+        );
+
+        if (!messageInfo.length) {
+          console.log(`No messages found for chat ${chatInfo.chat_id}`);
+          return;
+        }
+
+        const isMediaMessage = messageInfo[0].is_media;
         const currentCaption = messageInfo[0].caption || "";
 
         // Проверяем, изменилась ли подпись
-        if (currentCaption === messageText) {
+        if (
+          currentCaption === messageText &&
+          telegramUpdateType === "update_text"
+        ) {
           console.log(
             `Skipping update for message ${messageInfo[0].message_id} in chat ${chatInfo.chat_id}: caption unchanged`
           );
@@ -373,6 +431,7 @@ export const updateTelegramMessages = async (
         if (telegramUpdateType === "update_text") {
           let success;
           if (isMediaMessage) {
+            // Для медиа-группы редактируем только первое сообщение
             success = await TelegramCreationService.editMessageCaption({
               chatId: chatInfo.chat_id,
               messageId: messageInfo[0].message_id,
@@ -397,12 +456,12 @@ export const updateTelegramMessages = async (
               type: "text_edited",
             });
           }
-          // Обновляем подпись в базе
+          // Обновляем подпись в базе для всех сообщений в чате
           if (success) {
             await pool.query(
               `UPDATE telegram_messages SET caption = $1 
-               WHERE ad_id = $2 AND chat_id = $3 AND message_id = $4`,
-              [messageText, ad_id, chatInfo.chat_id, messageInfo[0].message_id]
+               WHERE ad_id = $2 AND chat_id = $3`,
+              [messageText, ad_id, chatInfo.chat_id]
             );
           }
         } else if (telegramUpdateType === "keep") {
@@ -437,36 +496,5 @@ export const updateTelegramMessages = async (
     results.push(...newResults);
   }
 
-  return results;
-};
-
-export const deleteTelegramMessages = async (ad_id, messages) => {
-  const limit = pLimit(5);
-  const results = [];
-  for (const msg of messages) {
-    await limit(async () => {
-      try {
-        const success = await TelegramCreationService.deleteMessage({
-          chatId: msg.chat_id,
-          messageId: msg.message_id,
-          threadId: msg.thread_id,
-        });
-        results.push({
-          chat_id: msg.chat_id,
-          message_id: msg.message_id,
-          ok: success,
-        });
-      } catch (err) {
-        console.error(`Error deleting message ${msg.message_id}:`, err);
-        results.push({
-          chat_id: msg.chat_id,
-          message_id: msg.message_id,
-          ok: false,
-          error: err.message,
-        });
-      }
-    });
-  }
-  await pool.query("DELETE FROM telegram_messages WHERE ad_id = $1", [ad_id]);
   return results;
 };
