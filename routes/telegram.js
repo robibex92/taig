@@ -1,6 +1,8 @@
 import bot from "../services/telegramBot.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import express from "express";
+import { pool } from "../config/db.js";
+
 const router = express.Router();
 
 // Маршрут для отправки сообщений в Telegram
