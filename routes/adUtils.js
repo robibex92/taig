@@ -338,7 +338,13 @@ export const updateTelegramMessages = async (
   selectedChats,
   messageText
 ) => {
-  if (!messages.length && telegramUpdateType !== "repost") return [];
+  // Если нет сообщений и тип не "repost", ничего не делаем
+  if (!messages.length && telegramUpdateType !== "repost") {
+    console.log(
+      `No messages to update for ad ${ad_id}, and not a repost. Skipping.`
+    );
+    return [];
+  }
 
   const uniqueSelectedChats = [...new Set(selectedChats)].map((chat) =>
     chat.toUpperCase()
@@ -356,40 +362,62 @@ export const updateTelegramMessages = async (
     })),
   });
 
+  // Функция для проверки изменений изображений
   const hasImageChanges = async () => {
-    const { rows: dbMessages } = await pool.query(
-      `SELECT array_agg(clean_url) AS url_imgs
-       FROM (
-         SELECT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url)) AS clean_url
-         FROM telegram_messages, unnest(url_img) AS unnested_url
-         WHERE ad_id = $1 
-           AND (media_group_id IS NOT NULL AND media_group_id <> '' OR (media_group_id IS NULL AND is_media = true))
-       ) AS cleaned_urls
-       ORDER BY created_at ASC
-       LIMIT 1`,
-      [ad_id]
-    );
+    if (!ad_id || isNaN(ad_id)) {
+      console.error(`Invalid ad_id: ${ad_id}`);
+      return false;
+    }
 
-    const currentUrls =
-      dbMessages.length > 0
-        ? dbMessages[0].url_imgs || [] // Проверяем наличие url_imgs
-        : [];
-    const newImages = (ad.images || [])
-      .map((img) => img.url || img.image_url)
-      .filter(Boolean)
-      .sort();
+    try {
+      // Получаем текущие URL изображений из telegram_messages
+      const { rows: dbMessages } = await pool.query(
+        `SELECT url_imgs
+         FROM (
+           SELECT array_agg(clean_url) AS url_imgs, MIN(created_at) AS created_at
+           FROM (
+             SELECT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url)) AS clean_url, created_at
+             FROM telegram_messages, unnest(url_img) AS unnested_url
+             WHERE ad_id = $1 
+               AND (media_group_id IS NOT NULL AND media_group_id <> '' OR (media_group_id IS NULL AND is_media = true))
+           ) AS cleaned_urls
+           GROUP BY media_group_id
+         ) AS grouped_urls
+         ORDER BY created_at ASC
+         LIMIT 1`,
+        [Number(ad_id)]
+      );
 
-    return (
-      currentUrls.length !== newImages.length ||
-      !currentUrls.every((url) => newImages.includes(url)) ||
-      !newImages.every((url) => currentUrls.includes(url))
-    );
+      const currentUrls =
+        dbMessages.length > 0 ? dbMessages[0].url_imgs || [] : [];
+      const newImages = (ad.images || [])
+        .map((img) => img.url || img.image_url)
+        .filter(Boolean)
+        .sort();
+
+      // Сравниваем массивы URL без учета порядка
+      const hasChanges =
+        currentUrls.length !== newImages.length ||
+        !currentUrls.every((url) => newImages.includes(url)) ||
+        !newImages.every((url) => currentUrls.includes(url));
+
+      console.log(`Image comparison for ad ${ad_id}:`, {
+        currentUrls,
+        newImages,
+        hasChanges,
+      });
+      return hasChanges;
+    } catch (error) {
+      console.error(`Error checking image changes for ad ${ad_id}:`, error);
+      return false; // В случае ошибки считаем, что изменений нет
+    }
   };
 
-  if (telegramUpdateType === "repost" && ad.images) {
-    const imageChangesDetected = await hasImageChanges();
+  // Логика для случая с репостом
+  if (telegramUpdateType === "repost" && ad.images && ad.images.length > 0) {
+    const imageChangesDetected = await hasImageChanges(ad_id);
     if (imageChangesDetected) {
-      console.log(`Image changes detected for ad ${ad_id}`);
+      console.log(`Image changes detected for ad ${ad_id}. Performing repost.`);
       const deleteResults = await deleteTelegramMessages(ad_id, messages);
       const sendResults = await sendToTelegram({
         ad_id,
@@ -399,18 +427,13 @@ export const updateTelegramMessages = async (
       });
       return [...deleteResults, ...sendResults];
     } else {
-      console.log(
-        `No image changes detected for ad ${ad_id}, switching to update_text`
-      );
-      return await updateExistingMessages(
-        ad_id,
-        messages,
-        messageText,
-        chatTargets
-      );
+      console.log(`No image changes for ad ${ad_id}. Updating text only.`);
     }
+  } else if (!ad.images || ad.images.length === 0) {
+    console.log(`No images provided for ad ${ad_id}. Updating text only.`);
   }
 
+  // Обновляем существующие сообщения, если репост не требуется
   return await updateExistingMessages(
     ad_id,
     messages,
