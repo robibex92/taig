@@ -171,11 +171,15 @@ export const buildMessageText = ({
   const priceStr =
     price == null ? "💰 Цена: Не указана" : `💰 Цена: ${price} ₽`;
   const authorLink = username
-    ? `<a href="https://t.me/${username}">${escapeHtml(username)}</a>`
-    : user_id || "Неизвестный пользователь";
+    ? `👤 Автор объявления: @${escapeHtml(username)}`
+    : user_id
+    ? `👤 Автор объявления: [${escapeHtml(user_id)}](tg://user?id=${escapeHtml(
+        user_id
+      )})`
+    : `👤 Автор объявления: Не определен`;
   return `📢 <b>Объявление</b>: ${escapeHtml(title)} 📢\n\n${escapeHtml(
     content
-  )}\n\n${priceStr}\n\n👤 Автор объявления: ${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
+  )}\n\n${priceStr}\n\n${authorLink}\n\n🔗 <a href="${adLink}">Посмотреть объявление на сайте</a>`;
 };
 
 export const sendToTelegram = async ({
