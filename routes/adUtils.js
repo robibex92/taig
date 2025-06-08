@@ -212,14 +212,14 @@ export const buildMessageText = async ({
 export const sendToTelegram = async ({
   ad_id,
   selectedChats,
-  messageText,
+  messageText: messageTextPromise, // Переименуем параметр для ясности
   photos,
 }) => {
   if (!selectedChats.length) return [];
   const limit = pLimit(1);
   const uniqueChats = [...new Set(selectedChats)].map((chat) =>
     chat.toUpperCase()
-  ); // Нормализация и удаление дубликатов
+  );
   const chatTargets = getTelegramChatTargets(uniqueChats);
   const photosToSend = photos
     .map((img) => {
@@ -233,11 +233,14 @@ export const sendToTelegram = async ({
     })
     .filter(Boolean);
 
-  console.log("Sending to Telegram:", {
+  // Ждем разрешения Promise от buildMessageText
+  const safeMessageText = await messageTextPromise;
+
+  console.log("[sendToTelegram] Sending to Telegram:", {
     ad_id,
     selectedChats: uniqueChats,
     photosToSend,
-    messageText,
+    messageText: safeMessageText,
   });
 
   return Promise.all(
@@ -251,13 +254,19 @@ export const sendToTelegram = async ({
                 type: "photo",
                 media: photo,
                 ...(index === 0
-                  ? { caption: messageText, parse_mode: "HTML" }
+                  ? { caption: safeMessageText, parse_mode: "HTML" }
                   : {}),
               }))
             : null;
 
+          console.log("[sendToTelegram] Sending to chat:", {
+            chatId: chat.chatId,
+            isMedia,
+            mediaGroup,
+          });
+
           result = await TelegramCreationService.sendMessage({
-            message: !isMedia ? messageText : "",
+            message: !isMedia ? safeMessageText : "",
             chatIds: [chat.chatId],
             threadIds: chat.threadId ? [chat.threadId] : [],
             photos: photosToSend,
@@ -276,7 +285,7 @@ export const sendToTelegram = async ({
                       const url =
                         photosToSend[res.result.indexOf(message)] ||
                         photosToSend[0];
-                      console.log("Inserting message:", {
+                      console.log("[sendToTelegram] Inserting message:", {
                         ad_id,
                         chatId: res.chatId,
                         threadId: res.threadId,
@@ -294,10 +303,10 @@ export const sendToTelegram = async ({
                           res.threadId,
                           message.message_id,
                           message.media_group_id || null,
-                          isFirst ? messageText : null,
+                          isFirst ? safeMessageText : null,
                           isMediaMessage,
                           isFirst
-                            ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
+                            ? (safeMessageText.match(/Цена: (\d+)/) || [])[1] ||
                               null
                             : null,
                           [url],
@@ -305,13 +314,16 @@ export const sendToTelegram = async ({
                       );
                       isFirst = false;
                     } catch (dbErr) {
-                      console.error("Error inserting media message:", dbErr);
+                      console.error(
+                        "[sendToTelegram] Error inserting media message:",
+                        dbErr
+                      );
                     }
                   }
                 }
               } else if (res.result?.message_id) {
                 try {
-                  console.log("Inserting single message:", {
+                  console.log("[sendToTelegram] Inserting single message:", {
                     ad_id,
                     chatId: res.chatId,
                     threadId: res.threadId,
@@ -325,14 +337,17 @@ export const sendToTelegram = async ({
                       res.chatId,
                       res.threadId,
                       res.result.message_id,
-                      messageText,
+                      safeMessageText,
                       false,
-                      (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                      (safeMessageText.match(/Цена: (\d+)/) || [])[1] || null,
                       photosToSend,
                     ]
                   );
                 } catch (dbErr) {
-                  console.error("Error inserting single message:", dbErr);
+                  console.error(
+                    "[sendToTelegram] Error inserting single message:",
+                    dbErr
+                  );
                 }
               }
             }
@@ -340,9 +355,10 @@ export const sendToTelegram = async ({
           return { chat: chat.chatId, ok: true };
         } catch (err) {
           if (err.message.includes("429 Too Many Requests")) {
-            const retryAfter = 44;
+            const retryAfter =
+              err.response?.data?.parameters?.retry_after || 44;
             console.warn(
-              `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
+              `[sendToTelegram] Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
             );
             await new Promise((resolve) =>
               setTimeout(resolve, retryAfter * 1000)
@@ -350,11 +366,14 @@ export const sendToTelegram = async ({
             return sendToTelegram({
               ad_id,
               selectedChats: [chat.chatId],
-              messageText,
+              messageText: safeMessageText, // Передаем уже разрешенное значение
               photos,
             });
           }
-          console.error(`Error sending to chat ${chat.chatId}:`, err);
+          console.error(
+            `[sendToTelegram] Error sending to chat ${chat.chatId}:`,
+            err
+          );
           return { chat: chat.chatId, ok: false, error: err.message };
         }
       })
