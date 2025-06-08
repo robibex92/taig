@@ -379,7 +379,7 @@ export const updateTelegramMessages = async (
              SELECT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url)) AS clean_url, created_at
              FROM telegram_messages, unnest(url_img) AS unnested_url
              WHERE ad_id = $1 
-               AND (media_group_id IS NOT NULL AND media_group_id <> '' OR (media_group_id IS NULL AND is_media = true))
+               AND (media_group_id IS NOT NULL OR is_media = true)
            ) AS cleaned_urls
            GROUP BY media_group_id
          ) AS grouped_urls
