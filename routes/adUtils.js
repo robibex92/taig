@@ -358,10 +358,13 @@ export const updateTelegramMessages = async (
 
   const hasImageChanges = async () => {
     const { rows: dbMessages } = await pool.query(
-      `SELECT array_agg(TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM url_img))) AS url_imgs
-       FROM telegram_messages
-       WHERE ad_id = $1 
-       AND (media_group_id IS NOT NULL AND media_group_id <> '' OR (media_group_id IS NULL AND is_media = true))
+      `SELECT array_agg(clean_url) AS url_imgs
+       FROM (
+         SELECT TRIM(LEADING '{' FROM TRIM(TRAILING '}' FROM unnested_url)) AS clean_url
+         FROM telegram_messages, unnest(url_img) AS unnested_url
+         WHERE ad_id = $1 
+           AND (media_group_id IS NOT NULL AND media_group_id <> '' OR (media_group_id IS NULL AND is_media = true))
+       ) AS cleaned_urls
        ORDER BY created_at ASC
        LIMIT 1`,
       [ad_id]
@@ -369,7 +372,7 @@ export const updateTelegramMessages = async (
 
     const currentUrls =
       dbMessages.length > 0
-        ? dbMessages[0].url_imgs.flat() // Преобразуем в плоский массив
+        ? dbMessages[0].url_imgs || [] // Проверяем наличие url_imgs
         : [];
     const newImages = (ad.images || [])
       .map((img) => img.url || img.image_url)
