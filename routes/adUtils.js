@@ -175,95 +175,149 @@ export const sendToTelegram = async ({
   messageText,
   photos,
 }) => {
-  const results = [];
-  for (const chat of selectedChats) {
-    const chatTarget = getTelegramChatTargets([chat])[0];
-    if (!chatTarget) {
-      console.log(`Chat target not found for ${chat}`);
-      continue;
-    }
+  if (!selectedChats.length) return [];
+  const limit = pLimit(1);
+  const uniqueChats = [...new Set(selectedChats)];
+  const chatTargets = getTelegramChatTargets(uniqueChats);
+  const photosToSend = photos
+    .map((img) => {
+      let url = img.url || img.image_url;
+      if (!url) return null;
+      if (url.startsWith("/"))
+        url = `${
+          process.env.PUBLIC_SITE_URL || "https://api.asicredinvest.md/api-v1"
+        }${url}`;
+      return isValidUrl(url) ? url : null;
+    })
+    .filter(Boolean);
 
-    const imageUrls =
-      photos && Array.isArray(photos)
-        ? photos.map((p) => p.url || p.image_url)
-        : [];
-    const isMedia = !!imageUrls.length;
-    const text = messageText || "";
+  console.log("Sending to Telegram:", {
+    ad_id,
+    selectedChats: uniqueChats,
+    photosToSend,
+    messageText,
+  });
 
-    console.log(
-      `Sending to ${chatTarget.chatId} with photos: ${imageUrls}, text: ${text}`
-    );
+  return Promise.all(
+    chatTargets.map((chat) =>
+      limit(async () => {
+        try {
+          let result;
+          const isMedia = photosToSend.length > 0;
+          const mediaGroup = isMedia
+            ? photosToSend.map((photo, index) => ({
+                type: "photo",
+                media: photo,
+                ...(index === 0
+                  ? { caption: messageText, parse_mode: "HTML" }
+                  : {}),
+              }))
+            : null;
 
-    try {
-      const response = await TelegramCreationService.sendMessage({
-        chatIds: [chatTarget.chatId],
-        threadIds: [chatTarget.threadId],
-        message: text,
-        photos: imageUrls,
-        parse_mode: "HTML",
-      });
-      const result = response.results[0].result;
-      if (result) {
-        if (Array.isArray(result)) {
-          // Обработка медиа-группы
-          for (const msg of result) {
-            await pool.query(
-              "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-              [
-                ad_id,
-                chatTarget.chatId,
-                chatTarget.threadId,
-                msg.message_id,
-                text,
-                isMedia,
-                [msg.url],
-              ]
+          result = await TelegramCreationService.sendMessage({
+            message: !isMedia ? messageText : "",
+            chatIds: [chat.chatId],
+            threadIds: chat.threadId ? [chat.threadId] : [],
+            photos: photosToSend,
+            mediaGroup,
+            parse_mode: "HTML",
+          });
+
+          if (result && Array.isArray(result.results)) {
+            for (const res of result.results) {
+              if (res.result && Array.isArray(res.result)) {
+                let isFirst = true;
+                for (const message of res.result) {
+                  if (message && message.message_id) {
+                    try {
+                      const isMediaMessage = isMedia && !isFirst;
+                      const url =
+                        photosToSend[res.result.indexOf(message)] ||
+                        photosToSend[0];
+                      console.log("Inserting message:", {
+                        ad_id,
+                        chatId: res.chatId,
+                        threadId: res.threadId,
+                        messageId: message.message_id,
+                        mediaGroupId: message.media_group_id || null,
+                        isMedia: isMediaMessage,
+                        url,
+                      });
+                      await pool.query(
+                        `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, media_group_id, caption, is_media, price, url_img, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+                        [
+                          ad_id,
+                          res.chatId,
+                          res.threadId,
+                          message.message_id,
+                          message.media_group_id || null,
+                          isFirst ? messageText : null,
+                          isMediaMessage,
+                          isFirst
+                            ? (messageText.match(/Цена: (\d+)/) || [])[1] ||
+                              null
+                            : null,
+                          [url], // Сохраняем URL как массив
+                        ]
+                      );
+                      isFirst = false;
+                    } catch (dbErr) {
+                      console.error("Error inserting media message:", dbErr);
+                    }
+                  }
+                }
+              } else if (res.result?.message_id) {
+                try {
+                  console.log("Inserting single message:", {
+                    ad_id,
+                    chatId: res.chatId,
+                    threadId: res.threadId,
+                    messageId: res.result.message_id,
+                  });
+                  await pool.query(
+                    `INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, price, url_img, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+                    [
+                      ad_id,
+                      res.chatId,
+                      res.threadId,
+                      res.result.message_id,
+                      messageText,
+                      false,
+                      (messageText.match(/Цена: (\d+)/) || [])[1] || null,
+                      photosToSend, // Сохраняем все URL для одиночного сообщения
+                    ]
+                  );
+                } catch (dbErr) {
+                  console.error("Error inserting single message:", dbErr);
+                }
+              }
+            }
+          }
+          return { chat: chat.chatId, ok: true };
+        } catch (err) {
+          if (err.message.includes("429 Too Many Requests")) {
+            const retryAfter = 44;
+            console.warn(
+              `Rate limited for chat ${chat.chatId}. Retrying after ${retryAfter}s`
             );
-            results.push({
-              chat_id: chatTarget.chatId,
-              thread_id: chatTarget.threadId,
-              message_id: msg.message_id,
-              success: true,
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryAfter * 1000)
+            );
+            return sendToTelegram({
+              ad_id,
+              selectedChats: [chat.chatId],
+              messageText,
+              photos,
             });
           }
-        } else {
-          // Одиночное сообщение или фото
-          await pool.query(
-            "INSERT INTO telegram_messages (ad_id, chat_id, thread_id, message_id, caption, is_media, url_img) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            [
-              ad_id,
-              chatTarget.chatId,
-              chatTarget.threadId,
-              result.message_id,
-              text,
-              isMedia,
-              imageUrls,
-            ]
-          );
-          results.push({
-            chat_id: chatTarget.chatId,
-            thread_id: chatTarget.threadId,
-            message_id: result.message_id,
-            success: true,
-          });
+          console.error(`Error sending to chat ${chat.chatId}:`, err);
+          return { chat: chat.chatId, ok: false, error: err.message };
         }
-      } else if (response.results[0].error) {
-        throw new Error(response.results[0].error);
-      }
-    } catch (error) {
-      console.log(
-        `Error sending to Telegram for ${chatTarget.chatId}:`,
-        error.message
-      );
-      results.push({
-        chat_id: chatTarget.chatId,
-        thread_id: chatTarget.threadId,
-        success: false,
-        error: error.message,
-      });
-    }
-  }
-  return results;
+      })
+    )
+  );
 };
 export const updateTelegramMessages = async (
   ad_id,
