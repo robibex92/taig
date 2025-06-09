@@ -34,8 +34,8 @@ router.post("/send", authenticateJWT, async (req, res) => {
         contextData?.car_brand || ""
       )} ${escapeHtml(contextData?.car_model || "")}</b> 🚗\n\n`;
     } else if (contextType === "apartment") {
-      header = `🏠 <b>Вам отправлено сообщение соседу из кв. ${escapeHtml(
-        contextData?.number || ""
+      header = `🏠 <b>Вам отправлено сообщение по квартире ${escapeHtml(
+        String(contextData?.number || "") // Приводим к строке
       )}</b> 🏠\n\n`;
     }
 
