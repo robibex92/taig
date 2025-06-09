@@ -344,8 +344,8 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
     const hours = 720;
     const query = `
       UPDATE ads
-      SET status = 'Archived', updated_at = NOW()
-      WHERE status != 'Archived'
+      SET status = 'Archive', updated_at = NOW()
+      WHERE status != 'Archive'
         AND (created_at IS NOT NULL OR updated_at IS NOT NULL)
         AND EXTRACT(EPOCH FROM (NOW() - GREATEST(
           COALESCE(updated_at, '1970-01-01'),
@@ -354,7 +354,7 @@ routerAds.post("/api/ads/archive-old", async (req, res) => {
       RETURNING id, title, created_at, updated_at, status;
     `;
     const { rows } = await pool.query(query, [hours]);
-    res.json({ message: `Archived ${rows.length} ads`, archive: rows });
+    res.json({ message: `Archive ${rows.length} ads`, archive: rows });
   } catch (error) {
     console.error("Error archiving old ads:", error);
     res.status(500).json({ error: "Internal Server Error" });

@@ -169,7 +169,7 @@ export const buildMessageText = async ({
   console.log(
     `[buildMessageText] Input - username: "${username}", user_id: "${user_id}"`
   );
-  const siteUrl = process.env.PUBLIC_SITE_URL || "https://test.sibroot.ru";
+  const siteUrl = process.env.PUBLIC_SITE_URL || "https://tp.sibroot.ru";
   const adLink = `${siteUrl}/#/ads/${ad_id}`;
   const priceStr =
     price == null ? "💰 Цена: Не указана" : `💰 Цена: ${price} ₽`;
