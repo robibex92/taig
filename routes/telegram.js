@@ -1,12 +1,12 @@
 import bot from "../services/telegramBot.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateConditional } from "../middlewares/authMiddleware.js";
 import express from "express";
 import { pool } from "../config/db.js";
 
 const router = express.Router();
 
 // Маршрут для отправки сообщений в Telegram
-router.post("/send", authenticateJWT, async (req, res) => {
+router.post("/send", authenticateConditional, async (req, res) => {
   try {
     const {
       chat_id,
@@ -20,7 +20,7 @@ router.post("/send", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Получаем user_id из токена
+    // Получаем user_id из токена (может быть null для обратной связи)
     const user_id = req.user.user_id;
 
     // Формируем заголовок на основе contextType и contextData
@@ -37,32 +37,49 @@ router.post("/send", authenticateJWT, async (req, res) => {
       header = `🏠 <b>Вам отправлено сообщение по квартире ${escapeHtml(
         String(contextData?.number || "") // Приводим к строке
       )}</b> 🏠\n\n`;
+    } else if (contextType === "feedback") {
+      header = `💬 <b>Обратная связь с сайта</b> 💬\n\n`;
     }
 
-    // Получаем имя пользователя из базы
+    // Получаем имя пользователя из базы (только если user_id не null)
     let dbUsername = null;
-    try {
-      const result = await pool.query(
-        "SELECT username FROM users WHERE user_id = $1",
-        [user_id]
-      );
-      dbUsername = result.rows[0]?.username || null;
-    } catch (error) {
-      console.error(
-        `[telegram/send] Error fetching username for user_id ${user_id}:`,
-        error
-      );
+    if (user_id) {
+      try {
+        const result = await pool.query(
+          "SELECT username FROM users WHERE user_id = $1",
+          [user_id]
+        );
+        dbUsername = result.rows[0]?.username || null;
+      } catch (error) {
+        console.error(
+          `[telegram/send] Error fetching username for user_id ${user_id}:`,
+          error
+        );
+      }
     }
 
     // Формируем информацию об авторе
-    const authorLink =
-      dbUsername && dbUsername.trim() !== ""
-        ? `Сообщение от: <b>@${escapeHtml(dbUsername)}</b>`
-        : user_id
-        ? `Сообщение от: <a href="tg://user?id=${escapeHtml(
-            user_id
-          )}"><b>ID ${escapeHtml(user_id)}</b></a>`
-        : `Сообщение от: <b>Не определен</b>`;
+    let authorLink;
+    if (contextType === "feedback") {
+      if (user_id && dbUsername && dbUsername.trim() !== "") {
+        authorLink = `Обратная связь от: <b>@${escapeHtml(dbUsername)}</b>`;
+      } else if (user_id) {
+        authorLink = `Обратная связь от: <a href="tg://user?id=${escapeHtml(
+          user_id
+        )}"><b>ID ${escapeHtml(user_id)}</b></a>`;
+      } else {
+        authorLink = `Обратная связь от: <b>Неавторизованный пользователь</b>`;
+      }
+    } else {
+      authorLink =
+        dbUsername && dbUsername.trim() !== ""
+          ? `Сообщение от: <b>@${escapeHtml(dbUsername)}</b>`
+          : user_id
+          ? `Сообщение от: <a href="tg://user?id=${escapeHtml(
+              user_id
+            )}"><b>ID ${escapeHtml(user_id)}</b></a>`
+          : `Сообщение от: <b>Не определен</b>`;
+    }
 
     // Финальное сообщение
     const finalMessage = `${header}${escapeHtml(message)}\n\n${authorLink}`;
