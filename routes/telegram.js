@@ -23,6 +23,10 @@ router.post("/send", authenticateConditional, async (req, res) => {
     // Получаем user_id из токена (может быть null для обратной связи)
     const user_id = req.user.user_id;
 
+    console.log(
+      `[telegram/send] contextType: ${contextType}, user_id: ${user_id}, isAuthenticated: ${!!user_id}`
+    );
+
     // Формируем заголовок на основе contextType и contextData
     let header = "";
     if (contextType === "announcement") {
