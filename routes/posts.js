@@ -110,8 +110,14 @@ routerPosts.post("/api/posts", async (req, res) => {
                     for (const msg of messagesArr) {
                       if (msg && msg.message_id) {
                         await pool.query(
-                          `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                          [post_id, res.chatId, res.threadId, msg.message_id]
+                          `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, caption, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                          [
+                            post_id,
+                            res.chatId,
+                            res.threadId,
+                            msg.message_id,
+                            `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
+                          ]
                         );
                         console.log(
                           "DEBUG: Inserted telegram_messages for media",
@@ -132,8 +138,14 @@ routerPosts.post("/api/posts", async (req, res) => {
                   } else if (res.result && res.result.message_id) {
                     // Fallback: single message object
                     await pool.query(
-                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                      [post_id, res.chatId, res.threadId, res.result.message_id]
+                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, caption, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                      [
+                        post_id,
+                        res.chatId,
+                        res.threadId,
+                        res.result.message_id,
+                        `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
+                      ]
                     );
                     console.log(
                       "DEBUG: Inserted telegram_messages for media (single)",
@@ -181,8 +193,14 @@ routerPosts.post("/api/posts", async (req, res) => {
                       if (msg && msg.message_id) {
                         messageId = msg.message_id;
                         await pool.query(
-                          `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                          [post_id, res.chatId, res.threadId, messageId]
+                          `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, caption, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                          [
+                            post_id,
+                            res.chatId,
+                            res.threadId,
+                            messageId,
+                            `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
+                          ]
                         );
                         console.log(
                           "DEBUG: Inserted telegram_messages for text (array)",
@@ -200,8 +218,14 @@ routerPosts.post("/api/posts", async (req, res) => {
                   else if (res.result && res.result.message_id) {
                     messageId = res.result.message_id;
                     await pool.query(
-                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                      [post_id, res.chatId, res.threadId, messageId]
+                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, caption, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                      [
+                        post_id,
+                        res.chatId,
+                        res.threadId,
+                        messageId,
+                        `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
+                      ]
                     );
                     console.log(
                       "DEBUG: Inserted telegram_messages for text (object)",
@@ -217,8 +241,14 @@ routerPosts.post("/api/posts", async (req, res) => {
                   else if (res.result?.result?.message_id) {
                     messageId = res.result.result.message_id;
                     await pool.query(
-                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-                      [post_id, res.chatId, res.threadId, messageId]
+                      `INSERT INTO telegram_messages (post_id, chat_id, thread_id, message_id, caption, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+                      [
+                        post_id,
+                        res.chatId,
+                        res.threadId,
+                        messageId,
+                        `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
+                      ]
                     );
                     console.log(
                       "DEBUG: Inserted telegram_messages for text (nested)",
