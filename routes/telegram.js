@@ -159,6 +159,8 @@ export const TelegramCreationService = {
         console.error(`Error sending to chat ${chatId}:`, err.message);
         results.push({ chatId, threadId, error: err.message });
       }
+      // Добавляем комфортную задержку между отправками (например, 2 секунды)
+      await new Promise((res) => setTimeout(res, 2000));
     }
     return { results };
   },
