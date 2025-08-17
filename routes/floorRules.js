@@ -1,34 +1,45 @@
-import express from 'express';
-import { pool } from '../config/db.js';
+import express from "express";
+import { pool } from "../config/db.js";
 
 const routerFloorRules = express.Router();
 
 // 1. Получить все правила для дома и подъезда
-routerFloorRules.get('/api/floorRules', async (req, res) => {
+routerFloorRules.get("/api/floorRules", async (req, res) => {
   const { house, entrance } = req.query;
   if (!house || !entrance) {
     return res.status(400).json({ error: "house and entrance are required" });
   }
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM floor_rules WHERE house = $1 AND entrance = $2',
-      [house, entrance]
+      "SELECT * FROM floor_rules WHERE house = $1 AND entrance = $2",
+      [house, parseInt(entrance)]
     );
     res.json({ data: rows });
   } catch (error) {
-    console.error('Error fetching floor rules:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error fetching floor rules:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
 // 2. Добавить или обновить правило
-routerFloorRules.post('/api/floor-rules', async (req, res) => {
+routerFloorRules.post("/api/floor-rules", async (req, res) => {
   try {
     const { house, entrance, floor, position } = req.body;
 
     if (!house || !entrance || !floor || !position) {
-      return res.status(400).json({ 
-        error: 'Все параметры (house, entrance, floor, position) обязательны' 
+      return res.status(400).json({
+        error: "Все параметры (house, entrance, floor, position) обязательны",
+      });
+    }
+
+    // Проверяем, что числовые поля действительно являются числами
+    if (
+      isNaN(parseInt(entrance)) ||
+      isNaN(parseInt(floor)) ||
+      isNaN(parseInt(position))
+    ) {
+      return res.status(400).json({
+        error: "Поля entrance, floor и position должны быть числами",
       });
     }
 
@@ -36,7 +47,7 @@ routerFloorRules.post('/api/floor-rules', async (req, res) => {
     const { rows: existing } = await pool.query(
       `SELECT * FROM floor_rules 
        WHERE house = $1 AND entrance = $2 AND floor = $3`,
-      [house, entrance, floor]
+      [house, parseInt(entrance), parseInt(floor)]
     );
 
     let result;
@@ -47,7 +58,7 @@ routerFloorRules.post('/api/floor-rules', async (req, res) => {
          SET position = $1 
          WHERE house = $2 AND entrance = $3 AND floor = $4 
          RETURNING *`,
-        [position, house, entrance, floor]
+        [parseInt(position), house, parseInt(entrance), parseInt(floor)]
       );
       result = rows[0];
     } else {
@@ -57,15 +68,15 @@ routerFloorRules.post('/api/floor-rules', async (req, res) => {
          (house, entrance, floor, position) 
          VALUES ($1, $2, $3, $4) 
          RETURNING *`,
-        [house, entrance, floor, position]
+        [house, parseInt(entrance), parseInt(floor), parseInt(position)]
       );
       result = rows[0];
     }
 
     res.status(200).json({ data: result });
   } catch (error) {
-    console.error('Ошибка при сохранении правила:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Ошибка при сохранении правила:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
