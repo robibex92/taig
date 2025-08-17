@@ -17,10 +17,13 @@ routerNearby.get("/api/nearby/houses", async (req, res) => {
   }
 });
 
-// 2. Получить все уникальные подъезды для конкретного дома
-routerNearby.get("/api/nearby/entrances/:house", async (req, res) => {
+// 2. Получить все уникальные подъезды для конкретного дома (через query параметр house)
+routerNearby.get("/api/nearby/entrances", async (req, res) => {
   try {
-    const { house } = req.params;
+    const { house } = req.query;
+    if (!house) {
+      return res.status(400).json({ error: "House parameter is required" });
+    }
     const { rows } = await pool.query(
       "SELECT DISTINCT entrance FROM houses WHERE house = $1 AND status = true ORDER BY entrance ASC",
       [house]
@@ -123,12 +126,10 @@ routerNearby.post("/api/nearby", async (req, res) => {
         [house, number]
       );
       if (alreadyHasPos1.length > 1) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "В базе уже есть несколько записей с position=1 для этой квартиры! Обратитесь к администратору.",
-          });
+        return res.status(400).json({
+          error:
+            "В базе уже есть несколько записей с position=1 для этой квартиры! Обратитесь к администратору.",
+        });
       }
       // Создаём новую запись только если position > 1
       const { rows: maxPosition } = await pool.query(

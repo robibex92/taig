@@ -1,4 +1,5 @@
 import express from "express";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import {
   getSessionUser,
   updateCurrentUser,
@@ -9,10 +10,10 @@ const userRouter = express.Router();
 const publicUserRouter = express.Router();
 
 // Protected: получение данных текущего пользователя
-userRouter.get("/api/users/me", getSessionUser);
+userRouter.get("/api/users/me", authenticateJWT, getSessionUser);
 
 // Protected: обновление данных текущего пользователя
-userRouter.patch("/api/users/me", updateCurrentUser);
+userRouter.patch("/api/users/me", authenticateJWT, updateCurrentUser);
 
 // Public: получение данных любого пользователя по ID
 publicUserRouter.get("/api/users/:user_id", async (req, res) => {

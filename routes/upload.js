@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = express.Router();
 
-const API_URL = process.env.API_URL || "https://api.asicredinvest.md/api-v1";
+// Формировать публичные URL загрузок будем от реального хоста запроса
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -57,8 +57,9 @@ router.post("/", upload.array("photos", 10), (req, res) => {
       .status(400)
       .json({ success: false, message: "No files uploaded." });
 
+  const serverUrl = req.protocol + "://" + req.get("host");
   const fileUrls = req.files.map(
-    (file) => `${API_URL}/uploads/${file.filename}`
+    (file) => `${serverUrl}/uploads/${file.filename}`
   );
   console.log("Successfully processed files. URLs:", fileUrls);
   res.json({ success: true, fileUrls });

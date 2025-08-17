@@ -17,14 +17,11 @@ import uploadRouter from "./routes/upload.js";
 import telegramRoutes from "./routes/telegram.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes, { publicUserRouter } from "./routes/user.js";
-import {
-  authenticateUser,
-  refreshAccessToken,
-  updateCurrentUser,
-} from "./controllers/user-controller.js";
+// user-controller endpoints are mounted via routers
 import { authenticateJWT } from "./middlewares/authMiddleware.js";
 import cron from "node-cron";
-import fetch from "node-fetch";
+// Use global fetch (Node 18+)
+import fs from "fs";
 
 // Загрузка конфигурации
 dotenv.config();
@@ -66,8 +63,6 @@ app.use("/api/upload", authenticateJWT, uploadRouter); // Только защи�
 const uploadsStaticPath = path.join(__dirname, "../Uploads");
 console.log(`Express static serving from: ${uploadsStaticPath}`);
 app.use("/uploads", express.static(uploadsStaticPath));
-app.post("/api/auth/telegram", authenticateUser);
-app.post("/api/auth/refresh", refreshAccessToken);
 app.use(authRoutes);
 app.use(publicUserRouter);
 
@@ -111,6 +106,33 @@ app.post("/api/ads/delete-image", authenticateJWT, async (req, res) => {
   }
 });
 
+// Альтернативная загрузка изображений: base64 → файл
+app.post("/api/upload-base64", authenticateJWT, async (req, res) => {
+  try {
+    const { filename, data } = req.body || {};
+    if (!filename || !data) {
+      return res.status(400).json({ error: "Missing filename or data" });
+    }
+
+    const safeName = String(filename).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uploadDir = path.join(__dirname, "../Uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadDir, `${Date.now()}-${safeName}`);
+    const buffer = Buffer.from(data, "base64");
+    await fs.promises.writeFile(filePath, buffer);
+
+    const serverUrl = req.protocol + "://" + req.get("host");
+    const fileUrl = `${serverUrl}/uploads/${path.basename(filePath)}`;
+    res.json({ success: true, fileUrls: [fileUrl] });
+  } catch (error) {
+    console.error("Error in /api/upload-base64:", error);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
 // Роут для статуса текущего пользователя
 app.get("/api/users/me/status", authenticateJWT, async (req, res) => {
   try {
@@ -132,7 +154,6 @@ app.get("/api/users/me/status", authenticateJWT, async (req, res) => {
   }
 });
 
-app.patch("/api/users/me", authenticateJWT, updateCurrentUser);
 app.use(userRoutes);
 
 // Автоматическая архивация объявлений раз в 12 часов
