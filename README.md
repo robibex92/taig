@@ -130,7 +130,7 @@ npm install
 DATABASE_URL="postgresql://user:password@localhost:5432/taiginsky"
 
 # Server
-PORT=5000
+PORT=4000
 NODE_ENV=development
 
 # JWT
@@ -170,7 +170,7 @@ npm run dev
 npm start
 ```
 
-Сервер запустится на `http://localhost:5000`
+Сервер запустится на `http://localhost:4000`
 
 ---
 
@@ -230,7 +230,7 @@ backend/
 После запуска сервера, Swagger UI доступен по адресу:
 
 ```
-http://localhost:5000/api-docs
+http://localhost:4000/api-docs
 ```
 
 ### Основные эндпоинты

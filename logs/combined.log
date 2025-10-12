@@ -1,0 +1,153 @@
+2025-10-12 23:56:09 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-12 23:56:29 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-12 23:57:53 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-12 23:59:27 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-12 23:59:52 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:11:26 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:28:17 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:28:18 [info]: Database connection successful (Prisma)
+2025-10-13 00:28:18 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:28:21 [info]: SIGINT received. Starting graceful shutdown...
+2025-10-13 00:32:11 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:32:11 [info]: Database connection successful (Prisma)
+2025-10-13 00:32:12 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:38:50 [info]: SIGINT received. Starting graceful shutdown...
+2025-10-13 00:38:52 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:38:53 [info]: Database connection successful (Prisma)
+2025-10-13 00:38:53 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:38:57 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:38:57 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:38:57 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:38:57 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:38:57 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:38:57 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:07 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:07 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:07 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:07 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:13 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:13 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:13 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:13 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:13 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:13 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:32 [info]: SIGINT received. Starting graceful shutdown...
+2025-10-13 00:39:34 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:39:35 [info]: Database connection successful (Prisma)
+2025-10-13 00:39:35 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:39:39 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:39 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:39 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:39 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:39:39 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:39:39 [error]: Post.fromDatabase is not a function {"path":"/api/v1/posts","method":"GET","ip":"127.0.0.1"}
+TypeError: Post.fromDatabase is not a function
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:37
+    at Array.map (<anonymous>)
+    at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
+    at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
+    at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 00:41:12 [info]: SIGINT received. Starting graceful shutdown...
+2025-10-13 00:41:14 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:41:15 [info]: Database connection successful (Prisma)
+2025-10-13 00:41:15 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:41:20 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:41:20 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:41:20 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:41:20 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:21 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:21 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:31 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:31 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:31 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:31 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:32 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:32 [info]: Incoming request {"method":"GET","path":"/api/v1/posts","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:56 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:43:56 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:26 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:26 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:26 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:26 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:30 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:30 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:39 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:44:39 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:23 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:23 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:36 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:36 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:42 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:42 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:53 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:45:53 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:47:20 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:47:20 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:48:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:48:07 [info]: Incoming request {"method":"POST","path":"/api/v1/auth/refresh","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:50:18 [info]: SIGINT received. Starting graceful shutdown...
+2025-10-13 00:50:39 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 00:50:40 [info]: Database connection successful (Prisma)
+2025-10-13 00:50:40 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
+2025-10-13 00:51:04 [info]: Incoming request {"method":"POST","path":"/telegram/send","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:51:11 [info]: Incoming request {"method":"POST","path":"/telegram/send","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:51:35 [info]: Incoming request {"method":"GET","path":"/api/v1/categories","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:51:35 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:51:35 [info]: Incoming request {"method":"GET","path":"/api/v1/categories","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:51:36 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:52:19 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:52:20 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:52:58 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:52:59 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:54:11 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:54:12 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:56:18 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
+2025-10-13 00:57:19 [info]: Incoming request {"method":"GET","path":"/api/v1/ads","ip":"127.0.0.1","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
