@@ -636,3 +636,4 @@ export class Container {
 
 // Export singleton instance
 export const container = new Container();
+export default container;
