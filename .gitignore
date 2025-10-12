@@ -4,3 +4,9 @@ server.log
 uploads
 Uploads/
 ssl
+
+# Documentation (временные файлы, кроме README)
+*.md
+!README.md
+!prisma/schema.prisma
+!prisma/**/*.sql

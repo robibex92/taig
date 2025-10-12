@@ -1,28 +1,53 @@
 {
   "name": "taiginsky-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Backend service for Taiginsky website",
-  "main": "server.js",
+  "description": "Backend service for Taiginsky website - Refactored with Clean Architecture",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "start:old": "node server.js",
+    "test": "NODE_ENV=test jest --coverage",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:pull": "prisma db pull",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "node prisma/seed.js",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/client": "^5.8.1",
+    "axios": "^1.12.2",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.0",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "node-cron": "^4.1.0",
     "node-telegram-bot-api": "^0.63.0",
     "p-limit": "^6.2.0",
-    "pg": "^8.14.1"
+    "pg": "^8.14.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "@types/node": "^20.10.5",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "prisma": "^5.22.0",
+    "supertest": "^6.3.3"
   }
 }

@@ -1,0 +1,310 @@
+// ============================================
+// IMPROVED PRISMA SCHEMA
+// ============================================
+// Улучшения:
+// - Добавлены Foreign Keys и Relations
+// - Добавлены индексы для производительности
+// - Улучшены типы данных и constraints
+// - Добавлены каскадные удаления
+// - Сохранены все поля в защищенных таблицах
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS (Protected - сохранены все поля)
+// ============================================
+
+model User {
+  user_id             BigInt    @id @default(autoincrement())
+  username            String?   @db.VarChar(100)
+  first_name          String?   @db.VarChar(100)
+  last_name           String?   @db.VarChar(100)
+  joined_at           DateTime  @default(now()) @db.Timestamp(6)
+  avatar              String?   @db.Text
+  Invited             Int?
+  role                Boolean?  @default(false)
+  is_manually_updated String?   @db.VarChar(10) // 'true' or 'false' as string - legacy
+  telegram_first_name String?   @db.VarChar(100)
+  telegram_last_name  String?   @db.VarChar(100)
+  status              String?   @default("active") @db.VarChar(50)
+  refresh_token       String?   @db.VarChar(500)
+
+  // Relations (новые)
+  ads                 Ad[]
+  cars                Car[]
+  houses              House[]
+  refresh_tokens      RefreshToken[] // Сессии пользователя
+
+  @@index([username])
+  @@index([status])
+  @@map("users")
+}
+
+// ============================================
+// ADS (Улучшено)
+// ============================================
+
+model Ad {
+  id          BigInt    @id @default(autoincrement())
+  user_id     BigInt?   // nullable для обратной совместимости
+  title       String?   @db.VarChar(255)
+  content     String?   @db.Text
+  status      String?   @default("active") @db.VarChar(50) // active, archive, deleted
+  created_at  DateTime? @db.Timestamptz(6)
+  updated_at  DateTime? @updatedAt @db.Timestamptz(6)
+  category    Int?      // nullable для обратной совместимости
+  subcategory Int?
+  price       String?   @db.VarChar(50)
+  view_count  Int?      @default(0)
+
+  // Relations
+  user                User?             @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  category_rel        Category?         @relation(fields: [category], references: [id], onDelete: Restrict)
+  subcategory_rel     Subcategory?      @relation(fields: [subcategory], references: [id], onDelete: SetNull)
+  images              AdImage[]
+  telegram_messages   TelegramMessage[]
+
+  @@index([user_id])
+  @@index([category])
+  @@index([subcategory])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+  @@map("ads")
+}
+
+// ============================================
+// AD IMAGES (Улучшено)
+// ============================================
+
+model AdImage {
+  id         Int       @id @default(autoincrement())
+  ad_id      Int?
+  post_id    Int?
+  image_url  String?   @db.Text
+  is_main    Boolean?  @default(false)
+  created_at DateTime? @db.Timestamptz(6)
+
+  // Relations
+  ad         Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  post       Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([ad_id])
+  @@index([post_id])
+  @@index([is_main])
+  @@map("ad_images")
+}
+
+// ============================================
+// POSTS/NEWS (Улучшено)
+// ============================================
+
+model Post {
+  id         BigInt    @id @default(autoincrement())
+  title      String?   @db.VarChar(255)
+  content    String?   @db.Text
+  image_url  String?   @db.Text
+  status     String?   @default("active") @db.VarChar(50) // active, deleted
+  source     String?   @db.VarChar(100)
+  marker     String?   @db.VarChar(100)
+  created_at DateTime? @db.Timestamptz(6)
+  updated_at DateTime? @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  images             AdImage[]
+  telegram_messages  TelegramMessage[]
+
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+  @@map("posts")
+}
+
+// ============================================
+// TELEGRAM MESSAGES (Улучшено и упрощено)
+// ============================================
+
+model TelegramMessage {
+  id             BigInt    @id @default(autoincrement())
+  ad_id          BigInt?
+  post_id        BigInt?
+  chat_id        String?   @db.VarChar(100)
+  thread_id      String?   @db.VarChar(100)
+  message_id     String?   @db.VarChar(100)
+  caption        String?   @db.Text
+  is_media       Boolean?  @default(false)
+  media_group_id BigInt?
+  price          String?   @db.VarChar(50)
+  created_at     DateTime? @db.Timestamptz(6)
+
+  // Deprecated/Legacy поля (для обратной совместимости)
+  message_type   String?   @db.VarChar(50)
+  context_id     BigInt?
+  context_type   String?   @db.VarChar(50)
+  message_text   String?   @db.Text
+  recipient_id   String?   @db.VarChar(100)
+  sender_id      String?   @db.VarChar(100)
+  url_img        String[]  @default([])
+
+  // Relations
+  ad             Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  post           Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([ad_id])
+  @@index([post_id])
+  @@index([chat_id])
+  @@index([created_at(sort: Desc)])
+  @@map("telegram_messages")
+}
+
+// ============================================
+// HOUSES (Protected - сохранены все поля)
+// ============================================
+
+model House {
+  id           BigInt    @id @default(autoincrement())
+  house        String?   @db.VarChar(50)
+  entrance     Int?
+  number       Int?
+  floor        Int?
+  facade_color String?   @db.VarChar(50)
+  info         String?   @db.Text
+  position     Int?      @default(1)
+  status       Boolean?  @default(true)
+  created_at   DateTime? @db.Timestamptz(6)
+  id_telegram  Int?
+
+  // Relations (новая)
+  user         User?     @relation(fields: [id_telegram], references: [user_id], onDelete: SetNull)
+
+  @@index([house, entrance, number])
+  @@index([id_telegram])
+  @@index([status])
+  @@map("houses")
+}
+
+// ============================================
+// FLOOR RULES (Protected - сохранены все поля)
+// ============================================
+
+model FloorRule {
+  id       BigInt  @id
+  house    String? @db.VarChar(50)
+  entrance Int?
+  floor    Int?
+  position Int?
+
+  @@unique([house, entrance, floor], name: "unique_floor_rule")
+  @@index([house, entrance])
+  @@map("floor_rules")
+}
+
+// ============================================
+// CARS (Protected - сохранены все поля)
+// ============================================
+
+model Car {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt?
+  car_number String?   @db.VarChar(50)
+  car_model  String?   @db.VarChar(100)
+  car_brand  String?   @db.VarChar(100)
+  car_color  String?   @db.VarChar(50)
+  info       Json?
+  status     Boolean?  @default(true)
+  created_at DateTime? @db.Timestamptz(6)
+
+  // Relations (новая)
+  user       User?     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([status])
+  @@index([car_number])
+  @@map("cars")
+}
+
+// ============================================
+// FAQ (Улучшено)
+// ============================================
+
+model Faq {
+  id         BigInt    @id
+  question   String?   @db.Text
+  answer     String?   @db.Text
+  status     String?   @default("active") @db.VarChar(50)
+  created_at DateTime? @db.Timestamptz(6)
+  updated_at DateTime? @db.Timestamptz(6)
+
+  @@index([status])
+  @@map("faq")
+}
+
+// ============================================
+// CATEGORIES (Protected - сохранены все поля)
+// ============================================
+
+model Category {
+  id    BigInt  @id
+  name  String? @db.VarChar(100)
+  image String? @db.VarChar(255)
+
+  // Relations (новые)
+  ads           Ad[]
+  subcategories Subcategory[]
+
+  @@index([name])
+  @@map("categories")
+}
+
+// ============================================
+// SUBCATEGORIES (Protected - сохранены все поля)
+// ============================================
+
+model Subcategory {
+  id          BigInt    @id
+  category_id BigInt?
+  name        String?   @db.VarChar(100)
+
+  // Relations (новые)
+  category    Category? @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  ads         Ad[]
+
+  @@index([category_id])
+  @@index([name])
+  @@map("subcategories")
+}
+
+// ============================================
+// REFRESH TOKENS (New - для Session Management)
+// ============================================
+
+model RefreshToken {
+  id                 BigInt    @id @default(autoincrement())
+  user_id            BigInt    // Связь с пользователем
+  token              String    @unique @db.Text // Сам refresh token
+  jti                String    @unique @db.VarChar(255) // JWT ID для ротации
+  device_fingerprint String?   @db.VarChar(255) // Хеш устройства
+  ip_address         String?   @db.VarChar(100) // IP адрес
+  user_agent         String?   @db.Text // User Agent
+  device_info        Json?     // Дополнительная информация об устройстве
+  expires_at         DateTime  @db.Timestamptz(6) // Когда истекает
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  last_used_at       DateTime? @db.Timestamptz(6) // Последнее использование
+  is_revoked         Boolean   @default(false) // Отозван ли токен
+  revoked_at         DateTime? @db.Timestamptz(6) // Когда отозван
+
+  // Relations
+  user               User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([jti])
+  @@index([expires_at])
+  @@index([is_revoked])
+  @@map("refresh_tokens")
+}

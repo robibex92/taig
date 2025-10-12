@@ -1,0 +1,324 @@
+// Prisma Schema with MAX Platform Integration
+// Extends existing schema with MAX authentication and messaging
+// MAX Platform: https://dev.max.ru/docs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int       @id @default(autoincrement())
+  user_id          Int       @unique
+  
+  // Telegram data
+  id_telegram      BigInt?   @unique
+  telegram_username String?
+  telegram_photo_url String?
+  
+  // MAX Platform data (NEW)
+  max_id           BigInt?   @unique
+  max_first_name   String?
+  max_last_name    String?
+  max_photo_url    String?
+  max_platform     String?   // "mobile", "desktop", etc.
+  
+  // Common data
+  first_name       String
+  last_name        String?
+  username         String?
+  photo_url        String?
+  
+  // Authentication
+  auth_date        Int?
+  hash             String?
+  
+  // Account settings (NEW)
+  primary_platform String    @default("telegram") // "telegram" or "max"
+  platforms_linked Boolean   @default(false) // true if both Telegram and MAX are linked
+  
+  // Role and status
+  status           String    @default("user") // user, admin, moderator
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @updatedAt @db.Timestamptz(6)
+  
+  // Relations
+  ads              Ad[]
+  posts            Post[]
+  cars             Car[]
+  houses           House[]
+  refresh_tokens   RefreshToken[]
+  bookings         Booking[]
+  comments         Comment[]
+  
+  @@index([max_id])
+  @@index([primary_platform])
+  @@map("users")
+}
+
+model RefreshToken {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  token        String    @unique
+  jti          String    @unique
+  device       String?
+  ip           String?
+  user_agent   String?
+  platform     String?   // NEW: "telegram", "max", or "web"
+  expires_at   DateTime  @db.Timestamptz(6)
+  revoked      Boolean   @default(false)
+  revoked_at   DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@index([user_id])
+  @@index([jti])
+  @@index([expires_at])
+  @@index([platform])
+  @@map("refresh_tokens")
+}
+
+// NEW: MAX Messages log (similar to TelegramMessage)
+model MaxMessage {
+  id           Int       @id @default(autoincrement())
+  chat_id      BigInt    // MAX chat ID
+  message_id   BigInt    // MAX message ID
+  entity_type  String    // 'post', 'ad', 'booking', etc.
+  entity_id    Int
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  @@unique([chat_id, message_id])
+  @@index([entity_type, entity_id])
+  @@map("max_messages")
+}
+
+model Post {
+  id           Int       @id @default(autoincrement())
+  title        String
+  content      String
+  image_url    String?
+  photos       String[]  @default([])
+  marker       String    @default("default")
+  status       String    @default("active")
+  source       String    @default("web") // "web", "telegram", "vk"
+  user_id      Int?
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
+  
+  user         User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  telegram_messages TelegramMessage[]
+  max_messages MaxMessage[] @relation("PostMaxMessages") // NEW
+  
+  @@index([status])
+  @@index([created_at])
+  @@map("posts")
+}
+
+model Ad {
+  id               Int       @id @default(autoincrement())
+  title            String
+  description      String
+  price            Decimal?  @db.Decimal(10, 2)
+  category         Int
+  subcategory      Int
+  user_id          Int
+  status           String    @default("active")
+  view_count       Int       @default(0)
+  
+  // Platform settings
+  is_telegram      Boolean   @default(false)
+  is_max           Boolean   @default(false) // NEW
+  selected_chats   Int[]     @default([])
+  
+  // Lifecycle
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @updatedAt @db.Timestamptz(6)
+  expires_at       DateTime? @db.Timestamptz(6)
+  extended_count   Int       @default(0)
+  
+  user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category_rel     Category  @relation(fields: [category], references: [id])
+  subcategory_rel  Subcategory @relation(fields: [subcategory], references: [id])
+  images           AdImage[]
+  telegram_messages TelegramMessage[]
+  max_messages     MaxMessage[] @relation("AdMaxMessages") // NEW
+  bookings         Booking[]
+  comments         Comment[]
+  
+  @@index([user_id])
+  @@index([category])
+  @@index([subcategory])
+  @@index([status])
+  @@index([created_at])
+  @@index([expires_at])
+  @@map("ads")
+}
+
+model Booking {
+  id           Int       @id @default(autoincrement())
+  ad_id        Int
+  user_id      Int
+  status       String    @default("pending")
+  priority     Int       @default(0)
+  message      String?
+  seller_note  String?
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
+  
+  ad           Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([ad_id, user_id])
+  @@index([ad_id])
+  @@index([user_id])
+  @@index([status])
+  @@index([priority])
+  @@map("bookings")
+}
+
+model Comment {
+  id           Int       @id @default(autoincrement())
+  ad_id        Int
+  user_id      Int
+  parent_id    Int?
+  content      String
+  is_seller    Boolean   @default(false)
+  is_deleted   Boolean   @default(false)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
+  
+  ad           Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  parent       Comment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Cascade)
+  replies      Comment[] @relation("CommentReplies")
+  
+  @@index([ad_id])
+  @@index([user_id])
+  @@index([parent_id])
+  @@index([created_at])
+  @@map("comments")
+}
+
+model AdImage {
+  id           Int       @id @default(autoincrement())
+  ad_id        Int
+  image_url    String
+  is_main      Boolean   @default(false)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  ad           Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  
+  @@index([ad_id])
+  @@map("ad_images")
+}
+
+model TelegramMessage {
+  id           Int       @id @default(autoincrement())
+  chat_id      BigInt
+  message_id   Int
+  entity_type  String
+  entity_id    Int
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  post         Post?     @relation(fields: [entity_id], references: [id], onDelete: Cascade)
+  ad           Ad?       @relation(fields: [entity_id], references: [id], onDelete: Cascade)
+  
+  @@unique([chat_id, message_id])
+  @@index([entity_type, entity_id])
+  @@map("telegram_messages")
+}
+
+model Category {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  icon         String?
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  subcategories Subcategory[]
+  ads          Ad[]
+  
+  @@map("categories")
+}
+
+model Subcategory {
+  id           Int       @id @default(autoincrement())
+  category_id  Int
+  name         String
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  category     Category  @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  ads          Ad[]
+  
+  @@unique([category_id, name])
+  @@index([category_id])
+  @@map("subcategories")
+}
+
+model Car {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  car_brand    String
+  car_model    String
+  car_number   String
+  car_color    String
+  status       Boolean   @default(true)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@index([user_id])
+  @@index([car_number])
+  @@map("cars")
+}
+
+model House {
+  id           Int       @id @default(autoincrement())
+  house        String
+  entrance     String
+  number       String
+  floor        Int?
+  id_telegram  BigInt?
+  position     Int       @default(1)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  
+  user         User?     @relation(fields: [id_telegram], references: [id_telegram], onDelete: SetNull)
+  
+  @@index([house])
+  @@index([id_telegram])
+  @@map("houses")
+}
+
+model FloorRule {
+  id           Int       @id @default(autoincrement())
+  house        String
+  entrance     String
+  floor_start  Int
+  floor_end    Int
+  apartments_per_floor Int
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
+  
+  @@unique([house, entrance])
+  @@map("floor_rules")
+}
+
+model Faq {
+  id           Int       @id @default(autoincrement())
+  question     String
+  answer       String
+  status       String    @default("active")
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
+  
+  @@index([status])
+  @@map("faqs")
+}
+
+// Relations for MaxMessage (defined separately to avoid circular dependencies)
+// These would be added in actual implementation via implicit relations
+
