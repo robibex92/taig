@@ -10,8 +10,8 @@ export const testConnection = async () => {
     logger.info("Database connection successful (Prisma)");
     return true;
   } catch (error) {
-    logger.error("Database connection failed (Prisma)", { 
-      error: error.message 
+    logger.error("Database connection failed (Prisma)", {
+      error: error.message,
     });
     return false;
   }

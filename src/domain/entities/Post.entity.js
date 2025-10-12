@@ -18,6 +18,16 @@ export class PostEntity {
   }
 
   /**
+   * Create Post entity from database record
+   */
+  static fromDatabase(data) {
+    return new PostEntity({
+      ...data,
+      id: data.id ? data.id.toString() : null,
+    });
+  }
+
+  /**
    * Check if post is active
    */
   isActive() {
