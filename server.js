@@ -49,6 +49,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add /api/v1 support (alias for old /api routes)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/v1/')) {
+    req.url = req.url.replace('/api/v1/', '/api/');
+  }
+  next();
+});
+
 // Публичные роуты
 app.use(routerPosts);
 app.use(routerNearby);
