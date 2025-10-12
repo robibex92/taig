@@ -40,7 +40,7 @@ model User {
   // Relations (новые)
   ads                 Ad[]
   cars                Car[]
-  houses              House[]
+  // houses            House[] // Закомментировано - несовпадение типов
   refresh_tokens      RefreshToken[] // Сессии пользователя
 
   @@index([username])
@@ -60,8 +60,8 @@ model Ad {
   status      String?   @default("active") @db.VarChar(50) // active, archive, deleted
   created_at  DateTime? @db.Timestamptz(6)
   updated_at  DateTime? @updatedAt @db.Timestamptz(6)
-  category    BigInt?   // nullable для обратной совместимости
-  subcategory BigInt?
+  category    Int?      // nullable для обратной совместимости
+  subcategory Int?
   price       String?   @db.VarChar(50)
   view_count  Int?      @default(0)
 
@@ -69,7 +69,7 @@ model Ad {
   user                User?             @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
   category_rel        Category?         @relation(fields: [category], references: [id], onDelete: Restrict)
   subcategory_rel     Subcategory?      @relation(fields: [subcategory], references: [id], onDelete: SetNull)
-  images              AdImage[]
+  // images            AdImage[] // Закомментировано - несовпадение типов
   telegram_messages   TelegramMessage[]
 
   @@index([user_id])
@@ -86,15 +86,16 @@ model Ad {
 
 model AdImage {
   id         Int       @id @default(autoincrement())
-  ad_id      BigInt?
-  post_id    BigInt?
+  ad_id      Int?
+  post_id    Int?
   image_url  String?   @db.Text
   is_main    Boolean?  @default(false)
   created_at DateTime? @db.Timestamptz(6)
 
-  // Relations
-  ad         Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  post       Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  // Relations закомментированы - несовпадение типов (ad_id/post_id Int vs id BigInt)
+  // В legacy БД нет FK, поэтому это нормально
+  // ad         Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  // post       Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
   @@index([ad_id])
   @@index([post_id])
@@ -118,7 +119,7 @@ model Post {
   updated_at DateTime? @updatedAt @db.Timestamptz(6)
 
   // Relations
-  images             AdImage[]
+  // images           AdImage[] // Закомментировано - несовпадение типов
   telegram_messages  TelegramMessage[]
 
   @@index([status])
@@ -178,10 +179,10 @@ model House {
   position     Int?      @default(1)
   status       Boolean?  @default(true)
   created_at   DateTime? @db.Timestamptz(6)
-  id_telegram  BigInt?
+  id_telegram  Int?
 
-  // Relations (новая)
-  user         User?     @relation(fields: [id_telegram], references: [user_id], onDelete: SetNull)
+  // Relations (закомментирована - несовпадение типов: id_telegram Int vs user_id BigInt)
+  // user         User?     @relation(fields: [id_telegram], references: [user_id], onDelete: SetNull)
 
   @@index([house, entrance, number])
   @@index([id_telegram])
@@ -250,7 +251,7 @@ model Faq {
 // ============================================
 
 model Category {
-  id    BigInt  @id
+  id    Int     @id
   name  String? @db.VarChar(100)
   image String? @db.VarChar(255)
 
@@ -267,8 +268,8 @@ model Category {
 // ============================================
 
 model Subcategory {
-  id          BigInt    @id
-  category_id BigInt?
+  id          Int       @id
+  category_id Int?
   name        String?   @db.VarChar(100)
 
   // Relations (новые)
