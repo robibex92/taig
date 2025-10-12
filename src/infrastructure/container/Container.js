@@ -14,8 +14,8 @@ import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.j
 import { TokenService } from "../../application/services/TokenService.js";
 import { TelegramService } from "../../application/services/TelegramService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
-const MaxService = require("../../application/services/MaxService");
-const NotificationService = require("../../application/services/NotificationService");
+import MaxService from "../../application/services/MaxService.js";
+import NotificationService from "../../application/services/NotificationService.js";
 
 // Use Cases - Ad
 import { GetAdsUseCase } from "../../application/use-cases/ad/GetAdsUseCase.js";
@@ -75,12 +75,12 @@ import { LinkUserToApartmentUseCase } from "../../application/use-cases/house/Li
 import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/house/UnlinkUserFromApartmentUseCase.js";
 
 // MAX Auth Use Cases
-const AuthenticateMaxUserUseCase = require("../../application/use-cases/auth/AuthenticateMaxUserUseCase");
-const LinkMaxAccountUseCase = require("../../application/use-cases/auth/LinkMaxAccountUseCase");
-const LinkTelegramAccountUseCase = require("../../application/use-cases/auth/LinkTelegramAccountUseCase");
-const UnlinkPlatformUseCase = require("../../application/use-cases/auth/UnlinkPlatformUseCase");
-const UpdatePlatformSettingsUseCase = require("../../application/use-cases/auth/UpdatePlatformSettingsUseCase");
-const GetPlatformsInfoUseCase = require("../../application/use-cases/auth/GetPlatformsInfoUseCase");
+import AuthenticateMaxUserUseCase from "../../application/use-cases/auth/AuthenticateMaxUserUseCase.js";
+import LinkMaxAccountUseCase from "../../application/use-cases/auth/LinkMaxAccountUseCase.js";
+import LinkTelegramAccountUseCase from "../../application/use-cases/auth/LinkTelegramAccountUseCase.js";
+import UnlinkPlatformUseCase from "../../application/use-cases/auth/UnlinkPlatformUseCase.js";
+import UpdatePlatformSettingsUseCase from "../../application/use-cases/auth/UpdatePlatformSettingsUseCase.js";
+import GetPlatformsInfoUseCase from "../../application/use-cases/auth/GetPlatformsInfoUseCase.js";
 
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
@@ -94,7 +94,7 @@ import { CarController } from "../../presentation/controllers/CarController.js";
 import { AdImageController } from "../../presentation/controllers/AdImageController.js";
 import { UploadController } from "../../presentation/controllers/UploadController.js";
 import { HouseController } from "../../presentation/controllers/HouseController.js";
-const MaxAuthController = require("../../presentation/controllers/MaxAuthController");
+import MaxAuthController from "../../presentation/controllers/MaxAuthController.js";
 
 /**
  * Dependency Injection Container

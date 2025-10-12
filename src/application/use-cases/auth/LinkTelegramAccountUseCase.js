@@ -1,9 +1,9 @@
-const crypto = require("crypto");
-const {
+import crypto from "crypto";
+import {
   ValidationError,
   ConflictError,
   AuthenticationError,
-} = require("../../../core/errors/AppError");
+} from "../../../core/errors/AppError.js";
 
 /**
  * Link Telegram Account Use Case
@@ -107,4 +107,4 @@ class LinkTelegramAccountUseCase {
   }
 }
 
-module.exports = LinkTelegramAccountUseCase;
+export default LinkTelegramAccountUseCase;

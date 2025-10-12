@@ -1,4 +1,4 @@
-const { ValidationError } = require("../../../core/errors/AppError");
+import { ValidationError } from "../../../core/errors/AppError.js";
 
 /**
  * Get Platforms Info Use Case
@@ -38,4 +38,4 @@ class GetPlatformsInfoUseCase {
   }
 }
 
-module.exports = GetPlatformsInfoUseCase;
+export default GetPlatformsInfoUseCase;

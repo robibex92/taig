@@ -1,8 +1,8 @@
-const {
+import {
   ValidationError,
   ConflictError,
   AuthenticationError,
-} = require("../../../core/errors/AppError");
+} from "../../../core/errors/AppError.js";
 
 /**
  * Link MAX Account Use Case
@@ -79,4 +79,4 @@ class LinkMaxAccountUseCase {
   }
 }
 
-module.exports = LinkMaxAccountUseCase;
+export default LinkMaxAccountUseCase;

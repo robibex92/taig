@@ -1,4 +1,4 @@
-const { ValidationError } = require("../../../core/errors/AppError");
+import { ValidationError } from "../../../core/errors/AppError.js";
 
 /**
  * Unlink Platform Use Case
@@ -84,4 +84,4 @@ class UnlinkPlatformUseCase {
   }
 }
 
-module.exports = UnlinkPlatformUseCase;
+export default UnlinkPlatformUseCase;

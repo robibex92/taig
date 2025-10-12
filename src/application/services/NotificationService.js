@@ -1,4 +1,4 @@
-const { logger } = require("../../core/utils/logger");
+import { logger } from "../../core/utils/logger.js";
 
 /**
  * Notification Service
@@ -145,4 +145,4 @@ class NotificationService {
   }
 }
 
-module.exports = NotificationService;
+export default NotificationService;

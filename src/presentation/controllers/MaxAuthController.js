@@ -1,11 +1,11 @@
-const { ValidationError } = require("../../core/errors/AppError");
-const {
+import { ValidationError } from "../../core/errors/AppError.js";
+import {
   maxAuthSchema,
   linkMaxSchema,
   linkTelegramSchema,
   unlinkPlatformSchema,
   updatePlatformSettingsSchema,
-} = require("../../core/validation/schemas/maxAuth.schema");
+} from "../../core/validation/schemas/maxAuth.schema.js";
 
 /**
  * MAX Authentication Controller
@@ -193,4 +193,4 @@ class MaxAuthController {
   }
 }
 
-module.exports = MaxAuthController;
+export default MaxAuthController;

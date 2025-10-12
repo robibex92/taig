@@ -1,0 +1,1 @@
+2025-10-12 23:53:44 [error]: Database connection failed {"error":"connect ECONNREFUSED ::1:5432"}

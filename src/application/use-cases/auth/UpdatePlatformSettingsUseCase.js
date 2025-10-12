@@ -1,4 +1,4 @@
-const { ValidationError } = require("../../../core/errors/AppError");
+import { ValidationError } from "../../../core/errors/AppError.js";
 
 /**
  * Update Platform Settings Use Case
@@ -59,4 +59,4 @@ class UpdatePlatformSettingsUseCase {
   }
 }
 
-module.exports = UpdatePlatformSettingsUseCase;
+export default UpdatePlatformSettingsUseCase;

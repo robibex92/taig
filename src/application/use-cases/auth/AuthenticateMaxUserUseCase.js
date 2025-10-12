@@ -1,7 +1,7 @@
-const {
+import {
   ValidationError,
   AuthenticationError,
-} = require("../../../core/errors/AppError");
+} from "../../../core/errors/AppError.js";
 
 /**
  * Authenticate MAX User Use Case
@@ -106,4 +106,4 @@ class AuthenticateMaxUserUseCase {
   }
 }
 
-module.exports = AuthenticateMaxUserUseCase;
+export default AuthenticateMaxUserUseCase;

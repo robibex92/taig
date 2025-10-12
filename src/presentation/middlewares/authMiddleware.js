@@ -57,3 +57,8 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
 
   next();
 });
+
+/**
+ * Middleware for conditional authentication (alias for authenticateOptional)
+ */
+export const authenticateConditional = authenticateOptional;

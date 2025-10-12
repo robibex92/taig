@@ -1,6 +1,6 @@
-const axios = require("axios");
-const { logger } = require("../../core/utils/logger");
-const pLimit = require("p-limit");
+import { logger } from "../../core/utils/logger.js";
+import pLimit from "p-limit";
+import crypto from "crypto";
 
 /**
  * MAX Messaging Service
@@ -40,28 +40,30 @@ class MaxService {
           ...(attachments.length > 0 && { attachments }),
         };
 
-        const response = await axios.post(
-          `${this.apiUrl}/sendMessage`,
-          payload,
-          {
-            headers: {
-              Authorization: `Bearer ${this.botToken}`,
-              "Content-Type": "application/json",
-            },
-            timeout: 10000,
-          }
-        );
+        const response = await fetch(`${this.apiUrl}/sendMessage`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.botToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`MAX API error: ${response.status}`);
+        }
+
+        const data = await response.json();
 
         logger.info("MAX message sent", {
           chat_id,
-          message_id: response.data.message_id,
+          message_id: data.message_id,
         });
-        return response.data;
+        return data;
       } catch (error) {
         logger.error("MAX send message error", {
           chat_id,
           error: error.message,
-          response: error.response?.data,
         });
         throw error;
       }
@@ -78,22 +80,25 @@ class MaxService {
 
     return this.limit(async () => {
       try {
-        await axios.post(
-          `${this.apiUrl}/editMessage`,
-          {
-            chat_id,
-            message_id,
-            text,
-            ...(keyboard && { keyboard }),
+        const payload = {
+          chat_id,
+          message_id,
+          text,
+          ...(keyboard && { keyboard }),
+        };
+
+        const response = await fetch(`${this.apiUrl}/editMessage`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.botToken}`,
+            "Content-Type": "application/json",
           },
-          {
-            headers: {
-              Authorization: `Bearer ${this.botToken}`,
-              "Content-Type": "application/json",
-            },
-            timeout: 10000,
-          }
-        );
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`MAX API error: ${response.status}`);
+        }
 
         logger.info("MAX message edited", { chat_id, message_id });
       } catch (error) {
@@ -116,20 +121,21 @@ class MaxService {
 
     return this.limit(async () => {
       try {
-        await axios.post(
-          `${this.apiUrl}/deleteMessage`,
-          {
+        const response = await fetch(`${this.apiUrl}/deleteMessage`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.botToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
             chat_id,
             message_id,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.botToken}`,
-              "Content-Type": "application/json",
-            },
-            timeout: 10000,
-          }
-        );
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`MAX API error: ${response.status}`);
+        }
 
         logger.info("MAX message deleted", { chat_id, message_id });
       } catch (error) {
@@ -417,4 +423,4 @@ class MaxService {
   }
 }
 
-module.exports = MaxService;
+export default MaxService;
