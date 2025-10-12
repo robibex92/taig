@@ -36,7 +36,7 @@ import carRoutes from "./presentation/routes/cars.routes.js";
 import adImageRoutes from "./presentation/routes/adImages.routes.js";
 import uploadRoutes from "./presentation/routes/upload.routes.js";
 import nearbyRoutes from "./presentation/routes/nearby.routes.js";
-import maxAuthRoutes from "./presentation/routes/maxAuth.routes.js";
+// import maxAuthRoutes from "./presentation/routes/maxAuth.routes.js"; // Temporarily disabled
 import {
   userRoutes,
   publicUserRoutes,
@@ -103,7 +103,7 @@ logger.info("Static files serving", { path: uploadsStaticPath });
 // ================== Clean Architecture Routes (v1) ==================
 app.use(adsRoutes);
 app.use(authRoutes);
-app.use(maxAuthRoutes);
+// app.use(maxAuthRoutes); // Temporarily disabled
 app.use(postRoutes);
 app.use(telegramRoutes);
 app.use(categoryRoutes);
