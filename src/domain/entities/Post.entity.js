@@ -79,3 +79,7 @@ export class PostEntity {
     };
   }
 }
+
+// Export with alias for compatibility
+export { PostEntity as Post };
+export default PostEntity;
