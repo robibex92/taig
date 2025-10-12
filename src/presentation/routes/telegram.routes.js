@@ -5,7 +5,7 @@ import { API_PREFIX, API_VERSION } from "../../core/constants/index.js";
 import { validate } from "../../core/validation/validator.js";
 import Joi from "joi";
 import { logger } from "../../core/utils/logger.js";
-import { pool } from "../../infrastructure/database/db.js";
+import { prisma } from "../../infrastructure/database/db.js";
 
 const router = express.Router();
 const telegramService = container.resolve("telegramService");
@@ -106,11 +106,11 @@ router.post(
       let dbUsername = null;
       if (user_id) {
         try {
-          const result = await pool.query(
-            "SELECT username FROM users WHERE user_id = $1",
-            [user_id]
-          );
-          dbUsername = result.rows[0]?.username || null;
+          const user = await prisma.user.findUnique({
+            where: { user_id: BigInt(user_id) },
+            select: { username: true },
+          });
+          dbUsername = user?.username || null;
         } catch (error) {
           logger.error("Error fetching username", {
             user_id,
