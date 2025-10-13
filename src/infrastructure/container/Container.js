@@ -24,9 +24,15 @@ import { UpdateAdUseCase } from "../../application/use-cases/ad/UpdateAdUseCase.
 import { DeleteAdUseCase } from "../../application/use-cases/ad/DeleteAdUseCase.js";
 
 // Use Cases - User
-import { AuthenticateUserUseCase } from "../../application/use-cases/user/AuthenticateUserUseCase.js";
-import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.js";
+import { AuthenticateUserUseCase } from "../../application/use-cases/user/AuthenticateUserUseCase.improved.js";
+import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.improved.js";
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
+import { LogoutUseCase } from "../../application/use-cases/user/LogoutUseCase.js";
+
+// Use Cases - Session
+import { GetUserSessionsUseCase } from "../../application/use-cases/session/GetUserSessionsUseCase.js";
+import { RevokeSessionUseCase } from "../../application/use-cases/session/RevokeSessionUseCase.js";
+import { RevokeAllSessionsUseCase } from "../../application/use-cases/session/RevokeAllSessionsUseCase.js";
 
 // Use Cases - Post
 import { GetPostsUseCase } from "../../application/use-cases/post/GetPostsUseCase.js";
@@ -75,7 +81,7 @@ import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/hous
 
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
-import { AuthController } from "../../presentation/controllers/AuthController.js";
+import { AuthController } from "../../presentation/controllers/AuthController.improved.js";
 import { UserController } from "../../presentation/controllers/UserController.js";
 import { PostController } from "../../presentation/controllers/PostController.js";
 import { CategoryController } from "../../presentation/controllers/CategoryController.js";
@@ -200,7 +206,8 @@ export class Container {
       (container) =>
         new AuthenticateUserUseCase(
           container.resolve("userRepository"),
-          container.resolve("tokenService")
+          container.resolve("tokenService"),
+          container.resolve("refreshTokenRepository")
         )
     );
 
@@ -209,13 +216,47 @@ export class Container {
       (container) =>
         new RefreshTokenUseCase(
           container.resolve("userRepository"),
-          container.resolve("tokenService")
+          container.resolve("tokenService"),
+          container.resolve("refreshTokenRepository")
         )
     );
 
     this.register(
       "updateUserUseCase",
       (container) => new UpdateUserUseCase(container.resolve("userRepository"))
+    );
+
+    this.register(
+      "logoutUseCase",
+      (container) =>
+        new LogoutUseCase(
+          container.resolve("refreshTokenRepository"),
+          container.resolve("tokenService")
+        )
+    );
+
+    // Use Cases - Session
+    this.register(
+      "getUserSessionsUseCase",
+      (container) =>
+        new GetUserSessionsUseCase(
+          container.resolve("refreshTokenRepository"),
+          container.resolve("tokenService")
+        )
+    );
+
+    this.register(
+      "revokeSessionUseCase",
+      (container) =>
+        new RevokeSessionUseCase(container.resolve("refreshTokenRepository"))
+    );
+
+    this.register(
+      "revokeAllSessionsUseCase",
+      (container) =>
+        new RevokeAllSessionsUseCase(
+          container.resolve("refreshTokenRepository")
+        )
     );
 
     // Use Cases - Post
@@ -270,7 +311,12 @@ export class Container {
         new AuthController(
           container.resolve("authenticateUserUseCase"),
           container.resolve("refreshTokenUseCase"),
-          container.resolve("userRepository")
+          container.resolve("logoutUseCase"),
+          container.resolve("getUserSessionsUseCase"),
+          container.resolve("revokeSessionUseCase"),
+          container.resolve("revokeAllSessionsUseCase"),
+          container.resolve("userRepository"),
+          container.resolve("tokenService")
         )
     );
 
@@ -543,7 +589,6 @@ export class Container {
           container.resolve("unlinkUserFromApartmentUseCase")
         )
     );
-
   }
 }
 
