@@ -139,3 +139,10 @@ Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
     at listenInCluster (node:net:1799:12)
     at doListen (node:net:1948:7)
     at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 12:00:00 [error]: Cron job: Archive old ads failed {"error":"fetch failed"}
+2025-10-13 12:22:27 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
