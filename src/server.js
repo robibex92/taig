@@ -103,20 +103,20 @@ logger.info("Static files serving", { path: uploadsStaticPath });
 // ================== API Routes ==================
 
 // ================== Clean Architecture Routes (v1) ==================
-// Prefix /api-v1 is applied here, routes define paths without prefix
-app.use("/api-v1", adsRoutes);
-app.use("/api-v1", authRoutes);
-app.use("/api-v1", postRoutes);
-app.use("/api-v1", telegramRoutes);
-app.use("/api-v1", categoryRoutes);
-app.use("/api-v1", faqRoutes);
-app.use("/api-v1", floorRuleRoutes);
-app.use("/api-v1", carRoutes);
-app.use("/api-v1", adImageRoutes);
-app.use("/api-v1", uploadRoutes);
-app.use("/api-v1", nearbyRoutes);
-app.use("/api-v1", publicUserRoutes);
-app.use("/api-v1", userRoutes);
+// Prefix /api is applied here (Nginx rewrites /api-v1/ → /api/)
+app.use("/api", adsRoutes);
+app.use("/api", authRoutes);
+app.use("/api", postRoutes);
+app.use("/api", telegramRoutes);
+app.use("/api", categoryRoutes);
+app.use("/api", faqRoutes);
+app.use("/api", floorRuleRoutes);
+app.use("/api", carRoutes);
+app.use("/api", adImageRoutes);
+app.use("/api", uploadRoutes);
+app.use("/api", nearbyRoutes);
+app.use("/api", publicUserRoutes);
+app.use("/api", userRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅
