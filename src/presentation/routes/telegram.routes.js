@@ -1,7 +1,6 @@
 import express from "express";
 import container from "../../infrastructure/container/Container.js";
 import { authenticateConditional } from "../middlewares/authMiddleware.js";
-import { API_PREFIX, API_VERSION } from "../../core/constants/index.js";
 import { validate } from "../../core/validation/validator.js";
 import Joi from "joi";
 import { logger } from "../../core/utils/logger.js";
@@ -10,7 +9,7 @@ import { prisma } from "../../infrastructure/database/db.js";
 const router = express.Router();
 const telegramService = container.resolve("telegramService");
 
-const BASE_ROUTE = `${API_PREFIX}/${API_VERSION}/telegram`;
+const BASE_ROUTE = "/telegram";
 
 /**
  * @swagger
