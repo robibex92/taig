@@ -1,6 +1,7 @@
 .env
 node_modules
 server.log
+logs/
 uploads
 Uploads/
 ssl
