@@ -1,46 +1,99 @@
-const {
-  NotFoundError,
+import BookingRepository from "../../../infrastructure/repositories/BookingRepository.js";
+import AdRepository from "../../../infrastructure/repositories/AdRepository.js";
+import UserRepository from "../../../infrastructure/repositories/UserRepository.js";
+import TelegramService from "../../services/TelegramService.js";
+import {
   ValidationError,
-} = require("../../../core/errors/AppError");
+  NotFoundError,
+  ForbiddenError,
+} from "../../../domain/errors/index.js";
+import logger from "../../../infrastructure/logger/index.js";
 
 /**
- * Cancel Booking Use Case
- * Allows user to cancel their own booking
+ * CancelBookingUseCase - handles cancelling a booking
  */
-class CancelBookingUseCase {
-  constructor({ bookingRepository }) {
+export class CancelBookingUseCase {
+  constructor(
+    bookingRepository = BookingRepository,
+    adRepository = AdRepository,
+    userRepository = UserRepository
+  ) {
     this.bookingRepository = bookingRepository;
+    this.adRepository = adRepository;
+    this.userRepository = userRepository;
   }
 
-  async execute({ booking_id, user_id }) {
-    // Get booking
-    const booking = await this.bookingRepository.findById(booking_id);
-    if (!booking) {
-      throw new NotFoundError("Booking not found");
+  async execute({ bookingId, userId }) {
+    try {
+      // Validate input
+      if (!bookingId || !userId) {
+        throw new ValidationError("Booking ID and User ID are required");
+      }
+
+      // Find booking
+      const booking = await this.bookingRepository.findById(bookingId);
+      if (!booking) {
+        throw new NotFoundError("Booking not found");
+      }
+
+      // Check if booking belongs to user
+      if (booking.user_id?.toString() !== userId.toString()) {
+        throw new ForbiddenError("This booking does not belong to you");
+      }
+
+      // Check if booking is already cancelled
+      if (booking.status === "cancelled") {
+        throw new ValidationError("Booking is already cancelled");
+      }
+
+      // Cancel booking
+      const cancelledBooking = await this.bookingRepository.cancel(bookingId);
+
+      // Send Telegram notification to seller (non-blocking)
+      const telegramService = new TelegramService();
+      telegramService.queueTask(async () => {
+        try {
+          const ad = await this.adRepository.findById(booking.ad_id);
+          const user = await this.userRepository.findById(userId);
+
+          if (ad && user) {
+            const seller = await this.userRepository.findById(ad.user_id);
+            if (seller && seller.user_id) {
+              await telegramService.sendBookingCancellationNotification({
+                sellerTelegramId: seller.user_id.toString(),
+                buyerName: user.first_name || user.username || "Не указано",
+                buyerUsername: user.username || null,
+                adTitle: ad.title,
+                bookingOrder: booking.booking_order,
+                adId: ad.id.toString(),
+              });
+            }
+          }
+        } catch (err) {
+          logger.error(
+            "Failed to send booking cancellation Telegram notification",
+            {
+              error: err.message,
+            }
+          );
+        }
+      });
+
+      logger.info("Booking cancelled successfully", {
+        bookingId,
+        userId,
+        adId: booking.ad_id,
+      });
+
+      return {
+        booking: cancelledBooking,
+        message: "Бронь отменена",
+      };
+    } catch (error) {
+      logger.error("Error in CancelBookingUseCase", { error: error.message });
+      throw error;
     }
-
-    // Check if user owns the booking
-    if (booking.user_id !== user_id) {
-      throw new ValidationError(
-        "Unauthorized: You can only cancel your own bookings"
-      );
-    }
-
-    // Check if booking can be cancelled
-    if (!booking.canBeCancelled()) {
-      throw new ValidationError(
-        "Booking cannot be cancelled in its current state"
-      );
-    }
-
-    // Update status to cancelled
-    const cancelledBooking = await this.bookingRepository.updateStatus(
-      booking_id,
-      "cancelled"
-    );
-
-    return cancelledBooking;
   }
 }
 
-module.exports = CancelBookingUseCase;
+export default new CancelBookingUseCase();

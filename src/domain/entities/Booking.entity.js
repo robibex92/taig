@@ -1,87 +1,79 @@
 /**
- * Booking Entity
- * Represents a booking/reservation for an ad
+ * Booking Entity - represents a booking for an ad
  */
-class Booking {
-  constructor({
-    id,
-    ad_id,
-    user_id,
-    status = "pending",
-    priority = 0,
-    message = null,
-    seller_note = null,
-    created_at,
-    updated_at,
-    // Relations
-    ad = null,
-    user = null,
-  }) {
-    this.id = id;
-    this.ad_id = ad_id;
-    this.user_id = user_id;
-    this.status = status; // pending, confirmed, rejected, cancelled
-    this.priority = priority; // For queue ordering (lower = higher priority)
-    this.message = message; // Buyer's message
-    this.seller_note = seller_note; // Seller's notes
-    this.created_at = created_at;
-    this.updated_at = updated_at;
-    // Relations
-    this.ad = ad;
-    this.user = user;
+export class BookingEntity {
+  constructor(data) {
+    this.id = data.id;
+    this.ad_id = data.ad_id;
+    this.user_id = data.user_id;
+    this.booking_order = data.booking_order;
+    this.status = data.status || "active";
+    this.created_at = data.created_at || new Date();
+    this.cancelled_at = data.cancelled_at || null;
+
+    // Related entities (опционально)
+    this.ad = data.ad || null;
+    this.user = data.user || null;
   }
 
   /**
-   * Check if booking is active (pending or confirmed)
+   * Cancel booking
+   */
+  cancel() {
+    this.status = "cancelled";
+    this.cancelled_at = new Date();
+  }
+
+  /**
+   * Check if booking is active
    */
   isActive() {
-    return ["pending", "confirmed"].includes(this.status);
+    return this.status === "active";
   }
 
   /**
-   * Check if booking can be confirmed
+   * Check if booking is cancelled
    */
-  canBeConfirmed() {
-    return this.status === "pending";
+  isCancelled() {
+    return this.status === "cancelled";
   }
 
   /**
-   * Check if booking can be cancelled
+   * Get order text
    */
-  canBeCancelled() {
-    return ["pending", "confirmed"].includes(this.status);
+  getOrderText() {
+    const texts = {
+      1: "первым",
+      2: "вторым",
+      3: "третьим",
+      4: "четвертым",
+      5: "пятым",
+    };
+    return texts[this.booking_order] || `${this.booking_order}-м`;
   }
 
   /**
-   * Validate booking data
+   * Convert to JSON
    */
-  static validate(data) {
-    const errors = [];
-
-    if (!data.ad_id) {
-      errors.push("ad_id is required");
-    }
-
-    if (!data.user_id) {
-      errors.push("user_id is required");
-    }
-
-    if (
-      data.status &&
-      !["pending", "confirmed", "rejected", "cancelled"].includes(data.status)
-    ) {
-      errors.push("Invalid status value");
-    }
-
-    if (data.message && data.message.length > 500) {
-      errors.push("Message must be less than 500 characters");
-    }
-
+  toJSON() {
     return {
-      isValid: errors.length === 0,
-      errors,
+      id: this.id?.toString(),
+      ad_id: this.ad_id?.toString(),
+      user_id: this.user_id?.toString(),
+      booking_order: this.booking_order,
+      status: this.status,
+      created_at: this.created_at,
+      cancelled_at: this.cancelled_at,
+      ad: this.ad,
+      user: this.user,
+      order_text: this.getOrderText(),
     };
   }
-}
 
-module.exports = Booking;
+  /**
+   * Create from database
+   */
+  static fromDatabase(data) {
+    return new BookingEntity(data);
+  }
+}

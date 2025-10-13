@@ -5,10 +5,16 @@ import { asyncHandler } from "../../core/middlewares/errorHandler.js";
  * User Controller - handles user-related requests
  */
 export class UserController {
-  constructor(updateUserUseCase, userRepository, adRepository) {
+  constructor(
+    updateUserUseCase,
+    userRepository,
+    adRepository,
+    uploadAvatarUseCase = null
+  ) {
     this.updateUserUseCase = updateUserUseCase;
     this.userRepository = userRepository;
     this.adRepository = adRepository;
+    this.uploadAvatarUseCase = uploadAvatarUseCase;
   }
 
   /**
@@ -99,6 +105,27 @@ export class UserController {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       data: ads.map((ad) => ad.toJSON()),
+    });
+  });
+
+  /**
+   * Upload user avatar
+   */
+  uploadAvatar = asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const userId = req.user.user_id;
+    const user = await this.uploadAvatarUseCase.execute(userId, req.file.path);
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: user.toJSON(),
+      message: "Avatar uploaded successfully",
     });
   });
 }

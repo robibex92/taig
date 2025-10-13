@@ -38,10 +38,19 @@ model User {
   refresh_token       String?   @db.VarChar(500)
 
   // Relations (новые)
-  ads                 Ad[]
-  cars                Car[]
-  // houses            House[] // Закомментировано - несовпадение типов
-  refresh_tokens      RefreshToken[] // Сессии пользователя
+  ads                   Ad[]
+  cars                  Car[]
+  // houses              House[] // Закомментировано - несовпадение типов
+  refresh_tokens        RefreshToken[] // Сессии пользователя
+  
+  // Messaging
+  sent_messages         Message[]      @relation("SentMessages")
+  received_messages     Message[]      @relation("ReceivedMessages")
+  conversations_as_user1 Conversation[] @relation("ConversationsAsUser1")
+  conversations_as_user2 Conversation[] @relation("ConversationsAsUser2")
+  
+  // Bookings
+  bookings              Booking[]
 
   @@index([username])
   @@index([status])
@@ -71,6 +80,9 @@ model Ad {
   subcategory_rel     Subcategory?      @relation(fields: [subcategory], references: [id], onDelete: SetNull)
   // images            AdImage[] // Закомментировано - несовпадение типов
   telegram_messages   TelegramMessage[]
+  conversations       Conversation[]
+  messages            Message[]
+  bookings            Booking[]
 
   @@index([user_id])
   @@index([category])
@@ -308,4 +320,134 @@ model RefreshToken {
   @@index([expires_at])
   @@index([is_revoked])
   @@map("refresh_tokens")
+}
+
+// ============================================
+// MESSAGING SYSTEM
+// ============================================
+
+model Message {
+  id              BigInt    @id @default(autoincrement())
+  
+  // Связи
+  sender_id       BigInt
+  receiver_id     BigInt
+  ad_id           BigInt?   // Контекст (объявление)
+  
+  // Для threading (ответы в ветке)
+  parent_id       BigInt?
+  thread_id       BigInt?
+  
+  // Содержимое
+  content         String    @db.Text
+  
+  // Статус
+  is_read         Boolean   @default(false)
+  is_deleted      Boolean   @default(false)
+  
+  // Timestamps
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
+  read_at         DateTime? @db.Timestamptz(6)
+  
+  // Отношения
+  sender          User      @relation("SentMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+  receiver        User      @relation("ReceivedMessages", fields: [receiver_id], references: [user_id], onDelete: Cascade)
+  ad              Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  parent          Message?  @relation("MessageReplies", fields: [parent_id], references: [id], onDelete: SetNull)
+  replies         Message[] @relation("MessageReplies")
+  
+  @@index([sender_id, receiver_id])
+  @@index([ad_id])
+  @@index([thread_id])
+  @@index([created_at(sort: Desc)])
+  @@map("messages")
+}
+
+model Conversation {
+  id                BigInt   @id @default(autoincrement())
+  
+  // Участники
+  user1_id          BigInt
+  user2_id          BigInt
+  
+  // Контекст
+  ad_id             BigInt?
+  
+  // Последнее сообщение
+  last_message_id   BigInt?
+  last_message_at   DateTime? @db.Timestamptz(6)
+  
+  // Timestamps
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+  
+  // Отношения
+  user1             User     @relation("ConversationsAsUser1", fields: [user1_id], references: [user_id], onDelete: Cascade)
+  user2             User     @relation("ConversationsAsUser2", fields: [user2_id], references: [user_id], onDelete: Cascade)
+  ad                Ad?      @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user1_id, user2_id, ad_id])
+  @@index([user1_id])
+  @@index([user2_id])
+  @@index([ad_id])
+  @@index([last_message_at(sort: Desc)])
+  @@map("conversations")
+}
+
+// ============================================
+// BOOKING SYSTEM
+// ============================================
+
+model Booking {
+  id              BigInt    @id @default(autoincrement())
+  
+  // Связи
+  ad_id           BigInt
+  user_id         BigInt
+  
+  // Порядок бронирования
+  booking_order   Int
+  
+  // Статус
+  status          String    @default("active") @db.VarChar(50) // active, cancelled
+  
+  // Timestamps
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  cancelled_at    DateTime? @db.Timestamptz(6)
+  
+  // Отношения
+  ad              Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  
+  @@unique([ad_id, user_id, status])
+  @@index([ad_id, status])
+  @@index([user_id, status])
+  @@index([created_at(sort: Desc)])
+  @@map("bookings")
+}
+
+// ============================================
+// TELEGRAM CHATS (Управление чатами)
+// ============================================
+
+model TelegramChat {
+  id             Int       @id @default(autoincrement())
+  chat_id        String    @db.VarChar(255)
+  thread_id      String?   @db.VarChar(255)
+  name           String    @db.VarChar(255)
+  description    String?   @db.Text
+  chat_type      String    @default("group") @db.VarChar(50) // group, channel, supergroup
+  is_active      Boolean   @default(true)
+  purpose        String    @default("general") @db.VarChar(50) // ads, news, general, notifications
+  visible_to_all Boolean   @default(true) // if false, only admins can see this chat
+  created_at     DateTime  @default(now()) @db.Timestamp(6)
+  updated_at     DateTime  @default(now()) @db.Timestamp(6)
+
+  @@unique([chat_id, thread_id])
+  @@index([purpose])
+  @@index([is_active])
+  @@index([chat_id])
+  @@index([visible_to_all])
+  @@map("telegram_chats")
 }

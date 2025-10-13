@@ -1,9 +1,9 @@
-import TelegramBot from "node-telegram-bot-api";
+import { Telegraf } from "telegraf";
 import pLimit from "p-limit";
 import { logger } from "../../core/utils/logger.js";
 
 // Initialize bot instance
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 /**
  * Centralized Telegram Service
@@ -49,7 +49,7 @@ export class TelegramService {
             Array.isArray(mediaGroup) &&
             mediaGroup.length > 0
           ) {
-            response = await bot.sendMediaGroup(chatId, mediaGroup, {
+            response = await bot.telegram.sendMediaGroup(chatId, mediaGroup, {
               message_thread_id: threadId,
             });
 
@@ -61,7 +61,7 @@ export class TelegramService {
           }
           // Send single photo
           else if (photos && Array.isArray(photos) && photos.length > 0) {
-            response = await bot.sendPhoto(chatId, photos[0], {
+            response = await bot.telegram.sendPhoto(chatId, photos[0], {
               caption: message,
               parse_mode,
               message_thread_id: threadId,
@@ -76,7 +76,7 @@ export class TelegramService {
           }
           // Send text only
           else {
-            response = await bot.sendMessage(chatId, message, {
+            response = await bot.telegram.sendMessage(chatId, message, {
               parse_mode,
               message_thread_id: threadId,
             });
@@ -126,9 +126,7 @@ export class TelegramService {
   }) {
     return await this.limit(async () => {
       try {
-        await bot.editMessageText(text, {
-          chat_id: chatId,
-          message_id: messageId,
+        await bot.telegram.editMessageText(chatId, messageId, undefined, text, {
           parse_mode,
           message_thread_id: threadId,
         });
@@ -159,12 +157,16 @@ export class TelegramService {
   }) {
     return await this.limit(async () => {
       try {
-        await bot.editMessageCaption(caption, {
-          chat_id: chatId,
-          message_id: messageId,
-          parse_mode,
-          message_thread_id: threadId,
-        });
+        await bot.telegram.editMessageCaption(
+          chatId,
+          messageId,
+          undefined,
+          caption,
+          {
+            parse_mode,
+            message_thread_id: threadId,
+          }
+        );
 
         logger.info("Telegram message caption updated", { chatId, messageId });
         await this._delay();
@@ -200,11 +202,15 @@ export class TelegramService {
           parse_mode: parse_mode,
         };
 
-        await bot.editMessageMedia(media, {
-          chat_id: chatId,
-          message_id: messageId,
-          message_thread_id: threadId,
-        });
+        await bot.telegram.editMessageMedia(
+          chatId,
+          messageId,
+          undefined,
+          media,
+          {
+            message_thread_id: threadId,
+          }
+        );
 
         logger.info("Telegram message media updated", { chatId, messageId });
         await this._delay();
@@ -226,9 +232,7 @@ export class TelegramService {
   async deleteMessage({ chatId, messageId, threadId }) {
     return await this.limit(async () => {
       try {
-        await bot.deleteMessage(chatId, messageId, {
-          message_thread_id: threadId,
-        });
+        await bot.telegram.deleteMessage(chatId, messageId);
 
         logger.info("Telegram message deleted", { chatId, messageId });
         await this._delay();
@@ -349,6 +353,122 @@ export class TelegramService {
     }
 
     return `${header}${this._escapeHtml(message)}\n\n${authorLink}`;
+  }
+
+  /**
+   * Send booking notification to seller
+   */
+  async sendBookingNotification({
+    sellerTelegramId,
+    buyerName,
+    buyerUsername,
+    adTitle,
+    adPrice,
+    bookingOrder,
+    adId,
+  }) {
+    try {
+      const orderTexts = {
+        1: "первым",
+        2: "вторым",
+        3: "третьим",
+        4: "четвертым",
+        5: "пятым",
+      };
+      const orderText = orderTexts[bookingOrder] || `${bookingOrder}-м`;
+
+      const buyerDisplay = buyerUsername
+        ? `@${this._escapeHtml(buyerUsername)}`
+        : this._escapeHtml(buyerName || "Не указано");
+
+      let message = `🔔 <b>Новое бронирование!</b>\n\n`;
+      message += `👤 Пользователь: ${buyerDisplay}\n`;
+      message += `📦 Объявление: <b>${this._escapeHtml(adTitle)}</b>\n`;
+
+      if (adPrice) {
+        message += `💰 Цена: <b>${this._escapeHtml(adPrice)}</b> ₽\n`;
+      }
+
+      message += `📊 Забронировал: <b>${orderText}</b>\n\n`;
+      message += `Всего бронирований: <b>${bookingOrder}</b>\n\n`;
+      message += `🔗 Просмотреть: https://taiginsky.md/ads/${adId}`;
+
+      const result = await this.sendMessage({
+        message,
+        chatIds: [sellerTelegramId],
+        parse_mode: "HTML",
+      });
+
+      logger.info("Booking notification sent", {
+        sellerTelegramId,
+        adId,
+        bookingOrder,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error("Error sending booking notification", {
+        error: error.message,
+        sellerTelegramId,
+        adId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking cancellation notification to seller
+   */
+  async sendBookingCancellationNotification({
+    sellerTelegramId,
+    buyerName,
+    buyerUsername,
+    adTitle,
+    bookingOrder,
+    adId,
+  }) {
+    try {
+      const orderTexts = {
+        1: "первым",
+        2: "вторым",
+        3: "третьим",
+        4: "четвертым",
+        5: "пятым",
+      };
+      const orderText = orderTexts[bookingOrder] || `${bookingOrder}-м`;
+
+      const buyerDisplay = buyerUsername
+        ? `@${this._escapeHtml(buyerUsername)}`
+        : this._escapeHtml(buyerName || "Не указано");
+
+      let message = `❌ <b>Отмена бронирования</b>\n\n`;
+      message += `👤 Пользователь: ${buyerDisplay}\n`;
+      message += `📦 Объявление: <b>${this._escapeHtml(adTitle)}</b>\n`;
+      message += `📊 Был: <b>${orderText}</b>\n\n`;
+      message += `Пользователь передумал.\n\n`;
+      message += `🔗 Просмотреть: https://taiginsky.md/ads/${adId}`;
+
+      const result = await this.sendMessage({
+        message,
+        chatIds: [sellerTelegramId],
+        parse_mode: "HTML",
+      });
+
+      logger.info("Booking cancellation notification sent", {
+        sellerTelegramId,
+        adId,
+        bookingOrder,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error("Error sending booking cancellation notification", {
+        error: error.message,
+        sellerTelegramId,
+        adId,
+      });
+      throw error;
+    }
   }
 
   /**

@@ -15,18 +15,19 @@ export class AdRepository extends IAdRepository {
     try {
       const ad = await prisma.ad.findUnique({
         where: { id: BigInt(id) },
-        include: {
-          images: {
-            orderBy: [{ is_main: "desc" }, { created_at: "asc" }],
-          },
-        },
       });
 
       if (!ad) {
         return null;
       }
 
-      return new AdEntity({ ...ad, images: ad.images || [] });
+      // Получаем изображения отдельно из-за несоответствия типов (Ad.id BigInt vs AdImage.ad_id Int)
+      const images = await prisma.adImage.findMany({
+        where: { ad_id: Number(id) },
+        orderBy: [{ is_main: "desc" }, { created_at: "asc" }],
+      });
+
+      return new AdEntity({ ...ad, images: images || [] });
     } catch (error) {
       logger.error("Error finding ad by ID", { error: error.message, id });
       throw new DatabaseError("Failed to find ad", error);

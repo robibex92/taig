@@ -3,6 +3,7 @@ import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
 import { updateUserSchema } from "../../core/validation/schemas/user.schema.js";
+import { upload } from "../../core/middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 const publicRouter = express.Router();
@@ -23,6 +24,13 @@ router.patch(
   authenticateJWT,
   validateRequest(updateUserSchema, "body"),
   userController.updateProfile
+);
+
+router.post(
+  "/users/avatar",
+  authenticateJWT,
+  upload.single("avatar"),
+  userController.uploadAvatar
 );
 
 export { router as userRoutes, publicRouter as publicUserRoutes };

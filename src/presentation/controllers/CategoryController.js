@@ -32,10 +32,7 @@ export class CategoryController {
   getAll = asyncHandler(async (req, res) => {
     const categories = await this.getCategoriesUseCase.execute();
 
-    res.json({
-      success: true,
-      data: categories,
-    });
+    res.json(categories);
   });
 
   /**
@@ -55,10 +52,7 @@ export class CategoryController {
       parseInt(req.params.id)
     );
 
-    res.json({
-      success: true,
-      data: category,
-    });
+    res.json(category);
   });
 
   /**
@@ -78,10 +72,7 @@ export class CategoryController {
       parseInt(req.params.category_id)
     );
 
-    res.json({
-      success: true,
-      subcategories,
-    });
+    res.json(subcategories);
   });
 
   /**
@@ -91,10 +82,7 @@ export class CategoryController {
   getAllSubcategories = asyncHandler(async (req, res) => {
     const subcategories = await this.getAllSubcategoriesUseCase.execute();
 
-    res.json({
-      success: true,
-      data: subcategories,
-    });
+    res.json(subcategories);
   });
 
   /**
@@ -116,10 +104,6 @@ export class CategoryController {
       parseInt(req.params.category_id)
     );
 
-    res.json({
-      success: true,
-      category: result.category,
-      subcategory: result.subcategory,
-    });
+    res.json(result);
   });
 }

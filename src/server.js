@@ -40,6 +40,9 @@ import {
   userRoutes,
   publicUserRoutes,
 } from "./presentation/routes/users.routes.js";
+import messageRoutes from "./presentation/routes/messageRoutes.js";
+import bookingRoutes from "./presentation/routes/bookingRoutes.js";
+import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -118,6 +121,9 @@ app.use("/api", uploadRoutes);
 app.use("/api", nearbyRoutes);
 app.use("/api", publicUserRoutes);
 app.use("/api", userRoutes);
+app.use("/api", messageRoutes);
+app.use("/api", bookingRoutes);
+app.use("/api/telegram-chats", telegramChatRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅

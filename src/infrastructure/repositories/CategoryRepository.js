@@ -24,7 +24,7 @@ export class CategoryRepository extends ICategoryRepository {
    */
   async findById(id) {
     const category = await prisma.category.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: Number(id) },
     });
 
     return category ? Category.fromDatabase(category) : null;
@@ -36,7 +36,7 @@ export class CategoryRepository extends ICategoryRepository {
   async findSubcategoriesByCategoryId(categoryId) {
     const subcategories = await prisma.subcategory.findMany({
       where: {
-        category_id: BigInt(categoryId),
+        category_id: Number(categoryId),
       },
       orderBy: { name: "asc" },
     });
@@ -61,7 +61,7 @@ export class CategoryRepository extends ICategoryRepository {
   async findSubcategoryById(subcategoryId, categoryId) {
     // Check if category exists
     const category = await prisma.category.findUnique({
-      where: { id: BigInt(categoryId) },
+      where: { id: Number(categoryId) },
     });
 
     if (!category) {
@@ -71,8 +71,8 @@ export class CategoryRepository extends ICategoryRepository {
     // Check if subcategory exists
     const subcategory = await prisma.subcategory.findFirst({
       where: {
-        id: BigInt(subcategoryId),
-        category_id: BigInt(categoryId),
+        id: Number(subcategoryId),
+        category_id: Number(categoryId),
       },
     });
 

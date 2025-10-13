@@ -8,11 +8,17 @@ import { logger } from "../../../core/utils/logger.js";
  * Use case for updating an ad
  */
 export class UpdateAdUseCase {
-  constructor(adRepository) {
+  constructor(adRepository, telegramService) {
     this.adRepository = adRepository;
+    this.telegramService = telegramService;
   }
 
-  async execute(adId, updateData, authenticatedUserId) {
+  async execute(
+    adId,
+    updateData,
+    authenticatedUserId,
+    telegramUpdateType = null
+  ) {
     // Find the ad
     const ad = await this.adRepository.findById(adId);
 
@@ -32,6 +38,29 @@ export class UpdateAdUseCase {
       ad_id: adId,
       user_id: authenticatedUserId,
     });
+
+    // Update in Telegram if requested
+    if (telegramUpdateType && ad.telegram_message_id && ad.telegram_chat_id) {
+      try {
+        await this.telegramService.updateAdStatus(
+          updatedAd,
+          ad.telegram_chat_id,
+          ad.telegram_message_id,
+          ad.telegram_thread_id
+        );
+        logger.info("Ad status updated in Telegram", {
+          ad_id: adId,
+          telegram_chat_id: ad.telegram_chat_id,
+          telegram_message_id: ad.telegram_message_id,
+        });
+      } catch (err) {
+        logger.error("Failed to update ad status in Telegram", {
+          ad_id: adId,
+          error: err.message,
+        });
+        // Don't throw - ad update should succeed even if Telegram fails
+      }
+    }
 
     return updatedAd;
   }

@@ -9,6 +9,7 @@ import { CarRepository } from "../repositories/CarRepository.js";
 import { AdImageRepository } from "../repositories/AdImageRepository.js";
 import { HouseRepository } from "../repositories/HouseRepository.js";
 import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.js";
+import { TelegramChatRepository } from "../repositories/TelegramChatRepository.js";
 
 // Services
 import { TokenService } from "../../application/services/TokenService.improved.js";
@@ -27,6 +28,7 @@ import { DeleteAdUseCase } from "../../application/use-cases/ad/DeleteAdUseCase.
 import { AuthenticateUserUseCase } from "../../application/use-cases/user/AuthenticateUserUseCase.improved.js";
 import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.improved.js";
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
+import { UploadAvatarUseCase } from "../../application/use-cases/user/UploadAvatarUseCase.js";
 import { LogoutUseCase } from "../../application/use-cases/user/LogoutUseCase.js";
 
 // Use Cases - Session
@@ -79,6 +81,13 @@ import { GetHouseInfoUseCase } from "../../application/use-cases/house/GetHouseI
 import { LinkUserToApartmentUseCase } from "../../application/use-cases/house/LinkUserToApartmentUseCase.js";
 import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/house/UnlinkUserFromApartmentUseCase.js";
 
+// Use Cases - TelegramChat
+import { GetTelegramChatsUseCase } from "../../application/use-cases/telegramChat/GetTelegramChatsUseCase.js";
+import { CreateTelegramChatUseCase } from "../../application/use-cases/telegramChat/CreateTelegramChatUseCase.js";
+import { UpdateTelegramChatUseCase } from "../../application/use-cases/telegramChat/UpdateTelegramChatUseCase.js";
+import { DeleteTelegramChatUseCase } from "../../application/use-cases/telegramChat/DeleteTelegramChatUseCase.js";
+import { ToggleTelegramChatActiveUseCase } from "../../application/use-cases/telegramChat/ToggleTelegramChatActiveUseCase.js";
+
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
 import { AuthController } from "../../presentation/controllers/AuthController.improved.js";
@@ -91,6 +100,7 @@ import { CarController } from "../../presentation/controllers/CarController.js";
 import { AdImageController } from "../../presentation/controllers/AdImageController.js";
 import { UploadController } from "../../presentation/controllers/UploadController.js";
 import { HouseController } from "../../presentation/controllers/HouseController.js";
+import { TelegramChatController } from "../../presentation/controllers/TelegramChatController.js";
 
 /**
  * Dependency Injection Container
@@ -147,6 +157,7 @@ export class Container {
     this.register("adImageRepository", () => new AdImageRepository());
     this.register("houseRepository", () => new HouseRepository());
     this.register("refreshTokenRepository", () => new RefreshTokenRepository());
+    this.register("telegramChatRepository", () => new TelegramChatRepository());
 
     // Services
     this.register("tokenService", () => new TokenService());
@@ -186,13 +197,19 @@ export class Container {
       (container) =>
         new CreateAdUseCase(
           container.resolve("adRepository"),
-          container.resolve("userRepository")
+          container.resolve("userRepository"),
+          container.resolve("telegramChatRepository"),
+          container.resolve("telegramService")
         )
     );
 
     this.register(
       "updateAdUseCase",
-      (container) => new UpdateAdUseCase(container.resolve("adRepository"))
+      (container) =>
+        new UpdateAdUseCase(
+          container.resolve("adRepository"),
+          container.resolve("telegramService")
+        )
     );
 
     this.register(
@@ -224,6 +241,12 @@ export class Container {
     this.register(
       "updateUserUseCase",
       (container) => new UpdateUserUseCase(container.resolve("userRepository"))
+    );
+
+    this.register(
+      "uploadAvatarUseCase",
+      (container) =>
+        new UploadAvatarUseCase(container.resolve("userRepository"))
     );
 
     this.register(
@@ -326,7 +349,8 @@ export class Container {
         new UserController(
           container.resolve("updateUserUseCase"),
           container.resolve("userRepository"),
-          container.resolve("adRepository")
+          container.resolve("adRepository"),
+          container.resolve("uploadAvatarUseCase")
         )
     );
 
@@ -573,6 +597,58 @@ export class Container {
       "unlinkUserFromApartmentUseCase",
       (container) =>
         new UnlinkUserFromApartmentUseCase(container.resolve("houseRepository"))
+    );
+
+    // Use Cases - TelegramChat
+    this.register(
+      "getTelegramChatsUseCase",
+      (container) =>
+        new GetTelegramChatsUseCase(container.resolve("telegramChatRepository"))
+    );
+
+    this.register(
+      "createTelegramChatUseCase",
+      (container) =>
+        new CreateTelegramChatUseCase(
+          container.resolve("telegramChatRepository")
+        )
+    );
+
+    this.register(
+      "updateTelegramChatUseCase",
+      (container) =>
+        new UpdateTelegramChatUseCase(
+          container.resolve("telegramChatRepository")
+        )
+    );
+
+    this.register(
+      "deleteTelegramChatUseCase",
+      (container) =>
+        new DeleteTelegramChatUseCase(
+          container.resolve("telegramChatRepository")
+        )
+    );
+
+    this.register(
+      "toggleTelegramChatActiveUseCase",
+      (container) =>
+        new ToggleTelegramChatActiveUseCase(
+          container.resolve("telegramChatRepository")
+        )
+    );
+
+    // Controllers - TelegramChat
+    this.register(
+      "telegramChatController",
+      (container) =>
+        new TelegramChatController(
+          container.resolve("getTelegramChatsUseCase"),
+          container.resolve("createTelegramChatUseCase"),
+          container.resolve("updateTelegramChatUseCase"),
+          container.resolve("deleteTelegramChatUseCase"),
+          container.resolve("toggleTelegramChatActiveUseCase")
+        )
     );
 
     // Controllers - House
