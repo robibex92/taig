@@ -62,5 +62,5 @@ export const AD_SORT_FIELDS = {
   TITLE: "title",
 };
 
-export const API_PREFIX = "/api";
-export const API_VERSION = "v1";
+export const API_PREFIX = "";
+export const API_VERSION = "api-v1";

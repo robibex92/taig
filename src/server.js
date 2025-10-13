@@ -53,6 +53,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 
+// Trust proxy (needed when behind nginx)
+app.set("trust proxy", true);
+
 // ================== Middlewares ==================
 
 // Security
