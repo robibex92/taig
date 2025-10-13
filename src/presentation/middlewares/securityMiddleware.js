@@ -30,6 +30,8 @@ export const generalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Trust proxy for correct IP detection behind Nginx
+  validate: { trustProxy: false }, // Disable validation warning
 });
 
 /**
@@ -45,6 +47,7 @@ export const authLimiter = rateLimit({
       code: "AUTH_RATE_LIMIT_EXCEEDED",
     },
   },
+  validate: { trustProxy: false }, // Disable validation warning
 });
 
 /**
@@ -59,4 +62,5 @@ export const createAdLimiter = rateLimit({
       code: "CREATE_AD_RATE_LIMIT_EXCEEDED",
     },
   },
+  validate: { trustProxy: false }, // Disable validation warning
 });

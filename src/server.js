@@ -54,7 +54,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Trust proxy (needed when behind nginx)
-app.set("trust proxy", true);
+// Use 1 to trust only the first proxy (Nginx)
+app.set("trust proxy", 1);
 
 // ================== Middlewares ==================
 
