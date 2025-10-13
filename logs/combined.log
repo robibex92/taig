@@ -1,0 +1,3 @@
+2025-10-13 10:45:06 [info]: Static files serving {"path":"C:\\Users\\HOME\\Desktop\\site\\taiginsky\\Uploads"}
+2025-10-13 10:45:07 [info]: Database connection successful (Prisma)
+2025-10-13 10:45:07 [info]: Server started {"port":"4000","environment":"production","nodeVersion":"v18.17.0"}
