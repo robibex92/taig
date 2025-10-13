@@ -8,11 +8,9 @@ import {
   getAdsQuerySchema,
 } from "../../core/validation/schemas/ad.schema.js";
 import { createAdLimiter } from "../middlewares/securityMiddleware.js";
-import { API_PREFIX, API_VERSION } from "../../core/constants/index.js";
-
 const router = express.Router();
 const adController = container.resolve("adController");
-const BASE_PATH = `${API_PREFIX}/${API_VERSION}/ads`;
+const BASE_PATH = "/ads";
 
 // Public routes
 router.get(

@@ -96,19 +96,20 @@ logger.info("Static files serving", { path: uploadsStaticPath });
 // ================== API Routes ==================
 
 // ================== Clean Architecture Routes (v1) ==================
-app.use(adsRoutes);
-app.use(authRoutes);
-app.use(postRoutes);
-app.use(telegramRoutes);
-app.use(categoryRoutes);
-app.use(faqRoutes);
-app.use(floorRuleRoutes);
-app.use(carRoutes);
-app.use(adImageRoutes);
-app.use(uploadRoutes);
-app.use(nearbyRoutes);
-app.use(publicUserRoutes);
-app.use(userRoutes);
+// Prefix /api-v1 is applied here, routes define paths without prefix
+app.use("/api-v1", adsRoutes);
+app.use("/api-v1", authRoutes);
+app.use("/api-v1", postRoutes);
+app.use("/api-v1", telegramRoutes);
+app.use("/api-v1", categoryRoutes);
+app.use("/api-v1", faqRoutes);
+app.use("/api-v1", floorRuleRoutes);
+app.use("/api-v1", carRoutes);
+app.use("/api-v1", adImageRoutes);
+app.use("/api-v1", uploadRoutes);
+app.use("/api-v1", nearbyRoutes);
+app.use("/api-v1", publicUserRoutes);
+app.use("/api-v1", userRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅

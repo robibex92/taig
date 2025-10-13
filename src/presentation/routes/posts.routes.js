@@ -1,12 +1,11 @@
 import express from "express";
 import container from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { API_PREFIX, API_VERSION } from "../../core/constants/index.js";
 
 const router = express.Router();
 const postController = container.resolve("postController");
 
-const BASE_ROUTE = `${API_PREFIX}/${API_VERSION}/posts`;
+const BASE_ROUTE = "/posts";
 
 /**
  * @swagger

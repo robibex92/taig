@@ -10,17 +10,17 @@ const authController = container.resolve("authController");
 
 // Public routes
 router.post(
-  "/api-v1/auth/telegram",
+  "/auth/telegram",
   authLimiter,
   validateRequest(telegramAuthSchema, "body"),
   authController.authenticateTelegram
 );
 
-router.post("/api-v1/auth/refresh", authController.refreshToken);
+router.post("/auth/refresh", authController.refreshToken);
 
 // Protected routes
-router.get("/api-v1/auth/session", authenticateJWT, authController.getSession);
+router.get("/auth/session", authenticateJWT, authController.getSession);
 
-router.post("/api-v1/auth/logout", authenticateJWT, authController.logout);
+router.post("/auth/logout", authenticateJWT, authController.logout);
 
 export default router;

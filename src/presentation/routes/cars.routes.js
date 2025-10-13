@@ -5,31 +5,31 @@ const router = express.Router();
 const carController = container.resolve("carController");
 
 /**
- * @route   GET /api-v1/cars
+ * @route   GET /cars
  * @desc    Get all active cars
  * @access  Public
  */
-router.get("/api-v1/cars", carController.getAll);
+router.get("/cars", carController.getAll);
 
 /**
- * @route   GET /api-v1/cars/user/:user_id
+ * @route   GET /cars/user/:user_id
  * @desc    Get cars by user ID
  * @access  Public
  */
-router.get("/api-v1/cars/user/:user_id", carController.getUserCars);
+router.get("/cars/user/:user_id", carController.getUserCars);
 
 /**
- * @route   POST /api-v1/cars
+ * @route   POST /cars
  * @desc    Create new car
  * @access  Private (add auth middleware if needed)
  */
-router.post("/api-v1/cars", carController.create);
+router.post("/cars", carController.create);
 
 /**
- * @route   DELETE /api-v1/cars/:id
+ * @route   DELETE /cars/:id
  * @desc    Soft delete car
  * @access  Private (add auth middleware if needed)
  */
-router.delete("/api-v1/cars/:id", carController.delete);
+router.delete("/cars/:id", carController.delete);
 
 export default router;

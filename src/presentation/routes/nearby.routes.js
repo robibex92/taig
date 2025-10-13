@@ -5,52 +5,52 @@ const router = express.Router();
 const houseController = container.resolve("houseController");
 
 /**
- * @route   GET /api-v1/nearby/houses
+ * @route   GET /nearby/houses
  * @desc    Get all unique houses
  * @access  Public
  */
-router.get("/api-v1/nearby/houses", houseController.getUniqueHouses);
+router.get("/nearby/houses", houseController.getUniqueHouses);
 
 /**
- * @route   GET /api-v1/nearby/entrances
+ * @route   GET /nearby/entrances
  * @desc    Get entrances for a specific house
  * @access  Public
  */
-router.get("/api-v1/nearby/entrances", houseController.getEntrances);
+router.get("/nearby/entrances", houseController.getEntrances);
 
 /**
- * @route   GET /api-v1/nearby
+ * @route   GET /nearby
  * @desc    Get houses by filter (house, entrance, position)
  * @access  Public
  */
-router.get("/api-v1/nearby", houseController.getHousesByFilter);
+router.get("/nearby", houseController.getHousesByFilter);
 
 /**
- * @route   GET /api-v1/nearby/user/:id_telegram
+ * @route   GET /nearby/user/:id_telegram
  * @desc    Get all houses for a user
  * @access  Public
  */
-router.get("/api-v1/nearby/user/:id_telegram", houseController.getUserHouses);
+router.get("/nearby/user/:id_telegram", houseController.getUserHouses);
 
 /**
- * @route   GET /api-v1/nearby/:id/info
+ * @route   GET /nearby/:id/info
  * @desc    Get info for a specific house
  * @access  Public
  */
-router.get("/api-v1/nearby/:id/info", houseController.getHouseInfo);
+router.get("/nearby/:id/info", houseController.getHouseInfo);
 
 /**
- * @route   POST /api-v1/nearby
+ * @route   POST /nearby
  * @desc    Link user to apartment (create or update position)
  * @access  Private (add auth middleware if needed)
  */
-router.post("/api-v1/nearby", houseController.linkUserToApartment);
+router.post("/nearby", houseController.linkUserToApartment);
 
 /**
- * @route   POST /api-v1/nearby/unlink
+ * @route   POST /nearby/unlink
  * @desc    Unlink user from apartment
  * @access  Private (add auth middleware if needed)
  */
-router.post("/api-v1/nearby/unlink", houseController.unlinkUserFromApartment);
+router.post("/nearby/unlink", houseController.unlinkUserFromApartment);
 
 export default router;

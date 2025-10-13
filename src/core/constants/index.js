@@ -62,5 +62,6 @@ export const AD_SORT_FIELDS = {
   TITLE: "title",
 };
 
+// API versioning - prefix /api-v1 is applied in server.js via app.use()
 export const API_PREFIX = "";
-export const API_VERSION = "api-v1";
+export const API_VERSION = "";
