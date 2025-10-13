@@ -36,25 +36,18 @@ import carRoutes from "./presentation/routes/cars.routes.js";
 import adImageRoutes from "./presentation/routes/adImages.routes.js";
 import uploadRoutes from "./presentation/routes/upload.routes.js";
 import nearbyRoutes from "./presentation/routes/nearby.routes.js";
-// import maxAuthRoutes from "./presentation/routes/maxAuth.routes.js"; // Temporarily disabled
 import {
   userRoutes,
   publicUserRoutes,
 } from "./presentation/routes/users.routes.js";
 
-// Legacy routes - ALL MIGRATED! 🎉
-// import routerPosts from "../routes/posts.js"; // MIGRATED ✅
-// import telegramRoutes from "../routes/telegram.js"; // MIGRATED ✅
-// import routerCategories from "../routes/categories.js"; // MIGRATED ✅
-// import routerFaqs from "../routes/faqs.js"; // MIGRATED ✅
-// import routerFloorRules from "../routes/floorRules.js"; // MIGRATED ✅
-// import routerCars from "../routes/cars.js"; // MIGRATED ✅
-// import routerAdImages from "../routes/adImages.js"; // MIGRATED ✅
-// import uploadRouter from "../routes/upload.js"; // MIGRATED ✅
-// import routerNearby from "../routes/nearby.js"; // MIGRATED ✅
-
 // Load environment variables
 dotenv.config();
+
+// Fix BigInt serialization for JSON
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,7 +96,6 @@ logger.info("Static files serving", { path: uploadsStaticPath });
 // ================== Clean Architecture Routes (v1) ==================
 app.use(adsRoutes);
 app.use(authRoutes);
-// app.use(maxAuthRoutes); // Temporarily disabled
 app.use(postRoutes);
 app.use(telegramRoutes);
 app.use(categoryRoutes);

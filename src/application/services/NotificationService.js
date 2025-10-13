@@ -2,14 +2,12 @@ import { logger } from "../../core/utils/logger.js";
 
 /**
  * Notification Service
- * Routes notifications to appropriate platform (Telegram or MAX)
- * Based on user preferences and platform availability
+ * Routes notifications to Telegram
  */
 class NotificationService {
-  constructor({ userRepository, telegramService, maxService }) {
+  constructor({ userRepository, telegramService }) {
     this.userRepository = userRepository;
     this.telegramService = telegramService;
-    this.maxService = maxService;
   }
 
   /**
@@ -41,20 +39,6 @@ class NotificationService {
         );
       }
 
-      if (platforms.includes("max") && user.max_id) {
-        promises.push(
-          this.maxService
-            .sendNotification(user.max_id, notification)
-            .catch((error) => {
-              logger.error("Failed to send MAX notification", {
-                userId,
-                max_id: user.max_id,
-                error: error.message,
-              });
-            })
-        );
-      }
-
       await Promise.all(promises);
 
       logger.info("Notification sent", {
@@ -74,17 +58,9 @@ class NotificationService {
    * Determine which platform(s) to use for notifications
    */
   _getNotificationPlatforms(user) {
-    // If only one platform is linked, use it
-    if (!user.platforms_linked) {
-      if (user.id_telegram) return ["telegram"];
-      if (user.max_id) return ["max"];
-      return [];
-    }
-
-    // Both platforms are linked - check user preference
-    // TODO: Add user setting for "notify_both_platforms"
-    // For now, use primary_platform only
-    return [user.primary_platform];
+    // Use Telegram only
+    if (user.id_telegram) return ["telegram"];
+    return [];
   }
 
   /**

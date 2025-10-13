@@ -1,6 +1,9 @@
-import bot from "../../../services/telegramBot.js";
+import TelegramBot from "node-telegram-bot-api";
 import pLimit from "p-limit";
 import { logger } from "../../core/utils/logger.js";
+
+// Initialize bot instance
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 
 /**
  * Centralized Telegram Service
@@ -10,6 +13,7 @@ export class TelegramService {
   constructor(adRepository = null, postRepository = null) {
     this.adRepository = adRepository;
     this.postRepository = postRepository;
+    this.bot = bot;
 
     // Rate limiting: 1 request at a time with 2 second delay
     this.limit = pLimit(1);

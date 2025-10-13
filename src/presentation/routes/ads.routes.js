@@ -8,24 +8,26 @@ import {
   getAdsQuerySchema,
 } from "../../core/validation/schemas/ad.schema.js";
 import { createAdLimiter } from "../middlewares/securityMiddleware.js";
+import { API_PREFIX, API_VERSION } from "../../core/constants/index.js";
 
 const router = express.Router();
 const adController = container.resolve("adController");
+const BASE_PATH = `${API_PREFIX}/${API_VERSION}/ads`;
 
 // Public routes
 router.get(
-  "/api/ads",
+  BASE_PATH,
   validateRequest(getAdsQuerySchema, "query"),
   adController.getAds
 );
 
-router.get("/api/ads/:id", adController.getAdById);
+router.get(`${BASE_PATH}/:id`, adController.getAdById);
 
-router.post("/api/ads/:id/view_count", adController.incrementViewCount);
+router.post(`${BASE_PATH}/:id/view_count`, adController.incrementViewCount);
 
 // Protected routes
 router.post(
-  "/api/ads",
+  BASE_PATH,
   authenticateJWT,
   createAdLimiter,
   validateRequest(createAdSchema, "body"),
@@ -33,12 +35,12 @@ router.post(
 );
 
 router.patch(
-  "/api/ads/:id",
+  `${BASE_PATH}/:id`,
   authenticateJWT,
   validateRequest(updateAdSchema, "body"),
   adController.updateAd
 );
 
-router.delete("/api/ads/:id", authenticateJWT, adController.deleteAd);
+router.delete(`${BASE_PATH}/:id`, authenticateJWT, adController.deleteAd);
 
 export default router;

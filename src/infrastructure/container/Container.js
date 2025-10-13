@@ -14,7 +14,6 @@ import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.j
 import { TokenService } from "../../application/services/TokenService.js";
 import { TelegramService } from "../../application/services/TelegramService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
-import MaxService from "../../application/services/MaxService.js";
 import NotificationService from "../../application/services/NotificationService.js";
 
 // Use Cases - Ad
@@ -74,14 +73,6 @@ import { GetHouseInfoUseCase } from "../../application/use-cases/house/GetHouseI
 import { LinkUserToApartmentUseCase } from "../../application/use-cases/house/LinkUserToApartmentUseCase.js";
 import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/house/UnlinkUserFromApartmentUseCase.js";
 
-// MAX Auth Use Cases
-import AuthenticateMaxUserUseCase from "../../application/use-cases/auth/AuthenticateMaxUserUseCase.js";
-import LinkMaxAccountUseCase from "../../application/use-cases/auth/LinkMaxAccountUseCase.js";
-import LinkTelegramAccountUseCase from "../../application/use-cases/auth/LinkTelegramAccountUseCase.js";
-import UnlinkPlatformUseCase from "../../application/use-cases/auth/UnlinkPlatformUseCase.js";
-import UpdatePlatformSettingsUseCase from "../../application/use-cases/auth/UpdatePlatformSettingsUseCase.js";
-import GetPlatformsInfoUseCase from "../../application/use-cases/auth/GetPlatformsInfoUseCase.js";
-
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
 import { AuthController } from "../../presentation/controllers/AuthController.js";
@@ -94,7 +85,6 @@ import { CarController } from "../../presentation/controllers/CarController.js";
 import { AdImageController } from "../../presentation/controllers/AdImageController.js";
 import { UploadController } from "../../presentation/controllers/UploadController.js";
 import { HouseController } from "../../presentation/controllers/HouseController.js";
-import MaxAuthController from "../../presentation/controllers/MaxAuthController.js";
 
 /**
  * Dependency Injection Container
@@ -164,9 +154,6 @@ export class Container {
     );
     this.register("fileUploadService", () => new FileUploadService());
 
-    // MAX Service
-    this.register("maxService", () => new MaxService());
-
     // Notification Service
     this.register(
       "notificationService",
@@ -174,7 +161,6 @@ export class Container {
         new NotificationService({
           userRepository: container.resolve("userRepository"),
           telegramService: container.resolve("telegramService"),
-          maxService: container.resolve("maxService"),
         })
     );
 
@@ -558,79 +544,6 @@ export class Container {
         )
     );
 
-    // MAX Auth Use Cases
-    this.register(
-      "authenticateMaxUserUseCase",
-      (container) =>
-        new AuthenticateMaxUserUseCase({
-          userRepository: container.resolve("userRepository"),
-          tokenService: container.resolve("tokenService"),
-          refreshTokenRepository: container.resolve("refreshTokenRepository"),
-          maxService: container.resolve("maxService"),
-        })
-    );
-
-    this.register(
-      "linkMaxAccountUseCase",
-      (container) =>
-        new LinkMaxAccountUseCase({
-          userRepository: container.resolve("userRepository"),
-          maxService: container.resolve("maxService"),
-        })
-    );
-
-    this.register(
-      "linkTelegramAccountUseCase",
-      (container) =>
-        new LinkTelegramAccountUseCase({
-          userRepository: container.resolve("userRepository"),
-        })
-    );
-
-    this.register(
-      "unlinkPlatformUseCase",
-      (container) =>
-        new UnlinkPlatformUseCase({
-          userRepository: container.resolve("userRepository"),
-          refreshTokenRepository: container.resolve("refreshTokenRepository"),
-        })
-    );
-
-    this.register(
-      "updatePlatformSettingsUseCase",
-      (container) =>
-        new UpdatePlatformSettingsUseCase({
-          userRepository: container.resolve("userRepository"),
-        })
-    );
-
-    this.register(
-      "getPlatformsInfoUseCase",
-      (container) =>
-        new GetPlatformsInfoUseCase({
-          userRepository: container.resolve("userRepository"),
-        })
-    );
-
-    // MAX Auth Controller
-    this.register(
-      "maxAuthController",
-      (container) =>
-        new MaxAuthController({
-          authenticateMaxUserUseCase: container.resolve(
-            "authenticateMaxUserUseCase"
-          ),
-          linkMaxAccountUseCase: container.resolve("linkMaxAccountUseCase"),
-          linkTelegramAccountUseCase: container.resolve(
-            "linkTelegramAccountUseCase"
-          ),
-          unlinkPlatformUseCase: container.resolve("unlinkPlatformUseCase"),
-          updatePlatformSettingsUseCase: container.resolve(
-            "updatePlatformSettingsUseCase"
-          ),
-          getPlatformsInfoUseCase: container.resolve("getPlatformsInfoUseCase"),
-        })
-    );
   }
 }
 

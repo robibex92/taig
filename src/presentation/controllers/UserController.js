@@ -38,6 +38,22 @@ export class UserController {
   });
 
   /**
+   * Get user avatar by ID (public)
+   */
+  getUserAvatar = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const user = await this.userRepository.findById(Number(id));
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        photo_url: user.avatar || null,
+        user_id: user.user_id,
+      },
+    });
+  });
+
+  /**
    * Update current user profile
    */
   updateProfile = asyncHandler(async (req, res) => {

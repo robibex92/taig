@@ -61,3 +61,81 @@ TypeError: Post.fromDatabase is not a function
     at PostRepository.findAll (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/infrastructure/repositories/PostRepository.js:29:18)
     at async GetPostsUseCase.execute (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/application/use-cases/post/GetPostsUseCase.js:12:19)
     at async getPosts (file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/PostController.js:34:21)
+2025-10-13 01:02:39 [error]: Do not know how to serialize a BigInt {"path":"/api/v1/ads","method":"GET","ip":"127.0.0.1"}
+TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at stringify (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:1160:12)
+    at ServerResponse.json (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:271:14)
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/AdController.js:34:32
+2025-10-13 01:02:42 [error]: Do not know how to serialize a BigInt {"path":"/api/v1/ads","method":"GET","ip":"127.0.0.1"}
+TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at stringify (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:1160:12)
+    at ServerResponse.json (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:271:14)
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/AdController.js:34:32
+2025-10-13 01:02:44 [error]: Do not know how to serialize a BigInt {"path":"/api/v1/ads","method":"GET","ip":"127.0.0.1"}
+TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at stringify (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:1160:12)
+    at ServerResponse.json (C:\Users\HOME\Desktop\site\taiginsky\backend\node_modules\express\lib\response.js:271:14)
+    at file:///C:/Users/HOME/Desktop/site/taiginsky/backend/src/presentation/controllers/AdController.js:34:32
+2025-10-13 01:04:00 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:24:29 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:24:34 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:25:01 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:25:37 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:26:52 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:31:56 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:32:07 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:32:26 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+2025-10-13 09:32:28 [error]: Uncaught Exception {"error":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
+Error: listen EADDRINUSE: address already in use 0.0.0.0:4000
+    at Server.setupListenHandle [as _listen2] (node:net:1751:16)
+    at listenInCluster (node:net:1799:12)
+    at doListen (node:net:1948:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
