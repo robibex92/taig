@@ -237,58 +237,58 @@ http://localhost:4000/api-docs
 
 #### 🔐 Auth
 
-- `POST /api/v1/auth/telegram` - Telegram авторизация
-- `POST /api/v1/auth/refresh` - Обновление токена
+- `POST /api-v1/auth/telegram` - Telegram авторизация
+- `POST /api-v1/auth/refresh` - Обновление токена
 
 #### 📢 Ads (Объявления)
 
-- `GET /api/v1/ads` - Список объявлений
-- `GET /api/v1/ads/:id` - Одно объявление
-- `POST /api/v1/ads` - Создать объявление
-- `PATCH /api/v1/ads/:id` - Обновить объявление
-- `DELETE /api/v1/ads/:id` - Удалить объявление
+- `GET /api-v1/ads` - Список объявлений
+- `GET /api-v1/ads/:id` - Одно объявление
+- `POST /api-v1/ads` - Создать объявление
+- `PATCH /api-v1/ads/:id` - Обновить объявление
+- `DELETE /api-v1/ads/:id` - Удалить объявление
 
 #### 📰 Posts (Новости)
 
-- `GET /api/v1/posts` - Список новостей
-- `POST /api/v1/posts` - Создать новость
-- `PATCH /api/v1/posts/:id` - Обновить новость
-- `DELETE /api/v1/posts/:id` - Удалить новость
+- `GET /api-v1/posts` - Список новостей
+- `POST /api-v1/posts` - Создать новость
+- `PATCH /api-v1/posts/:id` - Обновить новость
+- `DELETE /api-v1/posts/:id` - Удалить новость
 
 #### 🏠 Nearby/Houses (Квартиры)
 
-- `GET /api/v1/nearby/houses` - Список домов
-- `GET /api/v1/nearby/entrances` - Подъезды дома
-- `GET /api/v1/nearby` - Квартиры с фильтрацией
-- `GET /api/v1/nearby/user/:id` - Квартиры пользователя
-- `POST /api/v1/nearby` - Привязать квартиру
-- `POST /api/v1/nearby/unlink` - Отвязать квартиру
+- `GET /api-v1/nearby/houses` - Список домов
+- `GET /api-v1/nearby/entrances` - Подъезды дома
+- `GET /api-v1/nearby` - Квартиры с фильтрацией
+- `GET /api-v1/nearby/user/:id` - Квартиры пользователя
+- `POST /api-v1/nearby` - Привязать квартиру
+- `POST /api-v1/nearby/unlink` - Отвязать квартиру
 
 #### 🚗 Cars (Автомобили)
 
-- `GET /api/v1/cars` - Список автомобилей
-- `GET /api/v1/cars/user/:id` - Автомобили пользователя
-- `POST /api/v1/cars` - Добавить автомобиль
-- `DELETE /api/v1/cars/:id` - Удалить автомобиль
+- `GET /api-v1/cars` - Список автомобилей
+- `GET /api-v1/cars/user/:id` - Автомобили пользователя
+- `POST /api-v1/cars` - Добавить автомобиль
+- `DELETE /api-v1/cars/:id` - Удалить автомобиль
 
 #### 📸 Images
 
-- `POST /api/v1/upload` - Загрузить изображения
-- `DELETE /api/v1/upload/delete-image` - Удалить изображение
-- `GET /api/v1/ad-images` - Изображения объявления
-- `POST /api/v1/ad-images` - Создать изображения
-- `DELETE /api/v1/ad-images/:id` - Удалить изображение
+- `POST /api-v1/upload` - Загрузить изображения
+- `DELETE /api-v1/upload/delete-image` - Удалить изображение
+- `GET /api-v1/ad-images` - Изображения объявления
+- `POST /api-v1/ad-images` - Создать изображения
+- `DELETE /api-v1/ad-images/:id` - Удалить изображение
 
 #### 📊 Categories
 
-- `GET /api/v1/categories` - Список категорий
-- `GET /api/v1/categories/:id/subcategories` - Подкатегории
+- `GET /api-v1/categories` - Список категорий
+- `GET /api-v1/categories/:id/subcategories` - Подкатегории
 
 #### ❓ FAQs
 
-- `GET /api/v1/faqs` - Список FAQ
-- `PATCH /api/v1/faqs/:id` - Обновить FAQ
-- `DELETE /api/v1/faqs/:id` - Удалить FAQ
+- `GET /api-v1/faqs` - Список FAQ
+- `PATCH /api-v1/faqs/:id` - Обновить FAQ
+- `DELETE /api-v1/faqs/:id` - Удалить FAQ
 
 ---
 
@@ -448,7 +448,7 @@ export class MyController {
 const router = express.Router();
 const controller = container.resolve("myController");
 
-router.get("/api/v1/my-entities", controller.getAll);
+router.get("/api-v1/my-entities", controller.getAll);
 
 export default router;
 ```

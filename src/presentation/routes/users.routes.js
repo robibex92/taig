@@ -16,11 +16,7 @@ publicRouter.get("/ads/user/:user_id", userController.getUserAds);
 // Protected routes
 router.get("/users/me", authenticateJWT, userController.getCurrentUser);
 
-router.get(
-  "/users/me/status",
-  authenticateJWT,
-  userController.getUserStatus
-);
+router.get("/users/me/status", authenticateJWT, userController.getUserStatus);
 
 router.patch(
   "/users/me",
