@@ -21,7 +21,7 @@ class BookingController {
 
   /**
    * Create a new booking
-   * POST /api/v1/bookings
+   * POST /api-v1/bookings
    */
   createBooking = asyncHandler(async (req, res) => {
     const { ad_id, message } = req.body;
@@ -42,7 +42,7 @@ class BookingController {
 
   /**
    * Get bookings for an ad (seller only)
-   * GET /api/v1/bookings/ad/:adId
+   * GET /api-v1/bookings/ad/:adId
    */
   getBookingsByAd = asyncHandler(async (req, res) => {
     const { adId } = req.params;
@@ -64,7 +64,7 @@ class BookingController {
 
   /**
    * Get booking queue for an ad
-   * GET /api/v1/bookings/ad/:adId/queue
+   * GET /api-v1/bookings/ad/:adId/queue
    */
   getBookingQueue = asyncHandler(async (req, res) => {
     const { adId } = req.params;
@@ -82,7 +82,7 @@ class BookingController {
 
   /**
    * Update booking status (confirm/reject)
-   * PATCH /api/v1/bookings/:id/status
+   * PATCH /api-v1/bookings/:id/status
    */
   updateBookingStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -105,7 +105,7 @@ class BookingController {
 
   /**
    * Cancel a booking
-   * DELETE /api/v1/bookings/:id
+   * DELETE /api-v1/bookings/:id
    */
   cancelBooking = asyncHandler(async (req, res) => {
     const { id } = req.params;

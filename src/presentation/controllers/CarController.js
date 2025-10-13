@@ -24,7 +24,7 @@ export class CarController {
   }
 
   /**
-   * GET /api/v1/cars
+   * GET /api-v1/cars
    * Get all active cars
    */
   getAll = asyncHandler(async (req, res) => {
@@ -37,7 +37,7 @@ export class CarController {
   });
 
   /**
-   * GET /api/v1/cars/user/:user_id
+   * GET /api-v1/cars/user/:user_id
    * Get cars by user ID
    */
   getUserCars = asyncHandler(async (req, res) => {
@@ -60,7 +60,7 @@ export class CarController {
   });
 
   /**
-   * POST /api/v1/cars
+   * POST /api-v1/cars
    * Create new car
    */
   create = asyncHandler(async (req, res) => {
@@ -79,7 +79,7 @@ export class CarController {
   });
 
   /**
-   * DELETE /api/v1/cars/:id
+   * DELETE /api-v1/cars/:id
    * Soft delete car
    */
   delete = asyncHandler(async (req, res) => {

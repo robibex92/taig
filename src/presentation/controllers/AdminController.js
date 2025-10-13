@@ -17,7 +17,7 @@ class AdminController {
 
   /**
    * Get all users
-   * GET /api/v1/admin/users
+   * GET /api-v1/admin/users
    */
   getAllUsers = asyncHandler(async (req, res) => {
     const { limit, offset, search, role } = req.query;
@@ -42,7 +42,7 @@ class AdminController {
 
   /**
    * Update user role
-   * PATCH /api/v1/admin/users/:id/role
+   * PATCH /api-v1/admin/users/:id/role
    */
   updateUserRole = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -62,7 +62,7 @@ class AdminController {
 
   /**
    * Get system statistics
-   * GET /api/v1/admin/statistics
+   * GET /api-v1/admin/statistics
    */
   getStatistics = asyncHandler(async (req, res) => {
     const stats = await this.getStatisticsUseCase.execute();

@@ -26,7 +26,7 @@ export class CategoryController {
   }
 
   /**
-   * GET /api/v1/categories
+   * GET /api-v1/categories
    * Get all categories
    */
   getAll = asyncHandler(async (req, res) => {
@@ -39,7 +39,7 @@ export class CategoryController {
   });
 
   /**
-   * GET /api/v1/categories/:id
+   * GET /api-v1/categories/:id
    * Get category by ID
    */
   getById = asyncHandler(async (req, res) => {
@@ -62,7 +62,7 @@ export class CategoryController {
   });
 
   /**
-   * GET /api/v1/categories/:category_id/subcategories
+   * GET /api-v1/categories/:category_id/subcategories
    * Get subcategories for a category
    */
   getSubcategories = asyncHandler(async (req, res) => {
@@ -85,7 +85,7 @@ export class CategoryController {
   });
 
   /**
-   * GET /api/v1/subcategories
+   * GET /api-v1/subcategories
    * Get all subcategories
    */
   getAllSubcategories = asyncHandler(async (req, res) => {
@@ -98,7 +98,7 @@ export class CategoryController {
   });
 
   /**
-   * GET /api/v1/categories/:category_id/subcategories/:subcategory_id
+   * GET /api-v1/categories/:category_id/subcategories/:subcategory_id
    * Get specific subcategory
    */
   getSubcategoryById = asyncHandler(async (req, res) => {

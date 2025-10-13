@@ -25,7 +25,7 @@ export class PostController {
 
   /**
    * Get all posts (with optional status filter)
-   * GET /api/v1/posts?status=active
+   * GET /api-v1/posts?status=active
    */
   getPosts = async (req, res, next) => {
     try {
@@ -44,7 +44,7 @@ export class PostController {
 
   /**
    * Create a new post
-   * POST /api/v1/posts
+   * POST /api-v1/posts
    */
   createPost = async (req, res, next) => {
     try {
@@ -71,7 +71,7 @@ export class PostController {
 
   /**
    * Update a post
-   * PATCH /api/v1/posts/:id
+   * PATCH /api-v1/posts/:id
    */
   updatePost = async (req, res, next) => {
     try {
@@ -95,8 +95,8 @@ export class PostController {
 
   /**
    * Delete (close) a post
-   * PATCH /api/v1/posts/:id/close
-   * or DELETE /api/v1/posts/:id
+   * PATCH /api-v1/posts/:id/close
+   * or DELETE /api-v1/posts/:id
    */
   deletePost = async (req, res, next) => {
     try {

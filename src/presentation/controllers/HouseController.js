@@ -33,7 +33,7 @@ export class HouseController {
   }
 
   /**
-   * GET /api/v1/nearby/houses
+   * GET /api-v1/nearby/houses
    * Get all unique houses
    */
   getUniqueHouses = asyncHandler(async (req, res) => {
@@ -45,7 +45,7 @@ export class HouseController {
   });
 
   /**
-   * GET /api/v1/nearby/entrances
+   * GET /api-v1/nearby/entrances
    * Get entrances for a specific house
    */
   getEntrances = asyncHandler(async (req, res) => {
@@ -64,7 +64,7 @@ export class HouseController {
   });
 
   /**
-   * GET /api/v1/nearby
+   * GET /api-v1/nearby
    * Get houses by filter (house, entrance, position)
    */
   getHousesByFilter = asyncHandler(async (req, res) => {
@@ -87,7 +87,7 @@ export class HouseController {
   });
 
   /**
-   * GET /api/v1/nearby/user/:id_telegram
+   * GET /api-v1/nearby/user/:id_telegram
    * Get all houses for a user
    */
   getUserHouses = asyncHandler(async (req, res) => {
@@ -109,7 +109,7 @@ export class HouseController {
   });
 
   /**
-   * GET /api/v1/nearby/:id/info
+   * GET /api-v1/nearby/:id/info
    * Get info for a specific house
    */
   getHouseInfo = asyncHandler(async (req, res) => {
@@ -131,7 +131,7 @@ export class HouseController {
   });
 
   /**
-   * POST /api/v1/nearby
+   * POST /api-v1/nearby
    * Link user to apartment (create or update position)
    */
   linkUserToApartment = asyncHandler(async (req, res) => {
@@ -155,7 +155,7 @@ export class HouseController {
   });
 
   /**
-   * POST /api/v1/nearby/unlink
+   * POST /api-v1/nearby/unlink
    * Unlink user from apartment
    */
   unlinkUserFromApartment = asyncHandler(async (req, res) => {

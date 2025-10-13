@@ -9,21 +9,21 @@ const publicRouter = express.Router();
 const userController = container.resolve("userController");
 
 // Public routes
-publicRouter.get("/api/v1/users/:id", userController.getUserById);
-publicRouter.get("/api/v1/users/:id/avatar", userController.getUserAvatar);
-publicRouter.get("/api/v1/ads/user/:user_id", userController.getUserAds);
+publicRouter.get("/api-v1/users/:id", userController.getUserById);
+publicRouter.get("/api-v1/users/:id/avatar", userController.getUserAvatar);
+publicRouter.get("/api-v1/ads/user/:user_id", userController.getUserAds);
 
 // Protected routes
-router.get("/api/v1/users/me", authenticateJWT, userController.getCurrentUser);
+router.get("/api-v1/users/me", authenticateJWT, userController.getCurrentUser);
 
 router.get(
-  "/api/v1/users/me/status",
+  "/api-v1/users/me/status",
   authenticateJWT,
   userController.getUserStatus
 );
 
 router.patch(
-  "/api/v1/users/me",
+  "/api-v1/users/me",
   authenticateJWT,
   validateRequest(updateUserSchema, "body"),
   userController.updateProfile

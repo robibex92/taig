@@ -16,7 +16,7 @@ export class FloorRuleController {
   }
 
   /**
-   * GET /api/v1/floor-rules
+   * GET /api-v1/floor-rules
    * Get floor rules by house and entrance
    */
   getAll = asyncHandler(async (req, res) => {
@@ -39,7 +39,7 @@ export class FloorRuleController {
   });
 
   /**
-   * POST /api/v1/floor-rules
+   * POST /api-v1/floor-rules
    * Create or update floor rule (upsert)
    */
   upsert = asyncHandler(async (req, res) => {

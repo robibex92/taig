@@ -42,7 +42,7 @@ const sendMessageSchema = Joi.object({
 
 /**
  * @swagger
- * /api/v1/telegram/send:
+ * /api-v1/telegram/send:
  *   post:
  *     summary: Send message to Telegram
  *     tags: [Telegram]

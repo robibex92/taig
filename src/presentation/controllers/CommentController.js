@@ -21,7 +21,7 @@ class CommentController {
 
   /**
    * Create a new comment
-   * POST /api/v1/comments
+   * POST /api-v1/comments
    */
   createComment = asyncHandler(async (req, res) => {
     const { ad_id, content, parent_id } = req.body;
@@ -43,7 +43,7 @@ class CommentController {
 
   /**
    * Get comments for an ad
-   * GET /api/v1/comments/ad/:adId
+   * GET /api-v1/comments/ad/:adId
    */
   getComments = asyncHandler(async (req, res) => {
     const { adId } = req.params;
@@ -63,7 +63,7 @@ class CommentController {
 
   /**
    * Get comment tree (nested structure)
-   * GET /api/v1/comments/ad/:adId/tree
+   * GET /api-v1/comments/ad/:adId/tree
    */
   getCommentTree = asyncHandler(async (req, res) => {
     const { adId } = req.params;
@@ -80,7 +80,7 @@ class CommentController {
 
   /**
    * Update a comment
-   * PATCH /api/v1/comments/:id
+   * PATCH /api-v1/comments/:id
    */
   updateComment = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -102,7 +102,7 @@ class CommentController {
 
   /**
    * Delete a comment (soft delete)
-   * DELETE /api/v1/comments/:id
+   * DELETE /api-v1/comments/:id
    */
   deleteComment = asyncHandler(async (req, res) => {
     const { id } = req.params;

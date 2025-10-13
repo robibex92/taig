@@ -12,7 +12,7 @@ export class UploadController {
   }
 
   /**
-   * POST /api/v1/upload
+   * POST /api-v1/upload
    * Upload multiple files (up to 10)
    */
   uploadFiles = asyncHandler(async (req, res) => {
@@ -39,7 +39,7 @@ export class UploadController {
   });
 
   /**
-   * DELETE /api/v1/upload/delete-image
+   * DELETE /api-v1/upload/delete-image
    * Delete a file
    */
   deleteFile = asyncHandler(async (req, res) => {

@@ -32,7 +32,7 @@ export class AuthController {
 
   /**
    * Authenticate user via Telegram
-   * POST /api/v1/auth/telegram
+   * POST /api-v1/auth/telegram
    */
   authenticateTelegram = asyncHandler(async (req, res) => {
     const telegramData = req.body;
@@ -74,7 +74,7 @@ export class AuthController {
 
   /**
    * Refresh access token
-   * POST /api/v1/auth/refresh
+   * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
     // Try to get refresh token from cookie (preferred)
@@ -122,7 +122,7 @@ export class AuthController {
 
   /**
    * Get current session user
-   * GET /api/v1/auth/session
+   * GET /api-v1/auth/session
    */
   getSession = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -136,7 +136,7 @@ export class AuthController {
 
   /**
    * Logout user (current session only)
-   * POST /api/v1/auth/logout
+   * POST /api-v1/auth/logout
    */
   logout = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -163,7 +163,7 @@ export class AuthController {
 
   /**
    * Get all user sessions
-   * GET /api/v1/auth/sessions
+   * GET /api-v1/auth/sessions
    */
   getSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -182,7 +182,7 @@ export class AuthController {
 
   /**
    * Revoke a specific session
-   * DELETE /api/v1/auth/sessions/:sessionId
+   * DELETE /api-v1/auth/sessions/:sessionId
    */
   revokeSession = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -198,7 +198,7 @@ export class AuthController {
 
   /**
    * Revoke all sessions except current
-   * POST /api/v1/auth/sessions/revoke-all
+   * POST /api-v1/auth/sessions/revoke-all
    */
   revokeAllOtherSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -217,7 +217,7 @@ export class AuthController {
 
   /**
    * Logout from all devices
-   * POST /api/v1/auth/logout-all
+   * POST /api-v1/auth/logout-all
    */
   logoutAll = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;

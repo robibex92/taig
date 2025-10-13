@@ -22,7 +22,7 @@ const authController = container.resolve("authController");
 
 /**
  * @swagger
- * /api/v1/auth/telegram:
+ * /api-v1/auth/telegram:
  *   post:
  *     summary: Authenticate via Telegram
  *     tags: [Auth]
@@ -71,7 +71,7 @@ router.post(
 
 /**
  * @swagger
- * /api/v1/auth/refresh:
+ * /api-v1/auth/refresh:
  *   post:
  *     summary: Refresh access token
  *     tags: [Auth]
@@ -92,7 +92,7 @@ router.post(
 
 /**
  * @swagger
- * /api/v1/auth/session:
+ * /api-v1/auth/session:
  *   get:
  *     summary: Get current session user
  *     tags: [Auth]
@@ -108,7 +108,7 @@ router.get("/session", authenticateJWT, authController.getSession);
 
 /**
  * @swagger
- * /api/v1/auth/logout:
+ * /api-v1/auth/logout:
  *   post:
  *     summary: Logout from current session
  *     tags: [Auth]
@@ -124,7 +124,7 @@ router.post("/logout", authenticateJWT, authController.logout);
 
 /**
  * @swagger
- * /api/v1/auth/logout-all:
+ * /api-v1/auth/logout-all:
  *   post:
  *     summary: Logout from all sessions
  *     tags: [Auth]
@@ -140,7 +140,7 @@ router.post("/logout-all", authenticateJWT, authController.logoutAll);
 
 /**
  * @swagger
- * /api/v1/auth/sessions:
+ * /api-v1/auth/sessions:
  *   get:
  *     summary: Get all user sessions
  *     tags: [Auth]
@@ -161,7 +161,7 @@ router.get(
 
 /**
  * @swagger
- * /api/v1/auth/sessions/{sessionId}:
+ * /api-v1/auth/sessions/{sessionId}:
  *   delete:
  *     summary: Revoke a specific session
  *     tags: [Auth]
@@ -190,7 +190,7 @@ router.delete(
 
 /**
  * @swagger
- * /api/v1/auth/sessions/revoke-all:
+ * /api-v1/auth/sessions/revoke-all:
  *   post:
  *     summary: Revoke all sessions except current
  *     tags: [Auth]

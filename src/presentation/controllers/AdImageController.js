@@ -31,7 +31,7 @@ export class AdImageController {
   }
 
   /**
-   * POST /api/v1/ad-images
+   * POST /api-v1/ad-images
    * Create images for ad or post
    */
   create = asyncHandler(async (req, res) => {
@@ -58,7 +58,7 @@ export class AdImageController {
   });
 
   /**
-   * GET /api/v1/ad-images
+   * GET /api-v1/ad-images
    * Get images by ad_id or post_id query param
    */
   getByQuery = asyncHandler(async (req, res) => {
@@ -81,7 +81,7 @@ export class AdImageController {
   });
 
   /**
-   * GET /api/v1/ad-images/:id
+   * GET /api-v1/ad-images/:id
    * Get images by ID (tries as ad_id, then post_id)
    */
   getById = asyncHandler(async (req, res) => {
@@ -104,7 +104,7 @@ export class AdImageController {
   });
 
   /**
-   * DELETE /api/v1/ad-images/:id
+   * DELETE /api-v1/ad-images/:id
    * Delete single image
    */
   deleteOne = asyncHandler(async (req, res) => {
@@ -125,7 +125,7 @@ export class AdImageController {
   });
 
   /**
-   * DELETE /api/v1/ad-images
+   * DELETE /api-v1/ad-images
    * Delete multiple images
    */
   deleteMultiple = asyncHandler(async (req, res) => {
@@ -146,7 +146,7 @@ export class AdImageController {
   });
 
   /**
-   * POST /api/v1/ad-images/set-main/:image_id
+   * POST /api-v1/ad-images/set-main/:image_id
    * Set image as main
    */
   setMain = asyncHandler(async (req, res) => {

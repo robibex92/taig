@@ -18,7 +18,7 @@ export class FaqController {
   }
 
   /**
-   * GET /api/v1/faqs
+   * GET /api-v1/faqs
    * Get all FAQs with optional status filter
    */
   getAll = asyncHandler(async (req, res) => {
@@ -38,7 +38,7 @@ export class FaqController {
   });
 
   /**
-   * PATCH /api/v1/faqs/:id
+   * PATCH /api-v1/faqs/:id
    * Update FAQ
    */
   update = asyncHandler(async (req, res) => {
@@ -68,7 +68,7 @@ export class FaqController {
   });
 
   /**
-   * DELETE /api/v1/faqs/:id
+   * DELETE /api-v1/faqs/:id
    * Soft delete FAQ
    */
   delete = asyncHandler(async (req, res) => {

@@ -17,7 +17,7 @@ const BASE_ROUTE = `${API_PREFIX}/${API_VERSION}/posts`;
 
 /**
  * @swagger
- * /api/v1/posts:
+ * /api-v1/posts:
  *   get:
  *     summary: Get all posts
  *     tags: [Posts]
@@ -39,7 +39,7 @@ router.get(BASE_ROUTE, postController.getPosts);
 
 /**
  * @swagger
- * /api/v1/posts:
+ * /api-v1/posts:
  *   post:
  *     summary: Create a new post
  *     tags: [Posts]
@@ -97,7 +97,7 @@ router.post(BASE_ROUTE, authenticateJWT, postController.createPost);
 
 /**
  * @swagger
- * /api/v1/posts/{id}:
+ * /api-v1/posts/{id}:
  *   patch:
  *     summary: Update a post
  *     tags: [Posts]
@@ -142,7 +142,7 @@ router.patch(`${BASE_ROUTE}/:id`, authenticateJWT, postController.updatePost);
 
 /**
  * @swagger
- * /api/v1/posts/{id}/close:
+ * /api-v1/posts/{id}/close:
  *   patch:
  *     summary: Close (delete) a post
  *     tags: [Posts]
@@ -172,7 +172,7 @@ router.patch(
 
 /**
  * @swagger
- * /api/v1/posts/{id}:
+ * /api-v1/posts/{id}:
  *   delete:
  *     summary: Delete a post (alternative endpoint)
  *     tags: [Posts]
