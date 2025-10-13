@@ -15,7 +15,7 @@ module.exports = {
   apps: [
     {
       // Имя приложения
-      name: "taiginsky-backend",
+      name: "taig",
 
       // Скрипт для запуска
       script: "./src/server.js",
