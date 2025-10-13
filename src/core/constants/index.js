@@ -63,4 +63,4 @@ export const AD_SORT_FIELDS = {
 };
 
 export const API_PREFIX = "";
-export const API_VERSION = "";
+export const API_VERSION = "api-v1";
