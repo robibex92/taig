@@ -11,7 +11,7 @@ import { HouseRepository } from "../repositories/HouseRepository.js";
 import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.js";
 
 // Services
-import { TokenService } from "../../application/services/TokenService.js";
+import { TokenService } from "../../application/services/TokenService.improved.js";
 import { TelegramService } from "../../application/services/TelegramService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
 import NotificationService from "../../application/services/NotificationService.js";
