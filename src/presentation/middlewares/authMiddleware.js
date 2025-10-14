@@ -1,10 +1,9 @@
 import { TokenService } from "../../application/services/TokenService.js";
 import { AuthenticationError } from "../../core/errors/AppError.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
-import UserRepository from "../../infrastructure/repositories/UserRepository.js";
+import userRepository from "../../infrastructure/repositories/UserRepository.js";
 
 const tokenService = new TokenService();
-const userRepository = new UserRepository();
 
 /**
  * Middleware to authenticate JWT tokens
