@@ -1,4 +1,7 @@
-import { NotFoundError } from "../../../core/errors/AppError.js";
+import {
+  NotFoundError,
+  ForbiddenError,
+} from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 
 /**
@@ -10,7 +13,18 @@ export class DeletePostUseCase {
     this.telegramService = telegramService;
   }
 
-  async execute(postId) {
+  async execute(postId, user) {
+    // Authorization: Only admins and moderators can delete posts
+    if (!user || (user.status !== "admin" && user.status !== "moderator")) {
+      logger.warn("Unauthorized attempt to delete post", {
+        userId: user?.user_id,
+        status: user?.status,
+        postId,
+      });
+      throw new ForbiddenError(
+        "Only administrators and moderators can delete posts"
+      );
+    }
     // 1. Check if post exists
     const existingPost = await this.postRepository.findById(postId);
     if (!existingPost) {

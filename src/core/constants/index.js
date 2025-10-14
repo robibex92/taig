@@ -41,9 +41,10 @@ export const USER_STATUS = {
 };
 
 export const USER_ROLES = {
-  USER: "user",
+  ACTIVE: "active",      // Обычный пользователь (ранее "user")
   MODERATOR: "moderator",
   ADMIN: "admin",
+  BLOCKED: "blocked",    // Заблокированный пользователь
 };
 
 export const TOKEN_TYPES = {

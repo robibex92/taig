@@ -1,4 +1,7 @@
-import { NotFoundError } from "../../../core/errors/AppError.js";
+import {
+  NotFoundError,
+  ForbiddenError,
+} from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 
 /**
@@ -10,7 +13,18 @@ export class UpdatePostUseCase {
     this.telegramService = telegramService;
   }
 
-  async execute(postId, updateData) {
+  async execute(postId, updateData, user) {
+    // Authorization: Only admins and moderators can update posts
+    if (!user || (user.status !== "admin" && user.status !== "moderator")) {
+      logger.warn("Unauthorized attempt to update post", {
+        userId: user?.user_id,
+        status: user?.status,
+        postId,
+      });
+      throw new ForbiddenError(
+        "Only administrators and moderators can update posts"
+      );
+    }
     // 1. Check if post exists
     const existingPost = await this.postRepository.findById(postId);
     if (!existingPost) {

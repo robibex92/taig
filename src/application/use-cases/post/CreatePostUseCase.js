@@ -1,4 +1,5 @@
 import { logger } from "../../../core/utils/logger.js";
+import { ForbiddenError } from "../../../domain/errors/index.js";
 
 /**
  * Use case for creating a new post
@@ -9,7 +10,17 @@ export class CreatePostUseCase {
     this.telegramService = telegramService;
   }
 
-  async execute(postData, isImportant, selectedChats, photos) {
+  async execute(postData, isImportant, selectedChats, photos, user) {
+    // Authorization: Only admins and moderators can create posts
+    if (!user || (user.status !== "admin" && user.status !== "moderator")) {
+      logger.warn("Unauthorized attempt to create post", {
+        userId: user?.user_id,
+        status: user?.status,
+      });
+      throw new ForbiddenError(
+        "Only administrators and moderators can create posts"
+      );
+    }
     const { title, content, image_url, status, source, marker } = postData;
 
     // 1. Create the post in the database

@@ -1,501 +1,234 @@
-# 🏗️ Taiginsky Backend - Clean Architecture
+# Taiginsky Backend
 
-> Modern, scalable backend built with Clean Architecture principles
-
-## 📋 Содержание
-
-- [О проекте](#о-проекте)
-- [Архитектура](#архитектура)
-- [Технологии](#технологии)
-- [Быстрый старт](#быстрый-старт)
-- [Структура проекта](#структура-проекта)
-- [API Документация](#api-документация)
-- [Миграция](#миграция)
-- [Тестирование](#тестирование)
-
----
-
-## 🎯 О проекте
-
-Backend приложения **Taiginsky** - платформа для управления объявлениями, новостями и взаимодействия с жильцами микрорайона.
-
-### Основные возможности:
-
-- 📢 **Объявления** (Ads) - создание, редактирование, удаление
-- 📰 **Новости** (Posts) - публикация важных новостей
-- 🏠 **Квартиры** (Houses) - управление информацией о жильцах
-- 🚗 **Автомобили** (Cars) - регистрация машин жильцов
-- 📸 **Изображения** (Ad Images) - загрузка и управление фото
-- 💬 **Telegram интеграция** - автоматическая публикация в Telegram каналы
-- ❓ **FAQ** - часто задаваемые вопросы
-- 📊 **Категории** - классификация объявлений
-
----
+> Node.js REST API with Clean Architecture
 
 ## 🏗️ Архитектура
-
-Проект построен на **Clean Architecture** с четким разделением на слои:
-
-```
-┌─────────────────────────────────────┐
-│     Presentation Layer              │
-│  (Controllers, Routes, Validation)  │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│      Application Layer              │
-│    (Use Cases, Services, DTOs)      │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│    Infrastructure Layer             │
-│  (Repositories, DB, External APIs)  │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│      Domain Layer                   │
-│   (Entities, Interfaces, Rules)     │
-└─────────────────────────────────────┘
-```
-
-### Принципы:
-
-- ✅ **SOLID** principles
-- ✅ **Dependency Injection**
-- ✅ **Repository Pattern**
-- ✅ **Use Case Pattern**
-- ✅ **Clean separation of concerns**
-
----
-
-## 🛠️ Технологии
-
-### Core
-
-- **Node.js** 18+ (ES Modules)
-- **Express.js** - веб-фреймворк
-- **PostgreSQL** - база данных
-- **Prisma** - ORM (в процессе миграции)
-
-### Validation & Security
-
-- **Joi** - валидация данных
-- **JWT** - аутентификация
-- **bcrypt** - хеширование паролей
-- **Helmet** - безопасность HTTP заголовков
-- **CORS** - настройка cross-origin запросов
-- **express-rate-limit** - защита от DDoS
-
-### External Services
-
-- **node-telegram-bot-api** - Telegram интеграция
-- **Multer** - загрузка файлов
-- **p-limit** - управление очередями задач
-
-### Logging & Monitoring
-
-- **Winston** - структурированное логирование
-- **Swagger** - API документация
-
-### Development
-
-- **Nodemon** - hot reload
-- **ESLint** - линтинг кода
-- **Prettier** - форматирование кода
-- **Jest** - тестирование (планируется)
-
----
-
-## 🚀 Быстрый старт
-
-### Предварительные требования
-
-- Node.js 18+
-- PostgreSQL 14+
-- npm или yarn
-
-### 1. Установка зависимостей
-
-```bash
-cd backend
-npm install
-```
-
-### 2. Настройка окружения
-
-Создайте файл `.env` в корне `backend/`:
-
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/taiginsky"
-
-# Server
-PORT=4000
-NODE_ENV=development
-
-# JWT
-JWT_ACCESS_SECRET=your_access_secret_key_here
-JWT_REFRESH_SECRET=your_refresh_secret_key_here
-ACCESS_TOKEN_EXPIRY=15m
-REFRESH_TOKEN_EXPIRY=7d
-
-# Telegram
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_default_chat_id
-
-# Frontend URL (for CORS)
-FRONTEND_URL=http://localhost:3000
-```
-
-### 3. Prisma настройка
-
-```bash
-# Генерация Prisma Client
-npm run prisma:generate
-
-# Применить миграции (опционально)
-npm run prisma:migrate
-
-# Открыть Prisma Studio для просмотра БД
-npm run prisma:studio
-```
-
-### 4. Запуск сервера
-
-```bash
-# Development mode (hot reload)
-npm run dev
-
-# Production mode
-npm start
-```
-
-Сервер запустится на `http://localhost:4000`
-
----
-
-## 📁 Структура проекта
 
 ```
 backend/
 ├── src/
-│   ├── domain/                   # Domain Layer
-│   │   ├── entities/            # Бизнес-сущности
-│   │   └── repositories/        # Интерфейсы репозиториев
-│   │
-│   ├── application/             # Application Layer
-│   │   ├── use-cases/          # Бизнес-логика (Use Cases)
-│   │   └── services/           # Сервисы (Telegram, Token, etc.)
-│   │
-│   ├── infrastructure/          # Infrastructure Layer
-│   │   ├── repositories/       # Реализации репозиториев
-│   │   ├── database/           # Подключение к БД
-│   │   ├── container/          # DI Container
-│   │   └── swagger/            # Swagger конфигурация
-│   │
-│   ├── presentation/            # Presentation Layer
-│   │   ├── controllers/        # HTTP контроллеры
-│   │   ├── routes/             # Express routes
-│   │   └── middlewares/        # Express middlewares
-│   │
-│   ├── core/                    # Core utilities
-│   │   ├── errors/             # Кастомные ошибки
-│   │   ├── middlewares/        # Core middlewares
-│   │   ├── utils/              # Утилиты (logger, asyncHandler)
-│   │   └── validation/         # Joi схемы валидации
-│   │
-│   └── server.js               # Точка входа приложения
-│
+│   ├── core/              # Ядро приложения
+│   │   ├── errors/        # Обработка ошибок
+│   │   ├── utils/         # Утилиты
+│   │   └── validation/    # Joi схемы
+│   ├── domain/            # Доменная логика
+│   │   ├── entities/      # Сущности
+│   │   ├── errors/        # Доменные ошибки
+│   │   └── repositories/  # Интерфейсы
+│   ├── application/       # Бизнес-логика
+│   │   ├── services/      # Сервисы
+│   │   └── use-cases/     # Use Cases
+│   ├── infrastructure/    # Внешние зависимости
+│   │   ├── repositories/  # Реализация репозиториев
+│   │   ├── logger/        # Winston logger
+│   │   └── container/     # DI container
+│   └── presentation/      # HTTP слой
+│       ├── controllers/   # Контроллеры
+│       ├── routes/        # Маршруты
+│       └── middlewares/   # Middleware
 ├── prisma/
-│   ├── schema.prisma           # Prisma схема
-│   ├── schema_improved.prisma  # Улучшенная схема (для миграции)
-│   └── migrations/             # SQL миграции
-│
-├── config/                      # Legacy конфигурация (to be removed)
-├── routes/                      # Legacy routes (to be removed)
-├── Uploads/                     # Загруженные файлы
-├── logs/                        # Логи приложения
-│
-├── package.json
-├── .env
-└── README.md
+│   ├── schema.prisma      # Database schema
+│   └── migrations/        # Миграции
+└── server.js
 ```
 
----
+## 🚀 Запуск
 
-## 📚 API Документация
+### Development
 
-### Swagger UI
-
-После запуска сервера, Swagger UI доступен по адресу:
-
+```bash
+npm install
+cp env.template .env
+npx prisma migrate dev
+npm run dev
 ```
-http://localhost:4000/api-docs
+
+### Production
+
+```bash
+npm install --production
+npx prisma migrate deploy
+npx pm2 start ecosystem.config.cjs
 ```
 
-### Основные эндпоинты
+## 📡 API Endpoints
 
-#### 🔐 Auth
+### Authentication
 
-- `POST /api-v1/auth/telegram` - Telegram авторизация
-- `POST /api-v1/auth/refresh` - Обновление токена
+- `POST /api/auth/telegram` - Telegram OAuth
+- `POST /api/auth/refresh` - Refresh token
 
-#### 📢 Ads (Объявления)
+### Ads (Объявления)
 
-- `GET /api-v1/ads` - Список объявлений
-- `GET /api-v1/ads/:id` - Одно объявление
-- `POST /api-v1/ads` - Создать объявление
-- `PATCH /api-v1/ads/:id` - Обновить объявление
-- `DELETE /api-v1/ads/:id` - Удалить объявление
+- `GET /api/ads` - Список объявлений
+- `POST /api/ads` - Создать объявление
+- `GET /api/ads/:id` - Детали объявления
+- `PATCH /api/ads/:id` - Обновить объявление
+- `DELETE /api/ads/:id` - Удалить объявление
 
-#### 📰 Posts (Новости)
+### Posts (Новости)
 
-- `GET /api-v1/posts` - Список новостей
-- `POST /api-v1/posts` - Создать новость
-- `PATCH /api-v1/posts/:id` - Обновить новость
-- `DELETE /api-v1/posts/:id` - Удалить новость
+- `GET /api/posts` - Список новостей
+- `POST /api/posts` - Создать новость (admin/moderator)
+- `PATCH /api/posts/:id` - Обновить новость (admin/moderator)
+- `DELETE /api/posts/:id` - Удалить новость (admin/moderator)
 
-#### 🏠 Nearby/Houses (Квартиры)
+### FAQs
 
-- `GET /api-v1/nearby/houses` - Список домов
-- `GET /api-v1/nearby/entrances` - Подъезды дома
-- `GET /api-v1/nearby` - Квартиры с фильтрацией
-- `GET /api-v1/nearby/user/:id` - Квартиры пользователя
-- `POST /api-v1/nearby` - Привязать квартиру
-- `POST /api-v1/nearby/unlink` - Отвязать квартиру
+- `GET /api/faqs` - Список FAQ
+- `POST /api/faqs` - Создать FAQ (admin)
+- `PATCH /api/faqs/:id` - Обновить FAQ (admin)
+- `DELETE /api/faqs/:id` - Удалить FAQ (admin)
 
-#### 🚗 Cars (Автомобили)
+### Admin
 
-- `GET /api-v1/cars` - Список автомобилей
-- `GET /api-v1/cars/user/:id` - Автомобили пользователя
-- `POST /api-v1/cars` - Добавить автомобиль
-- `DELETE /api-v1/cars/:id` - Удалить автомобиль
+- `GET /api/admin/users` - Список пользователей (admin)
+- `PATCH /api/admin/users/:id/role` - Изменить роль (admin)
+- `GET /api/admin/statistics` - Статистика (admin)
 
-#### 📸 Images
+**Swagger:** http://localhost:4000/api-docs
 
-- `POST /api-v1/upload` - Загрузить изображения
-- `DELETE /api-v1/upload/delete-image` - Удалить изображение
-- `GET /api-v1/ad-images` - Изображения объявления
-- `POST /api-v1/ad-images` - Создать изображения
-- `DELETE /api-v1/ad-images/:id` - Удалить изображение
+## 🔐 Безопасность
 
-#### 📊 Categories
+### Реализовано
 
-- `GET /api-v1/categories` - Список категорий
-- `GET /api-v1/categories/:id/subcategories` - Подкатегории
+1. **SQL Injection** - Prisma ORM с параметризованными запросами
+2. **XSS** - Sanitization middleware (`xss`, `dompurify`)
+3. **CSRF** - CORS настройка
+4. **Rate Limiting** - `express-rate-limit`
+5. **Idempotency** - `Idempotency-Key` header
+6. **Input Validation** - Joi schemas
+7. **JWT Auth** - Access + Refresh tokens
 
-#### ❓ FAQs
+### Middleware
 
-- `GET /api-v1/faqs` - Список FAQ
-- `PATCH /api-v1/faqs/:id` - Обновить FAQ
-- `DELETE /api-v1/faqs/:id` - Удалить FAQ
+```javascript
+// Защищенный маршрут
+router.post(
+  "/bookings",
+  authenticateJWT, // JWT проверка
+  idempotencyMiddleware, // Идемпотентность
+  validationMiddleware(createBookingSchema), // Валидация
+  bookingController.create
+);
+```
 
----
+## 🗄️ База данных
 
-## 🔄 Миграция
+### Prisma Commands
 
-Проект полностью мигрирован из legacy архитектуры в Clean Architecture.
+```bash
+npx prisma migrate dev     # Создать и применить миграцию
+npx prisma migrate deploy  # Применить на production
+npx prisma generate        # Сгенерировать Prisma Client
+npx prisma studio          # GUI для БД
+npx prisma db seed         # Заполнить тестовыми данными
+```
 
-### Документы миграции:
+### Основные модели
 
-- `MIGRATION_COMPLETE.md` - полный отчет о миграции
-- `MIGRATION_PROGRESS.md` - прогресс миграции
-- `QUICK_START.md` - быстрый старт после миграции
+- `User` - Пользователи
+- `Ad` - Объявления
+- `Post` - Новости
+- `Booking` - Бронирования
+- `Chat` / `Message` - Чаты
+- `House` - Квартиры
+- `FAQ` - FAQ
 
-### Статус: ✅ 100% завершено
+## 🤖 Telegram Bot
 
-Все legacy routes мигрированы:
+### Конфигурация
 
-- ✅ Posts
-- ✅ Categories/Subcategories
-- ✅ FAQs
-- ✅ Floor Rules
-- ✅ Cars
-- ✅ Ad Images
-- ✅ Upload
-- ✅ Nearby/Houses
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
 
----
+### Функции
+
+- Публикация новостей в группы
+- Отправка объявлений
+- Управление топиками (threads)
+- Редактирование/удаление сообщений
+
+## 📊 PM2 (Production)
+
+```bash
+# Управление
+npx pm2 start ecosystem.config.cjs
+npx pm2 restart taig
+npx pm2 stop taig
+npx pm2 delete taig
+
+# Логи
+npx pm2 logs taig
+npx pm2 logs taig --lines 100
+
+# Мониторинг
+npx pm2 list
+npx pm2 monit
+```
 
 ## 🧪 Тестирование
 
-### Запуск тестов
-
 ```bash
-# Unit тесты
-npm test
-
-# С покрытием
-npm run test:coverage
-
-# Watch mode
-npm run test:watch
+npm test              # Запустить тесты
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
 ```
 
-### Структура тестов
+## 📝 Переменные окружения
 
-```
-backend/tests/
-├── unit/
-│   ├── use-cases/
-│   ├── services/
-│   └── repositories/
-└── integration/
-    └── api/
-```
+```env
+# Server
+PORT=4000
+NODE_ENV=production
 
----
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/taiginsky
 
-## 🔧 Скрипты
+# JWT
+JWT_SECRET=your_secret
+JWT_REFRESH_SECRET=your_refresh_secret
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
 
-```bash
-# Development
-npm run dev              # Запуск с hot reload
+# Telegram
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=your_chat_id
 
-# Production
-npm start                # Запуск production сервера
-
-# Prisma
-npm run prisma:generate  # Генерация Prisma Client
-npm run prisma:migrate   # Применить миграции
-npm run prisma:studio    # Открыть Prisma Studio
-npm run prisma:pull      # Получить схему из БД
-npm run prisma:push      # Отправить схему в БД
-
-# Linting
-npm run lint             # Проверка кода
-npm run lint:fix         # Автофикс проблем
-
-# Testing
-npm test                 # Запуск тестов
-npm run test:watch       # Тесты в watch mode
+# CORS
+FRONTEND_URL=http://localhost:3000
 ```
 
----
-
-## 📝 Примеры использования
-
-### Создание нового модуля
-
-1. **Entity** (`src/domain/entities/`)
+## 🔄 Use Cases Pattern
 
 ```javascript
-export class MyEntity {
-  constructor(data) {
-    this.id = data.id;
-    // ...
+// Example: CreateAdUseCase
+export class CreateAdUseCase {
+  constructor(adRepository, imageService) {
+    this.adRepository = adRepository;
+    this.imageService = imageService;
   }
 
-  static fromDatabase(row) {
-    return new MyEntity(row);
+  async execute(adData, user) {
+    // Validation
+    if (!user) throw new UnauthorizedError();
+
+    // Business logic
+    const ad = await this.adRepository.create({
+      ...adData,
+      user_id: user.id,
+      status: "active",
+    });
+
+    return ad;
   }
 }
 ```
 
-2. **Repository Interface** (`src/domain/repositories/`)
+## 📚 Ресурсы
 
-```javascript
-export class IMyRepository {
-  async findAll() {
-    throw new Error("Not implemented");
-  }
-}
-```
-
-3. **Repository Implementation** (`src/infrastructure/repositories/`)
-
-```javascript
-export class MyRepository extends IMyRepository {
-  async findAll() {
-    const { rows } = await pool.query("SELECT * FROM my_table");
-    return rows.map((row) => MyEntity.fromDatabase(row));
-  }
-}
-```
-
-4. **Use Case** (`src/application/use-cases/my-module/`)
-
-```javascript
-export class GetMyEntitiesUseCase {
-  constructor(myRepository) {
-    this.myRepository = myRepository;
-  }
-
-  async execute(filters) {
-    return await this.myRepository.findAll(filters);
-  }
-}
-```
-
-5. **Controller** (`src/presentation/controllers/`)
-
-```javascript
-export class MyController {
-  constructor(getMyEntitiesUseCase) {
-    this.getMyEntitiesUseCase = getMyEntitiesUseCase;
-  }
-
-  getAll = asyncHandler(async (req, res) => {
-    const entities = await this.getMyEntitiesUseCase.execute(req.query);
-    res.json({ success: true, data: entities });
-  });
-}
-```
-
-6. **Routes** (`src/presentation/routes/`)
-
-```javascript
-const router = express.Router();
-const controller = container.resolve("myController");
-
-router.get("/api-v1/my-entities", controller.getAll);
-
-export default router;
-```
-
-7. **Register in Container** (`src/infrastructure/container/Container.js`)
-
-```javascript
-this.register("myRepository", () => new MyRepository());
-this.register(
-  "getMyEntitiesUseCase",
-  (c) => new GetMyEntitiesUseCase(c.resolve("myRepository"))
-);
-this.register(
-  "myController",
-  (c) => new MyController(c.resolve("getMyEntitiesUseCase"))
-);
-```
-
----
-
-## 🤝 Contributing
-
-1. Создайте feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit изменения (`git commit -m 'Add amazing feature'`)
-3. Push в branch (`git push origin feature/amazing-feature`)
-4. Создайте Pull Request
-
-### Стандарты кода:
-
-- ESLint конфигурация проекта
-- Prettier для форматирования
-- Clean Architecture принципы
-- SOLID принципы
-- JSDoc комментарии для публичных методов
-
----
-
-## 📄 Лицензия
-
-Proprietary - Taiginsky Project
-
----
-
-## 📞 Контакты
-
-Вопросы и предложения: [your-email@example.com]
-
----
-
-**Создано с ❤️ для Taiginsky community**
+- [Полная документация](../PROJECT_DOCUMENTATION.md)
+- [Prisma Docs](https://www.prisma.io/docs)
+- [Express.js Docs](https://expressjs.com/)

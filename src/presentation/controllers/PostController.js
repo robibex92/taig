@@ -56,7 +56,8 @@ export class PostController {
         postData,
         isImportant,
         selectedChats,
-        photos
+        photos,
+        req.user // Pass authenticated user
       );
 
       res.status(201).json({
@@ -79,8 +80,9 @@ export class PostController {
       const validatedData = validate(updatePostSchema, req.body);
 
       const updatedPost = await this.updatePostUseCase.execute(
-        id,
-        validatedData
+        parseInt(id),
+        validatedData,
+        req.user // Pass authenticated user
       );
 
       res.json({
@@ -102,7 +104,10 @@ export class PostController {
     try {
       const { id } = req.params;
 
-      const result = await this.deletePostUseCase.execute(id);
+      const result = await this.deletePostUseCase.execute(
+        parseInt(id),
+        req.user
+      );
 
       res.json(result);
     } catch (error) {
