@@ -241,10 +241,27 @@ export class BookingRepository {
         orderBy: { created_at: "desc" },
       });
 
-      return bookings.map((booking) => BookingEntity.fromDatabase(booking));
+      // Safely convert BigInt fields
+      return bookings.map((booking) => {
+        const safeBooking = {
+          ...booking,
+          id: booking.id,
+          ad_id: booking.ad_id,
+          user_id: booking.user_id,
+          ad: booking.ad
+            ? {
+                ...booking.ad,
+                id: booking.ad.id,
+                user_id: booking.ad.user_id,
+              }
+            : null,
+        };
+        return BookingEntity.fromDatabase(safeBooking);
+      });
     } catch (error) {
       logger.error("Error finding user bookings", {
         error: error.message,
+        stack: error.stack,
         userId,
       });
       throw new DatabaseError("Failed to find user bookings", error);

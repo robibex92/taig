@@ -50,7 +50,7 @@ export class CancelBookingUseCase {
       const cancelledBooking = await this.bookingRepository.cancel(bookingId);
 
       // Send Telegram notification to seller (non-blocking)
-      const telegramService = new TelegramService();
+      const telegramService = new TelegramService(this.adRepository);
       telegramService.queueTask(async () => {
         try {
           const ad = await this.adRepository.findById(booking.ad_id);
@@ -68,6 +68,14 @@ export class CancelBookingUseCase {
                 adId: ad.id.toString(),
               });
             }
+
+            // Update booking count in all Telegram messages for this ad
+            const activeCount =
+              await this.bookingRepository.countActiveBookings(booking.ad_id);
+            await telegramService.updateAdBookingCount({
+              adId: booking.ad_id,
+              activeBookings: activeCount, // New count after cancellation
+            });
           }
         } catch (err) {
           logger.error(

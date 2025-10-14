@@ -1,5 +1,6 @@
 import { HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
+import { logger } from "../../core/utils/logger.js";
 
 /**
  * Ad Controller - handles HTTP requests for ads
@@ -11,7 +12,8 @@ export class AdController {
     createAdUseCase,
     updateAdUseCase,
     deleteAdUseCase,
-    adRepository
+    adRepository,
+    telegramService
   ) {
     this.getAdsUseCase = getAdsUseCase;
     this.getAdByIdUseCase = getAdByIdUseCase;
@@ -19,6 +21,7 @@ export class AdController {
     this.updateAdUseCase = updateAdUseCase;
     this.deleteAdUseCase = deleteAdUseCase;
     this.adRepository = adRepository;
+    this.telegramService = telegramService;
   }
 
   /**
@@ -172,11 +175,74 @@ export class AdController {
       );
     }
 
+    // Delete from Telegram BEFORE deleting from database
+    try {
+      const telegramMessages =
+        await this.adRepository.getTelegramMessagesByAdId(Number(id));
+
+      if (telegramMessages && telegramMessages.length > 0) {
+        logger.info(
+          `Deleting ${telegramMessages.length} Telegram messages for ad ${id} from all chats`,
+          {
+            ad_id: id,
+            message_count: telegramMessages.length,
+          }
+        );
+
+        // Delete each message from Telegram (all chats/threads where it was posted)
+        const deletePromises = telegramMessages.map(async (msg) => {
+          try {
+            return await this.telegramService.deleteMessage({
+              chatId: msg.chat_id,
+              messageId: msg.message_id,
+              threadId: msg.thread_id || undefined,
+            });
+          } catch (err) {
+            logger.error(
+              `Failed to delete Telegram message ${msg.message_id} from chat ${msg.chat_id}`,
+              {
+                error: err.message,
+                chat_id: msg.chat_id,
+                message_id: msg.message_id,
+                ad_id: id,
+              }
+            );
+            // Continue even if some messages fail to delete
+            return { success: false, error: err.message };
+          }
+        });
+
+        const results = await Promise.allSettled(deletePromises);
+        const successCount = results.filter(
+          (r) => r.status === "fulfilled" && r.value?.success
+        ).length;
+
+        logger.info(
+          `Deleted ${successCount}/${telegramMessages.length} Telegram messages for permanently deleted ad`,
+          {
+            ad_id: id,
+            success_count: successCount,
+            total_count: telegramMessages.length,
+          }
+        );
+      }
+    } catch (err) {
+      logger.error(
+        "Failed to delete Telegram messages, but continuing with database deletion",
+        {
+          error: err.message,
+          ad_id: id,
+        }
+      );
+      // Don't throw - we still want to delete from database even if Telegram fails
+    }
+
+    // Now delete from database (includes telegram_messages table cascade)
     await this.adRepository.permanentDelete(Number(id));
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: "Ad permanently deleted from database",
+      message: "Ad permanently deleted from database and Telegram",
     });
   });
 

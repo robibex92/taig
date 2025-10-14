@@ -79,7 +79,7 @@ export class CreateBookingUseCase {
       });
 
       // Send Telegram notification to seller (non-blocking)
-      const telegramService = new TelegramService();
+      const telegramService = new TelegramService(this.adRepository);
       telegramService.queueTask(async () => {
         try {
           const seller = await this.userRepository.findById(ad.user_id);
@@ -94,6 +94,12 @@ export class CreateBookingUseCase {
               adId: ad.id.toString(),
             });
           }
+
+          // Update booking count in all Telegram messages for this ad
+          await telegramService.updateAdBookingCount({
+            adId,
+            activeBookings: bookingOrder, // New total count after this booking
+          });
         } catch (err) {
           logger.error("Failed to send booking Telegram notification", {
             error: err.message,

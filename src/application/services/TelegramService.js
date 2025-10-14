@@ -227,6 +227,119 @@ export class TelegramService {
   }
 
   /**
+   * Update Telegram ad messages with booking count
+   * @param {Object} options - { adId, activeBookings }
+   */
+  async updateAdBookingCount({ adId, activeBookings }) {
+    try {
+      if (!this.adRepository) {
+        logger.warn("AdRepository not initialized in TelegramService");
+        return { success: false, error: "Repository not available" };
+      }
+
+      // Get all Telegram messages for this ad
+      const messages = await this.adRepository.getTelegramMessagesByAdId(adId);
+
+      if (!messages || messages.length === 0) {
+        logger.info("No Telegram messages found for ad", { adId });
+        return { success: true, updated: 0 };
+      }
+
+      logger.info(
+        `Updating ${messages.length} Telegram messages with booking count`,
+        {
+          adId,
+          activeBookings,
+        }
+      );
+
+      // Get ad details
+      const ad = await this.adRepository.findById(adId);
+      if (!ad) {
+        throw new Error(`Ad ${adId} not found`);
+      }
+
+      // Prepare booking status text
+      const bookingText =
+        activeBookings > 0
+          ? `\n\n📌 <b>Забронировало: ${activeBookings} ${this._getPersonWord(
+              activeBookings
+            )}</b>`
+          : "";
+
+      // Update each message
+      const updatePromises = messages.map(async (msg) => {
+        try {
+          // Get original caption (without previous booking count)
+          let baseCaption =
+            msg.caption || `${ad.title}\n\n${ad.content}\n\nЦена: ${ad.price}`;
+
+          // Remove old booking count if exists
+          baseCaption = baseCaption.replace(
+            /\n\n📌 <b>Забронировало:.*?<\/b>/g,
+            ""
+          );
+
+          // Add new booking count
+          const updatedCaption = `${baseCaption}${bookingText}`;
+
+          return await this.editMessageCaption({
+            chatId: msg.chat_id,
+            messageId: msg.message_id,
+            caption: updatedCaption,
+            threadId: msg.thread_id || undefined,
+            parse_mode: "HTML",
+          });
+        } catch (err) {
+          logger.error(`Failed to update Telegram message ${msg.message_id}`, {
+            error: err.message,
+            chat_id: msg.chat_id,
+            message_id: msg.message_id,
+          });
+          return { success: false, error: err.message };
+        }
+      });
+
+      const results = await Promise.allSettled(updatePromises);
+      const successCount = results.filter(
+        (r) => r.status === "fulfilled" && r.value?.success
+      ).length;
+
+      logger.info(
+        `Updated ${successCount}/${messages.length} Telegram messages with booking count`,
+        {
+          adId,
+          activeBookings,
+        }
+      );
+
+      return { success: true, updated: successCount, total: messages.length };
+    } catch (error) {
+      logger.error("Error updating Telegram ad booking count", {
+        error: error.message,
+        adId,
+      });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Helper: Get correct word form for "person" (человек/человека/человек)
+   */
+  _getPersonWord(count) {
+    if (count % 10 === 1 && count % 100 !== 11) {
+      return "человек";
+    } else if (
+      [2, 3, 4].includes(count % 10) &&
+      ![12, 13, 14].includes(count % 100)
+    ) {
+      return "человека";
+    } else {
+      return "человек";
+    }
+  }
+
+  /**
    * Delete Telegram message
    */
   async deleteMessage({ chatId, messageId, threadId }) {

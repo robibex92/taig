@@ -325,7 +325,8 @@ export class Container {
           container.resolve("createAdUseCase"),
           container.resolve("updateAdUseCase"),
           container.resolve("deleteAdUseCase"),
-          container.resolve("adRepository")
+          container.resolve("adRepository"),
+          container.resolve("telegramService")
         )
     );
 

@@ -432,6 +432,7 @@ export class AdRepository extends IAdRepository {
 
   /**
    * Get Telegram messages for an ad
+   * Returns all messages across all chats/threads where this ad was posted
    */
   async getTelegramMessagesByAdId(adId) {
     try {
@@ -440,8 +441,14 @@ export class AdRepository extends IAdRepository {
           ad_id: BigInt(adId),
         },
         orderBy: {
-          created_at: "desc",
+          created_at: "asc",
         },
+      });
+
+      logger.info("Retrieved Telegram messages for ad", {
+        ad_id: adId,
+        message_count: messages.length,
+        chats: [...new Set(messages.map((m) => m.chat_id))].length,
       });
 
       return messages;
@@ -451,6 +458,30 @@ export class AdRepository extends IAdRepository {
         adId,
       });
       throw new DatabaseError("Failed to get telegram messages", error);
+    }
+  }
+
+  /**
+   * Get Telegram message by message_id and chat_id
+   * Used for finding which ad a user replied to
+   */
+  async getTelegramMessageByMessageId(messageId, chatId) {
+    try {
+      const message = await prisma.telegramMessage.findFirst({
+        where: {
+          message_id: messageId.toString(),
+          chat_id: chatId.toString(),
+        },
+      });
+
+      return message;
+    } catch (error) {
+      logger.error("Error getting telegram message by message ID", {
+        error: error.message,
+        messageId,
+        chatId,
+      });
+      throw new DatabaseError("Failed to get telegram message", error);
     }
   }
 

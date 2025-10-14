@@ -44,6 +44,9 @@ import messageRoutes from "./presentation/routes/messageRoutes.js";
 import bookingRoutes from "./presentation/routes/bookingRoutes.js";
 import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
 
+// Telegram Bot
+import telegramBot from "./application/services/TelegramBot.js";
+
 // Load environment variables
 dotenv.config();
 
@@ -105,6 +108,12 @@ app.use("/uploads", express.static(uploadsStaticPath));
 logger.info("Static files serving", { path: uploadsStaticPath });
 
 // ================== API Routes ==================
+
+// Telegram webhook (if using webhook mode)
+if (process.env.TELEGRAM_WEBHOOK_URL) {
+  app.use(telegramBot.getWebhookMiddleware());
+  logger.info("Telegram webhook middleware registered");
+}
 
 // ================== Clean Architecture Routes (v1) ==================
 // Prefix /api is applied here (Nginx rewrites /api-v1/ → /api/)
@@ -205,6 +214,11 @@ testConnection().then((connected) => {
       environment: NODE_ENV,
       nodeVersion: process.version,
     });
+
+    // Start Telegram bot
+    telegramBot.launch().catch((err) => {
+      logger.error("Failed to start Telegram bot", { error: err.message });
+    });
   });
 });
 
@@ -212,6 +226,13 @@ testConnection().then((connected) => {
 
 const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received. Starting graceful shutdown...`);
+
+  // Stop Telegram bot
+  try {
+    await telegramBot.stop();
+  } catch (err) {
+    logger.error("Error stopping Telegram bot", { error: err.message });
+  }
 
   // Close server
   process.exit(0);
