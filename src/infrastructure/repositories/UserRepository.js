@@ -268,7 +268,13 @@ export class UserRepository extends IUserRepository {
 
       // Status/role filter
       if (status) {
-        where.status = status;
+        // For "active" status (regular users), include both "active" and NULL
+        if (status === "active") {
+          where.OR = where.OR || [];
+          where.OR.push({ status: "active" }, { status: null });
+        } else {
+          where.status = status;
+        }
       }
 
       const users = await prisma.user.findMany({
@@ -306,7 +312,13 @@ export class UserRepository extends IUserRepository {
 
       // Status/role filter
       if (filters.status) {
-        where.status = filters.status;
+        // For "active" status (regular users), include both "active" and NULL
+        if (filters.status === "active") {
+          where.OR = where.OR || [];
+          where.OR.push({ status: "active" }, { status: null });
+        } else {
+          where.status = filters.status;
+        }
       }
 
       const count = await prisma.user.count({ where });
