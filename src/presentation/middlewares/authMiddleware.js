@@ -1,8 +1,10 @@
 import { TokenService } from "../../application/services/TokenService.js";
 import { AuthenticationError } from "../../core/errors/AppError.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
+import UserRepository from "../../infrastructure/repositories/UserRepository.js";
 
 const tokenService = new TokenService();
+const userRepository = new UserRepository();
 
 /**
  * Middleware to authenticate JWT tokens
@@ -26,7 +28,20 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     throw new AuthenticationError("Invalid token");
   }
 
-  req.user = { user_id: decoded.id };
+  // Load full user data from database to get status field
+  const user = await userRepository.findById(decoded.id);
+  
+  if (!user) {
+    throw new AuthenticationError("User not found");
+  }
+
+  req.user = {
+    user_id: user.user_id,
+    status: user.status || "active",
+    username: user.username,
+    first_name: user.first_name,
+  };
+  
   next();
 });
 
@@ -50,7 +65,24 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = tokenService.verifyToken(token);
-    req.user = decoded ? { user_id: decoded.id } : null;
+    
+    if (decoded && decoded.id) {
+      // Load full user data from database
+      const user = await userRepository.findById(decoded.id);
+      
+      if (user) {
+        req.user = {
+          user_id: user.user_id,
+          status: user.status || "active",
+          username: user.username,
+          first_name: user.first_name,
+        };
+      } else {
+        req.user = null;
+      }
+    } else {
+      req.user = null;
+    }
   } catch (error) {
     req.user = null;
   }
