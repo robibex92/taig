@@ -1,4 +1,5 @@
-import { NotFoundError } from "../../../core/errors/AppError.js";
+import { NotFoundError } from "../../../domain/errors/index.js";
+import logger from "../../../infrastructure/logger/index.js";
 
 /**
  * Use case for getting house info
@@ -9,12 +10,21 @@ export class GetHouseInfoUseCase {
   }
 
   async execute(houseId) {
-    const house = await this.houseRepository.findById(houseId);
+    try {
+      const house = await this.houseRepository.findById(houseId);
 
-    if (!house) {
-      throw new NotFoundError("House");
+      if (!house) {
+        logger.warn("House not found when getting info", { houseId });
+        throw new NotFoundError("House not found");
+      }
+
+      return house.info || "";
+    } catch (error) {
+      logger.error("Error in GetHouseInfoUseCase", {
+        houseId,
+        error: error.message,
+      });
+      throw error;
     }
-
-    return house.info;
   }
 }
