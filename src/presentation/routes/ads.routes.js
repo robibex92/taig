@@ -27,6 +27,12 @@ router.get(`${BASE_PATH}/:id/images`, async (req, res, next) => {
   return adImageController.getById(req, res, next);
 });
 
+// Get telegram messages for an ad
+router.get(
+  `${BASE_PATH}/:id/telegram-messages`,
+  adController.getTelegramMessages
+);
+
 router.post(`${BASE_PATH}/:id/view_count`, adController.incrementViewCount);
 
 // Protected routes
@@ -46,5 +52,12 @@ router.patch(
 );
 
 router.delete(`${BASE_PATH}/:id`, authenticateJWT, adController.deleteAd);
+
+// Permanently delete ad (only for already deleted ads)
+router.delete(
+  `${BASE_PATH}/:id/permanent`,
+  authenticateJWT,
+  adController.permanentDeleteAd
+);
 
 export default router;

@@ -10,23 +10,48 @@ export class AdController {
     getAdByIdUseCase,
     createAdUseCase,
     updateAdUseCase,
-    deleteAdUseCase
+    deleteAdUseCase,
+    adRepository
   ) {
     this.getAdsUseCase = getAdsUseCase;
     this.getAdByIdUseCase = getAdByIdUseCase;
     this.createAdUseCase = createAdUseCase;
     this.updateAdUseCase = updateAdUseCase;
     this.deleteAdUseCase = deleteAdUseCase;
+    this.adRepository = adRepository;
   }
 
   /**
    * Get all ads
    */
   getAds = asyncHandler(async (req, res) => {
-    const { status, category, subcategory, sort, order, page, limit } =
-      req.query;
+    const {
+      status,
+      category,
+      subcategory,
+      sort,
+      order,
+      page,
+      limit,
+      priceMin,
+      priceMax,
+      dateFrom,
+      dateTo,
+      search,
+    } = req.query;
 
-    const filters = { status, category, subcategory, sort, order };
+    const filters = {
+      status,
+      category,
+      subcategory,
+      sort,
+      order,
+      priceMin,
+      priceMax,
+      dateFrom,
+      dateTo,
+      search,
+    };
     const pagination = { page, limit };
 
     const result = await this.getAdsUseCase.execute(filters, pagination);
@@ -123,6 +148,51 @@ export class AdController {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: "Ad deleted successfully",
+    });
+  });
+
+  /**
+   * Permanently delete ad (hard delete)
+   */
+  permanentDeleteAd = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const authenticatedUserId = req.user.user_id;
+
+    // First check if user owns the ad or is admin
+    const ad = await this.getAdByIdUseCase.execute(Number(id), false);
+
+    if (String(ad.user_id) !== String(authenticatedUserId) && !req.user.role) {
+      throw new Error("You can only permanently delete your own ads");
+    }
+
+    // Only allow permanent delete for ads with status 'deleted'
+    if (ad.status !== "deleted") {
+      throw new Error(
+        "Can only permanently delete ads that are already soft-deleted"
+      );
+    }
+
+    await this.adRepository.permanentDelete(Number(id));
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "Ad permanently deleted from database",
+    });
+  });
+
+  /**
+   * Get telegram messages for an ad
+   */
+  getTelegramMessages = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const messages = await this.adRepository.getTelegramMessagesByAdId(
+      Number(id)
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: messages,
     });
   });
 }

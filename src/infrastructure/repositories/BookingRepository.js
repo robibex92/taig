@@ -113,10 +113,36 @@ export class BookingRepository {
         },
       });
 
-      return booking ? BookingEntity.fromDatabase(booking) : null;
+      if (!booking) {
+        return null;
+      }
+
+      // Safely convert BigInt fields to strings for JSON serialization
+      const safeBooking = {
+        ...booking,
+        id: booking.id,
+        ad_id: booking.ad_id,
+        user_id: booking.user_id,
+        ad: booking.ad
+          ? {
+              ...booking.ad,
+              id: booking.ad.id,
+              user_id: booking.ad.user_id,
+            }
+          : null,
+        user: booking.user
+          ? {
+              ...booking.user,
+              user_id: booking.user.user_id,
+            }
+          : null,
+      };
+
+      return BookingEntity.fromDatabase(safeBooking);
     } catch (error) {
       logger.error("Error finding booking by user and ad", {
         error: error.message,
+        stack: error.stack,
         userId,
         adId,
       });

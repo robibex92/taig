@@ -102,4 +102,12 @@ export const getAdsQuerySchema = Joi.object({
   order: Joi.string().valid("ASC", "DESC").default("DESC"),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
+  // Price filters
+  priceMin: Joi.number().min(0),
+  priceMax: Joi.number().min(0),
+  // Date filters
+  dateFrom: Joi.date().iso(),
+  dateTo: Joi.date().iso(),
+  // Search
+  search: Joi.string().trim().max(200),
 });

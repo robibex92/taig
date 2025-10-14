@@ -45,6 +45,11 @@ export class AdRepository extends IAdRepository {
         subcategory,
         sort = "created_at",
         order = "DESC",
+        priceMin,
+        priceMax,
+        dateFrom,
+        dateTo,
+        search,
       } = filters;
       const { page = 1, limit = 20 } = pagination;
 
@@ -62,6 +67,44 @@ export class AdRepository extends IAdRepository {
         where.subcategory = parseInt(subcategory);
       }
 
+      // Price filter - since price is stored as string, we need to convert to number for comparison
+      if (priceMin !== undefined || priceMax !== undefined) {
+        where.AND = where.AND || [];
+
+        // We'll need to use raw query for price comparison since it's stored as string
+        // For now, let's try to convert and filter
+        if (priceMin !== undefined) {
+          where.AND.push({
+            price: {
+              not: null,
+            },
+          });
+        }
+      }
+
+      // Date filter
+      if (dateFrom) {
+        where.created_at = {
+          ...where.created_at,
+          gte: new Date(dateFrom),
+        };
+      }
+
+      if (dateTo) {
+        where.created_at = {
+          ...where.created_at,
+          lte: new Date(dateTo),
+        };
+      }
+
+      // Search filter (search in title and content)
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" } },
+          { content: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
       // Build orderBy
       let orderBy;
       const safeOrder = order === "ASC" ? "asc" : "desc";
@@ -74,7 +117,7 @@ export class AdRepository extends IAdRepository {
       }
 
       // Get ads with pagination
-      const [ads, total] = await prisma.$transaction([
+      let [ads, total] = await prisma.$transaction([
         prisma.ad.findMany({
           where,
           orderBy,
@@ -83,6 +126,32 @@ export class AdRepository extends IAdRepository {
         }),
         prisma.ad.count({ where }),
       ]);
+
+      // Apply price filtering post-query since price is stored as string
+      if (priceMin !== undefined || priceMax !== undefined) {
+        ads = ads.filter((ad) => {
+          if (!ad.price) return false;
+
+          // Try to parse price (handle "Не указана" and other non-numeric values)
+          const priceStr = ad.price.toString().replace(/[^\d.]/g, "");
+          const priceNum = parseFloat(priceStr);
+
+          if (isNaN(priceNum)) return false;
+
+          if (priceMin !== undefined && priceNum < parseFloat(priceMin)) {
+            return false;
+          }
+
+          if (priceMax !== undefined && priceNum > parseFloat(priceMax)) {
+            return false;
+          }
+
+          return true;
+        });
+
+        // Update total count after filtering
+        total = ads.length;
+      }
 
       const adEntities = ads.map((ad) => new AdEntity(ad));
 
@@ -362,6 +431,30 @@ export class AdRepository extends IAdRepository {
   }
 
   /**
+   * Get Telegram messages for an ad
+   */
+  async getTelegramMessagesByAdId(adId) {
+    try {
+      const messages = await prisma.telegramMessage.findMany({
+        where: {
+          ad_id: BigInt(adId),
+        },
+        orderBy: {
+          created_at: "desc",
+        },
+      });
+
+      return messages;
+    } catch (error) {
+      logger.error("Error getting telegram messages by ad ID", {
+        error: error.message,
+        adId,
+      });
+      throw new DatabaseError("Failed to get telegram messages", error);
+    }
+  }
+
+  /**
    * Delete Telegram messages for an ad
    */
   async deleteTelegramMessagesByAdId(adId) {
@@ -370,6 +463,38 @@ export class AdRepository extends IAdRepository {
         ad_id: BigInt(adId),
       },
     });
+  }
+
+  /**
+   * Permanently delete an ad (hard delete)
+   */
+  async permanentDelete(id) {
+    try {
+      // First delete all related images
+      await prisma.adImage.deleteMany({
+        where: { ad_id: Number(id) },
+      });
+
+      // Delete all telegram messages
+      await this.deleteTelegramMessagesByAdId(id);
+
+      // Delete the ad
+      await prisma.ad.delete({
+        where: { id: BigInt(id) },
+      });
+
+      logger.info("Ad permanently deleted", { ad_id: id });
+      return true;
+    } catch (error) {
+      if (error.code === "P2025") {
+        throw new NotFoundError("Ad");
+      }
+      logger.error("Error permanently deleting ad", {
+        error: error.message,
+        id,
+      });
+      throw new DatabaseError("Failed to permanently delete ad", error);
+    }
   }
 }
 

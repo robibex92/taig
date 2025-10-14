@@ -324,7 +324,8 @@ export class Container {
           container.resolve("getAdByIdUseCase"),
           container.resolve("createAdUseCase"),
           container.resolve("updateAdUseCase"),
-          container.resolve("deleteAdUseCase")
+          container.resolve("deleteAdUseCase"),
+          container.resolve("adRepository")
         )
     );
 

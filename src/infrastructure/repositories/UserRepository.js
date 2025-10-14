@@ -120,7 +120,12 @@ export class UserRepository extends IUserRepository {
 
       allowedFields.forEach((field) => {
         if (data[field] !== undefined) {
-          updateData[field] = data[field];
+          // Trim string fields
+          if (typeof data[field] === "string" && field !== "avatar") {
+            updateData[field] = data[field].trim();
+          } else {
+            updateData[field] = data[field];
+          }
         }
       });
 
@@ -133,13 +138,21 @@ export class UserRepository extends IUserRepository {
         data: updateData,
       });
 
-      logger.info("User updated", { user_id: id });
+      logger.info("User updated", {
+        user_id: id,
+        fields: Object.keys(updateData),
+      });
       return new UserEntity(user);
     } catch (error) {
       if (error.code === "P2025") {
         throw new NotFoundError("User");
       }
-      logger.error("Error updating user", { error: error.message, id });
+      logger.error("Error updating user", {
+        error: error.message,
+        stack: error.stack,
+        id,
+        data: updateData,
+      });
       throw new DatabaseError("Failed to update user", error);
     }
   }
