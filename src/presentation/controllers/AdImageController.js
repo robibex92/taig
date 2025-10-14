@@ -178,4 +178,34 @@ export class AdImageController {
       success: true,
     });
   });
+
+  /**
+   * POST /api-v1/ads/delete-image
+   * Delete image by URL
+   */
+  deleteByUrl = asyncHandler(async (req, res) => {
+    const { ad_id, image_url } = req.body;
+
+    if (!ad_id || !image_url) {
+      throw new ValidationError("ad_id and image_url are required");
+    }
+
+    // Get all images for this ad
+    const images = await this.getAdImagesUseCase.execute(parseInt(ad_id), null);
+
+    // Find the image with matching URL
+    const imageToDelete = images.find((img) => img.image_url === image_url);
+
+    if (!imageToDelete) {
+      throw new ValidationError("Image not found");
+    }
+
+    // Delete the image by its ID
+    await this.deleteAdImageUseCase.execute(imageToDelete.id);
+
+    res.json({
+      success: true,
+      message: "Image deleted",
+    });
+  });
 }

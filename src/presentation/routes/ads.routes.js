@@ -60,4 +60,14 @@ router.delete(
   adController.permanentDeleteAd
 );
 
+// Delete ad image
+router.post(
+  `${BASE_PATH}/delete-image`,
+  authenticateJWT,
+  async (req, res, next) => {
+    const adImageController = container.resolve("adImageController");
+    return adImageController.deleteByUrl(req, res, next);
+  }
+);
+
 export default router;
