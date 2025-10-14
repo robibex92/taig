@@ -2,10 +2,11 @@ const {
   NotFoundError,
   ValidationError,
 } = require("../../../core/errors/AppError");
+const { USER_ROLES } = require("../../../core/constants");
 
 /**
  * Update User Role Use Case
- * Admin endpoint to change user role
+ * Admin endpoint to change user role/status
  */
 class UpdateUserRoleUseCase {
   constructor({ userRepository }) {
@@ -14,7 +15,7 @@ class UpdateUserRoleUseCase {
 
   async execute({ user_id, new_role }) {
     // Validate role
-    const validRoles = ["user", "moderator", "admin"];
+    const validRoles = Object.values(USER_ROLES);
     if (!validRoles.includes(new_role)) {
       throw new ValidationError(
         `Invalid role. Must be one of: ${validRoles.join(", ")}`

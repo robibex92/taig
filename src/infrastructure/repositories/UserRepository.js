@@ -220,6 +220,105 @@ export class UserRepository extends IUserRepository {
       throw new DatabaseError("Failed to clear refresh token", error);
     }
   }
+
+  /**
+   * Update user role/status
+   */
+  async updateRole(userId, newRole) {
+    try {
+      const user = await prisma.user.update({
+        where: { user_id: BigInt(userId) },
+        data: {
+          status: newRole,
+        },
+      });
+
+      logger.info("User role updated", { user_id: userId, new_role: newRole });
+      return new UserEntity(user);
+    } catch (error) {
+      if (error.code === "P2025") {
+        throw new NotFoundError("User");
+      }
+      logger.error("Error updating user role", {
+        error: error.message,
+        userId,
+        newRole,
+      });
+      throw new DatabaseError("Failed to update user role", error);
+    }
+  }
+
+  /**
+   * Find all users with filters
+   */
+  async findAll(options = {}) {
+    try {
+      const { limit = 50, offset = 0, search, status } = options;
+
+      const where = {};
+
+      // Search filter
+      if (search) {
+        where.OR = [
+          { username: { contains: search, mode: "insensitive" } },
+          { first_name: { contains: search, mode: "insensitive" } },
+          { last_name: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      // Status/role filter
+      if (status) {
+        where.status = status;
+      }
+
+      const users = await prisma.user.findMany({
+        where,
+        take: limit,
+        skip: offset,
+        orderBy: { joined_at: "desc" },
+      });
+
+      return users.map((user) => new UserEntity(user));
+    } catch (error) {
+      logger.error("Error finding all users", {
+        error: error.message,
+        options,
+      });
+      throw new DatabaseError("Failed to find users", error);
+    }
+  }
+
+  /**
+   * Count users with filters
+   */
+  async count(filters = {}) {
+    try {
+      const where = {};
+
+      // Search filter
+      if (filters.search) {
+        where.OR = [
+          { username: { contains: filters.search, mode: "insensitive" } },
+          { first_name: { contains: filters.search, mode: "insensitive" } },
+          { last_name: { contains: filters.search, mode: "insensitive" } },
+        ];
+      }
+
+      // Status/role filter
+      if (filters.status) {
+        where.status = filters.status;
+      }
+
+      const count = await prisma.user.count({ where });
+      return count;
+    } catch (error) {
+      logger.error("Error counting users", {
+        error: error.message,
+        filters,
+      });
+      throw new DatabaseError("Failed to count users", error);
+    }
+  }
 }
 
 export default new UserRepository();

@@ -83,8 +83,8 @@ export const authorize = (...allowedRoles) => {
       return next();
     }
 
-    // Check if user has required role
-    const userRole = req.user.role || "user";
+    // Check if user has required role (using status field)
+    const userRole = req.user.status || "user";
     if (!allowedRoles.includes(userRole)) {
       throw new AuthenticationError(
         `Access denied. Required role: ${allowedRoles.join(" or ")}`

@@ -48,8 +48,7 @@ export class TokenService {
     const payload = {
       id: user.user_id,
       type: "access",
-      role: user.role || "user",
-      status: user.status,
+      status: user.status || "active",
       // Device fingerprint for additional security
       device: this._hashDeviceInfo(deviceInfo),
     };

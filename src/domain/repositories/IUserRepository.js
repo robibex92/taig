@@ -67,4 +67,32 @@ export class IUserRepository {
   async clearRefreshToken(userId) {
     throw new Error("Method not implemented");
   }
+
+  /**
+   * Update user role/status
+   * @param {number} userId - User ID
+   * @param {string} newRole - New role (user/moderator/admin)
+   * @returns {Promise<UserEntity>}
+   */
+  async updateRole(userId, newRole) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Find all users with filters
+   * @param {Object} options - Query options
+   * @returns {Promise<UserEntity[]>}
+   */
+  async findAll(options) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Count users with filters
+   * @param {Object} filters - Query filters
+   * @returns {Promise<number>}
+   */
+  async count(filters) {
+    throw new Error("Method not implemented");
+  }
 }

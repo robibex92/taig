@@ -164,7 +164,10 @@ export class AdController {
     // First check if user owns the ad or is admin
     const ad = await this.getAdByIdUseCase.execute(Number(id), false);
 
-    if (String(ad.user_id) !== String(authenticatedUserId) && !req.user.role) {
+    if (
+      String(ad.user_id) !== String(authenticatedUserId) &&
+      req.user.status !== "admin"
+    ) {
       throw new Error("You can only permanently delete your own ads");
     }
 
