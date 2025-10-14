@@ -51,6 +51,7 @@ import { GetSubcategoryByIdUseCase } from "../../application/use-cases/category/
 
 // Use Cases - FAQ
 import { GetFaqsUseCase } from "../../application/use-cases/faq/GetFaqsUseCase.js";
+import { CreateFaqUseCase } from "../../application/use-cases/faq/CreateFaqUseCase.js";
 import { UpdateFaqUseCase } from "../../application/use-cases/faq/UpdateFaqUseCase.js";
 import { DeleteFaqUseCase } from "../../application/use-cases/faq/DeleteFaqUseCase.js";
 
@@ -425,6 +426,11 @@ export class Container {
     );
 
     this.register(
+      "createFaqUseCase",
+      (container) => new CreateFaqUseCase(container.resolve("faqRepository"))
+    );
+
+    this.register(
       "updateFaqUseCase",
       (container) => new UpdateFaqUseCase(container.resolve("faqRepository"))
     );
@@ -440,6 +446,7 @@ export class Container {
       (container) =>
         new FaqController(
           container.resolve("getFaqsUseCase"),
+          container.resolve("createFaqUseCase"),
           container.resolve("updateFaqUseCase"),
           container.resolve("deleteFaqUseCase")
         )

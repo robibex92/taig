@@ -37,6 +37,23 @@ export class FaqRepository extends IFaqRepository {
   }
 
   /**
+   * Create new FAQ
+   */
+  async create(faqData) {
+    const faq = await prisma.faq.create({
+      data: {
+        question: faqData.question,
+        answer: faqData.answer,
+        status: faqData.status || "active",
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+
+    return Faq.fromDatabase(faq);
+  }
+
+  /**
    * Update FAQ
    */
   async update(id, updateData) {

@@ -2,6 +2,7 @@ import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
 import {
   getFaqsSchema,
+  createFaqSchema,
   updateFaqSchema,
   faqIdSchema,
 } from "../../core/validation/schemas/faq.schema.js";
@@ -11,8 +12,14 @@ import {
  * Handles HTTP requests for FAQ operations
  */
 export class FaqController {
-  constructor(getFaqsUseCase, updateFaqUseCase, deleteFaqUseCase) {
+  constructor(
+    getFaqsUseCase,
+    createFaqUseCase,
+    updateFaqUseCase,
+    deleteFaqUseCase
+  ) {
     this.getFaqsUseCase = getFaqsUseCase;
+    this.createFaqUseCase = createFaqUseCase;
     this.updateFaqUseCase = updateFaqUseCase;
     this.deleteFaqUseCase = deleteFaqUseCase;
   }
@@ -38,8 +45,28 @@ export class FaqController {
   });
 
   /**
+   * POST /api-v1/faqs
+   * Create new FAQ (admin only)
+   */
+  create = asyncHandler(async (req, res) => {
+    const { error } = createFaqSchema.validate(req.body);
+
+    if (error) {
+      throw new ValidationError(error.details[0].message);
+    }
+
+    const newFaq = await this.createFaqUseCase.execute(req.body, req.user);
+
+    res.status(201).json({
+      success: true,
+      data: newFaq,
+      message: "FAQ created successfully",
+    });
+  });
+
+  /**
    * PATCH /api-v1/faqs/:id
-   * Update FAQ
+   * Update FAQ (admin only)
    */
   update = asyncHandler(async (req, res) => {
     const { error: idError } = faqIdSchema.validate({
@@ -58,18 +85,20 @@ export class FaqController {
 
     const updatedFaq = await this.updateFaqUseCase.execute(
       parseInt(req.params.id),
-      req.body
+      req.body,
+      req.user
     );
 
     res.json({
       success: true,
       data: updatedFaq,
+      message: "FAQ updated successfully",
     });
   });
 
   /**
    * DELETE /api-v1/faqs/:id
-   * Soft delete FAQ
+   * Soft delete FAQ (admin only)
    */
   delete = asyncHandler(async (req, res) => {
     const { error } = faqIdSchema.validate({
@@ -81,12 +110,13 @@ export class FaqController {
     }
 
     const deletedFaq = await this.deleteFaqUseCase.execute(
-      parseInt(req.params.id)
+      parseInt(req.params.id),
+      req.user
     );
 
     res.json({
       success: true,
-      message: "FAQ marked as deleted",
+      message: "FAQ deleted successfully",
       data: deletedFaq,
     });
   });
