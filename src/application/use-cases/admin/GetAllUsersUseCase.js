@@ -2,8 +2,8 @@
  * Get All Users Use Case
  * Admin endpoint to retrieve all users
  */
-class GetAllUsersUseCase {
-  constructor({ userRepository }) {
+export class GetAllUsersUseCase {
+  constructor(userRepository) {
     this.userRepository = userRepository;
   }
 
@@ -34,5 +34,3 @@ class GetAllUsersUseCase {
     };
   }
 }
-
-module.exports = GetAllUsersUseCase;

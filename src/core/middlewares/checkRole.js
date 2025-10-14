@@ -2,7 +2,7 @@
  * Role-Based Access Control (RBAC) Middleware
  * Checks if user has required role(s)
  */
-const checkRole = (...allowedRoles) => {
+export const checkRole = (...allowedRoles) => {
   return async (req, res, next) => {
     const user = req.user;
 
@@ -14,7 +14,7 @@ const checkRole = (...allowedRoles) => {
       });
     }
 
-    // Check if user has one of the allowed roles
+    // Check if user has one of the allowed roles (using status field)
     if (!allowedRoles.includes(user.status)) {
       return res.status(403).json({
         success: false,
@@ -26,5 +26,3 @@ const checkRole = (...allowedRoles) => {
     next();
   };
 };
-
-module.exports = { checkRole };

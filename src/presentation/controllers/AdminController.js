@@ -1,15 +1,15 @@
-const { asyncHandler } = require("../../core/middlewares/asyncHandler");
+import { asyncHandler } from "../../core/utils/asyncHandler.js";
 
 /**
  * Admin Controller
  * Handles admin panel requests
  */
-class AdminController {
-  constructor({
+export class AdminController {
+  constructor(
     getAllUsersUseCase,
     updateUserRoleUseCase,
-    getStatisticsUseCase,
-  }) {
+    getStatisticsUseCase
+  ) {
     this.getAllUsersUseCase = getAllUsersUseCase;
     this.updateUserRoleUseCase = updateUserRoleUseCase;
     this.getStatisticsUseCase = getStatisticsUseCase;
@@ -73,5 +73,3 @@ class AdminController {
     });
   });
 }
-
-module.exports = AdminController;

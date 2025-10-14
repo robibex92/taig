@@ -1,10 +1,10 @@
-const { prisma } = require("../../../infrastructure/database/prisma");
+import { prisma } from "../../../infrastructure/database/prisma.js";
 
 /**
  * Get Statistics Use Case
  * Admin endpoint to get system statistics
  */
-class GetStatisticsUseCase {
+export class GetStatisticsUseCase {
   async execute() {
     // Get user statistics
     const totalUsers = await prisma.user.count();
@@ -36,19 +36,26 @@ class GetStatisticsUseCase {
       _count: true,
     });
 
-    // Get comment statistics
-    const totalComments = await prisma.comment.count({
-      where: { is_deleted: false },
-    });
+    // Get comment statistics (if Comment model exists)
+    let totalComments = 0;
+    let commentsToday = 0;
+    try {
+      totalComments = await prisma.comment.count({
+        where: { is_deleted: false },
+      });
 
-    const commentsToday = await prisma.comment.count({
-      where: {
-        is_deleted: false,
-        created_at: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
+      commentsToday = await prisma.comment.count({
+        where: {
+          is_deleted: false,
+          created_at: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      // Comment model might not exist
+      console.warn("Comment model not found, skipping comment statistics");
+    }
 
     // Get posts statistics
     const totalPosts = await prisma.post.count();
@@ -87,5 +94,3 @@ class GetStatisticsUseCase {
     };
   }
 }
-
-module.exports = GetStatisticsUseCase;

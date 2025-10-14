@@ -88,6 +88,11 @@ import { UpdateTelegramChatUseCase } from "../../application/use-cases/telegramC
 import { DeleteTelegramChatUseCase } from "../../application/use-cases/telegramChat/DeleteTelegramChatUseCase.js";
 import { ToggleTelegramChatActiveUseCase } from "../../application/use-cases/telegramChat/ToggleTelegramChatActiveUseCase.js";
 
+// Use Cases - Admin
+import { GetAllUsersUseCase } from "../../application/use-cases/admin/GetAllUsersUseCase.js";
+import { UpdateUserRoleUseCase } from "../../application/use-cases/admin/UpdateUserRoleUseCase.js";
+import { GetStatisticsUseCase } from "../../application/use-cases/admin/GetStatisticsUseCase.js";
+
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
 import { AuthController } from "../../presentation/controllers/AuthController.improved.js";
@@ -101,6 +106,7 @@ import { AdImageController } from "../../presentation/controllers/AdImageControl
 import { UploadController } from "../../presentation/controllers/UploadController.js";
 import { HouseController } from "../../presentation/controllers/HouseController.js";
 import { TelegramChatController } from "../../presentation/controllers/TelegramChatController.js";
+import { AdminController } from "../../presentation/controllers/AdminController.js";
 
 /**
  * Dependency Injection Container
@@ -665,6 +671,31 @@ export class Container {
           container.resolve("getHouseInfoUseCase"),
           container.resolve("linkUserToApartmentUseCase"),
           container.resolve("unlinkUserFromApartmentUseCase")
+        )
+    );
+
+    // Use Cases - Admin
+    this.register(
+      "getAllUsersUseCase",
+      (container) => new GetAllUsersUseCase(container.resolve("userRepository"))
+    );
+
+    this.register(
+      "updateUserRoleUseCase",
+      (container) =>
+        new UpdateUserRoleUseCase(container.resolve("userRepository"))
+    );
+
+    this.register("getStatisticsUseCase", () => new GetStatisticsUseCase());
+
+    // Controllers - Admin
+    this.register(
+      "adminController",
+      (container) =>
+        new AdminController(
+          container.resolve("getAllUsersUseCase"),
+          container.resolve("updateUserRoleUseCase"),
+          container.resolve("getStatisticsUseCase")
         )
     );
   }

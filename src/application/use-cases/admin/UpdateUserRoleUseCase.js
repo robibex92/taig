@@ -1,15 +1,15 @@
-const {
+import {
   NotFoundError,
   ValidationError,
-} = require("../../../core/errors/AppError");
-const { USER_ROLES } = require("../../../core/constants");
+} from "../../../core/errors/AppError.js";
+import { USER_ROLES } from "../../../core/constants/index.js";
 
 /**
  * Update User Role Use Case
  * Admin endpoint to change user role/status
  */
-class UpdateUserRoleUseCase {
-  constructor({ userRepository }) {
+export class UpdateUserRoleUseCase {
+  constructor(userRepository) {
     this.userRepository = userRepository;
   }
 
@@ -34,5 +34,3 @@ class UpdateUserRoleUseCase {
     return updatedUser;
   }
 }
-
-module.exports = UpdateUserRoleUseCase;

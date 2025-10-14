@@ -43,6 +43,7 @@ import {
 import messageRoutes from "./presentation/routes/messageRoutes.js";
 import bookingRoutes from "./presentation/routes/bookingRoutes.js";
 import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
+import adminRoutes from "./presentation/routes/admin.routes.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
@@ -133,6 +134,7 @@ app.use("/api", userRoutes);
 app.use("/api", messageRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅
