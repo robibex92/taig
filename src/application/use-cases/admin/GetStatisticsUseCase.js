@@ -24,12 +24,19 @@ export class GetStatisticsUseCase {
     // Just skip avg_price calculation for now
     const avgPrice = { _avg: { price: 0 } };
 
-    // Get booking statistics
-    const totalBookings = await prisma.booking.count();
-    const bookingsByStatus = await prisma.booking.groupBy({
-      by: ["status"],
-      _count: true,
-    });
+    // Get booking statistics (if table exists)
+    let totalBookings = 0;
+    let bookingsByStatus = [];
+    try {
+      totalBookings = await prisma.booking.count();
+      bookingsByStatus = await prisma.booking.groupBy({
+        by: ["status"],
+        _count: true,
+      });
+    } catch (error) {
+      // Booking table might not exist
+      console.warn("Booking table not found, skipping booking statistics");
+    }
 
     // Get comment statistics (if Comment model exists)
     let totalComments = 0;
