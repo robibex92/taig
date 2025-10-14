@@ -222,4 +222,18 @@ export class HouseRepository extends IHouseRepository {
 
     return true;
   }
+
+  /**
+   * Update house info field
+   */
+  async updateInfo(id, info) {
+    const house = await prisma.house.update({
+      where: { id: BigInt(id) },
+      data: {
+        info: info || "",
+      },
+    });
+
+    return House.fromDatabase(house);
+  }
 }

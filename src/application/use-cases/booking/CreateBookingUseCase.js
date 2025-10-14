@@ -12,7 +12,7 @@ import { prisma } from "../../../infrastructure/database/prisma.js";
 
 /**
  * CreateBookingUseCase - handles creating a new booking for an ad
- * 
+ *
  * Security improvements:
  * - Uses database transaction to prevent race conditions
  * - Database-level constraint ensures no duplicate bookings (@@unique in schema)
@@ -59,52 +59,55 @@ export class CreateBookingUseCase {
 
       // Use transaction to prevent race conditions
       // This ensures that booking check and creation happen atomically
-      const booking = await prisma.$transaction(async (tx) => {
-        // Check if user already has an active booking (within transaction)
-        const existingBooking = await tx.booking.findFirst({
-          where: {
-            ad_id: BigInt(adId),
-            user_id: BigInt(userId),
-            status: "active"
-          }
-        });
+      const booking = await prisma.$transaction(
+        async (tx) => {
+          // Check if user already has an active booking (within transaction)
+          const existingBooking = await tx.booking.findFirst({
+            where: {
+              ad_id: BigInt(adId),
+              user_id: BigInt(userId),
+              status: "active",
+            },
+          });
 
-        if (existingBooking) {
-          throw new ValidationError(
-            `You already booked this ad (order #${existingBooking.booking_order})`
-          );
+          if (existingBooking) {
+            throw new ValidationError(
+              `You already booked this ad (order #${existingBooking.booking_order})`
+            );
+          }
+
+          // Get current active bookings count to determine order (within transaction)
+          // This ensures accurate count even with concurrent requests
+          const activeCount = await tx.booking.count({
+            where: {
+              ad_id: BigInt(adId),
+              status: "active",
+            },
+          });
+
+          const bookingOrder = activeCount + 1;
+
+          // Create booking (within transaction)
+          // Database constraint @@unique([ad_id, user_id, status]) provides additional safety
+          const newBooking = await tx.booking.create({
+            data: {
+              ad_id: BigInt(adId),
+              user_id: BigInt(userId),
+              booking_order: bookingOrder,
+              status: "active",
+            },
+          });
+
+          return newBooking;
+        },
+        {
+          // Set transaction isolation level to prevent race conditions
+          isolationLevel: "Serializable",
+          // Retry on conflict
+          maxWait: 5000, // Wait up to 5 seconds for transaction to start
+          timeout: 10000, // Transaction timeout 10 seconds
         }
-
-        // Get current active bookings count to determine order (within transaction)
-        // This ensures accurate count even with concurrent requests
-        const activeCount = await tx.booking.count({
-          where: {
-            ad_id: BigInt(adId),
-            status: "active"
-          }
-        });
-        
-        const bookingOrder = activeCount + 1;
-
-        // Create booking (within transaction)
-        // Database constraint @@unique([ad_id, user_id, status]) provides additional safety
-        const newBooking = await tx.booking.create({
-          data: {
-            ad_id: BigInt(adId),
-            user_id: BigInt(userId),
-            booking_order: bookingOrder,
-            status: "active",
-          }
-        });
-
-        return newBooking;
-      }, {
-        // Set transaction isolation level to prevent race conditions
-        isolationLevel: 'Serializable',
-        // Retry on conflict
-        maxWait: 5000, // Wait up to 5 seconds for transaction to start
-        timeout: 10000, // Transaction timeout 10 seconds
-      });
+      );
 
       // Convert Prisma booking to entity
       const bookingEntity = this.bookingRepository._toEntity(booking);
@@ -151,15 +154,15 @@ export class CreateBookingUseCase {
       };
     } catch (error) {
       // Handle Prisma unique constraint violations
-      if (error.code === 'P2002') {
-        logger.warn("Duplicate booking attempt detected", { 
-          adId, 
+      if (error.code === "P2002") {
+        logger.warn("Duplicate booking attempt detected", {
+          adId,
           userId,
-          error: error.message 
+          error: error.message,
         });
         throw new ValidationError("You already booked this ad");
       }
-      
+
       logger.error("Error in CreateBookingUseCase", { error: error.message });
       throw error;
     }

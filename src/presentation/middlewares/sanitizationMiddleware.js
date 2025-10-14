@@ -1,5 +1,5 @@
-import xss from 'xss';
-import { logger } from '../../core/utils/logger.js';
+import xss from "xss";
+import { logger } from "../../core/utils/logger.js";
 
 /**
  * Sanitization Middleware
@@ -21,37 +21,37 @@ const xssOptions = {
     em: [],
   },
   stripIgnoreTag: true,
-  stripIgnoreTagBody: ['script', 'style'],
+  stripIgnoreTagBody: ["script", "style"],
 };
 
 /**
  * Sanitize a single value
  */
 function sanitizeValue(value) {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     // Remove script tags and dangerous attributes
     const sanitized = xss(value, xssOptions);
-    
+
     // Additional manual sanitization
     return sanitized
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-      .replace(/javascript:/gi, '') // Remove javascript: protocol
-      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
-      .replace(/on\w+\s*=\s*[^\s>]*/gi, ''); // Remove event handlers without quotes
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "") // Remove script tags
+      .replace(/javascript:/gi, "") // Remove javascript: protocol
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "") // Remove event handlers
+      .replace(/on\w+\s*=\s*[^\s>]*/gi, ""); // Remove event handlers without quotes
   }
-  
-  if (typeof value === 'object' && value !== null) {
+
+  if (typeof value === "object" && value !== null) {
     if (Array.isArray(value)) {
       return value.map(sanitizeValue);
     }
-    
+
     const sanitized = {};
     for (const key in value) {
       sanitized[key] = sanitizeValue(value[key]);
     }
     return sanitized;
   }
-  
+
   return value;
 }
 
@@ -59,17 +59,17 @@ function sanitizeValue(value) {
  * Sanitize request body
  */
 export const sanitizeBody = (req, res, next) => {
-  if (req.body && typeof req.body === 'object') {
+  if (req.body && typeof req.body === "object") {
     try {
       req.body = sanitizeValue(req.body);
-      logger.debug('Request body sanitized', { 
+      logger.debug("Request body sanitized", {
         path: req.path,
-        method: req.method 
+        method: req.method,
       });
     } catch (error) {
-      logger.error('Error sanitizing request body', { 
+      logger.error("Error sanitizing request body", {
         error: error.message,
-        path: req.path 
+        path: req.path,
       });
     }
   }
@@ -80,17 +80,17 @@ export const sanitizeBody = (req, res, next) => {
  * Sanitize query parameters
  */
 export const sanitizeQuery = (req, res, next) => {
-  if (req.query && typeof req.query === 'object') {
+  if (req.query && typeof req.query === "object") {
     try {
       req.query = sanitizeValue(req.query);
-      logger.debug('Query params sanitized', { 
+      logger.debug("Query params sanitized", {
         path: req.path,
-        method: req.method 
+        method: req.method,
       });
     } catch (error) {
-      logger.error('Error sanitizing query params', { 
+      logger.error("Error sanitizing query params", {
         error: error.message,
-        path: req.path 
+        path: req.path,
       });
     }
   }
@@ -103,31 +103,31 @@ export const sanitizeQuery = (req, res, next) => {
 export const sanitizeAll = (req, res, next) => {
   try {
     // Sanitize body
-    if (req.body && typeof req.body === 'object') {
+    if (req.body && typeof req.body === "object") {
       req.body = sanitizeValue(req.body);
     }
-    
+
     // Sanitize query params
-    if (req.query && typeof req.query === 'object') {
+    if (req.query && typeof req.query === "object") {
       req.query = sanitizeValue(req.query);
     }
-    
+
     // Sanitize URL params
-    if (req.params && typeof req.params === 'object') {
+    if (req.params && typeof req.params === "object") {
       req.params = sanitizeValue(req.params);
     }
-    
-    logger.debug('All request data sanitized', { 
+
+    logger.debug("All request data sanitized", {
       path: req.path,
-      method: req.method 
+      method: req.method,
     });
   } catch (error) {
-    logger.error('Error sanitizing request data', { 
+    logger.error("Error sanitizing request data", {
       error: error.message,
-      path: req.path 
+      path: req.path,
     });
   }
-  
+
   next();
 };
 
@@ -136,7 +136,7 @@ export const sanitizeAll = (req, res, next) => {
  */
 export const detectSuspiciousContent = (req, res, next) => {
   const suspicious = [];
-  
+
   // Check for common XSS patterns
   const xssPatterns = [
     /<script/i,
@@ -147,34 +147,34 @@ export const detectSuspiciousContent = (req, res, next) => {
     /<embed/i,
     /eval\s*\(/i,
   ];
-  
+
   // Check body
   const bodyStr = JSON.stringify(req.body);
   for (const pattern of xssPatterns) {
     if (pattern.test(bodyStr)) {
-      suspicious.push({ type: 'body', pattern: pattern.toString() });
+      suspicious.push({ type: "body", pattern: pattern.toString() });
     }
   }
-  
+
   // Check query
   const queryStr = JSON.stringify(req.query);
   for (const pattern of xssPatterns) {
     if (pattern.test(queryStr)) {
-      suspicious.push({ type: 'query', pattern: pattern.toString() });
+      suspicious.push({ type: "query", pattern: pattern.toString() });
     }
   }
-  
+
   if (suspicious.length > 0) {
-    logger.warn('Suspicious content detected', {
+    logger.warn("Suspicious content detected", {
       path: req.path,
       method: req.method,
       userId: req.user?.user_id,
       ip: req.ip,
       patterns: suspicious,
       body: req.body,
-      query: req.query
+      query: req.query,
     });
-    
+
     // Optionally block the request
     // return res.status(400).json({
     //   success: false,
@@ -182,7 +182,7 @@ export const detectSuspiciousContent = (req, res, next) => {
     //   code: 'SUSPICIOUS_CONTENT'
     // });
   }
-  
+
   next();
 };
 
@@ -198,12 +198,12 @@ export const detectSqlInjection = (req, res, next) => {
     /(\bOR\b.*=.*)/i,
     /(WAITFOR\s+DELAY)/i,
   ];
-  
+
   const suspicious = [];
-  
+
   // Check all string values in body, query, params
   const checkValue = (value, type) => {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       for (const pattern of sqlPatterns) {
         if (pattern.test(value)) {
           suspicious.push({ type, pattern: pattern.toString(), value });
@@ -211,24 +211,24 @@ export const detectSqlInjection = (req, res, next) => {
       }
     }
   };
-  
+
   // Check body
   if (req.body) {
-    Object.values(req.body).forEach(val => checkValue(val, 'body'));
+    Object.values(req.body).forEach((val) => checkValue(val, "body"));
   }
-  
+
   // Check query
   if (req.query) {
-    Object.values(req.query).forEach(val => checkValue(val, 'query'));
+    Object.values(req.query).forEach((val) => checkValue(val, "query"));
   }
-  
+
   // Check params
   if (req.params) {
-    Object.values(req.params).forEach(val => checkValue(val, 'params'));
+    Object.values(req.params).forEach((val) => checkValue(val, "params"));
   }
-  
+
   if (suspicious.length > 0) {
-    logger.error('SQL Injection attempt detected', {
+    logger.error("SQL Injection attempt detected", {
       path: req.path,
       method: req.method,
       userId: req.user?.user_id,
@@ -236,17 +236,17 @@ export const detectSqlInjection = (req, res, next) => {
       patterns: suspicious,
       body: req.body,
       query: req.query,
-      params: req.params
+      params: req.params,
     });
-    
+
     // Block the request
     return res.status(400).json({
       success: false,
-      error: 'Invalid request',
-      code: 'INVALID_INPUT'
+      error: "Invalid request",
+      code: "INVALID_INPUT",
     });
   }
-  
+
   next();
 };
 
@@ -257,8 +257,7 @@ export const detectSqlInjection = (req, res, next) => {
 export const securitySuite = [
   detectSqlInjection,
   detectSuspiciousContent,
-  sanitizeAll
+  sanitizeAll,
 ];
 
 export default sanitizeAll;
-

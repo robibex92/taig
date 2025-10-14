@@ -1,5 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 const houseController = container.resolve("houseController");
@@ -52,5 +53,16 @@ router.post("/nearby", houseController.linkUserToApartment);
  * @access  Private (add auth middleware if needed)
  */
 router.post("/nearby/unlink", houseController.unlinkUserFromApartment);
+
+/**
+ * @route   PATCH /nearby/:id/info
+ * @desc    Update house info (admin only)
+ * @access  Private (Admin only)
+ */
+router.patch(
+  "/nearby/:id/info",
+  authenticateJWT,
+  houseController.updateHouseInfo
+);
 
 export default router;

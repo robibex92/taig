@@ -21,7 +21,8 @@ export class HouseController {
     getUserHousesUseCase,
     getHouseInfoUseCase,
     linkUserToApartmentUseCase,
-    unlinkUserFromApartmentUseCase
+    unlinkUserFromApartmentUseCase,
+    updateHouseInfoUseCase
   ) {
     this.getUniqueHousesUseCase = getUniqueHousesUseCase;
     this.getEntrancesByHouseUseCase = getEntrancesByHouseUseCase;
@@ -30,6 +31,7 @@ export class HouseController {
     this.getHouseInfoUseCase = getHouseInfoUseCase;
     this.linkUserToApartmentUseCase = linkUserToApartmentUseCase;
     this.unlinkUserFromApartmentUseCase = unlinkUserFromApartmentUseCase;
+    this.updateHouseInfoUseCase = updateHouseInfoUseCase;
   }
 
   /**
@@ -172,5 +174,27 @@ export class HouseController {
     );
 
     res.json(result);
+  });
+
+  /**
+   * PATCH /api-v1/nearby/:id/info
+   * Update house info (admin only)
+   */
+  updateHouseInfo = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { info } = req.body;
+    const user = req.user;
+
+    const updatedHouse = await this.updateHouseInfoUseCase.execute(
+      parseInt(id),
+      info,
+      user
+    );
+
+    res.json({
+      success: true,
+      data: updatedHouse.toJSON(),
+      message: "House info updated successfully",
+    });
   });
 }

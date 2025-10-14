@@ -80,6 +80,7 @@ import { GetUserHousesUseCase } from "../../application/use-cases/house/GetUserH
 import { GetHouseInfoUseCase } from "../../application/use-cases/house/GetHouseInfoUseCase.js";
 import { LinkUserToApartmentUseCase } from "../../application/use-cases/house/LinkUserToApartmentUseCase.js";
 import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/house/UnlinkUserFromApartmentUseCase.js";
+import { UpdateHouseInfoUseCase } from "../../application/use-cases/house/UpdateHouseInfoUseCase.js";
 
 // Use Cases - TelegramChat
 import { GetTelegramChatsUseCase } from "../../application/use-cases/telegramChat/GetTelegramChatsUseCase.js";
@@ -607,6 +608,12 @@ export class Container {
         new UnlinkUserFromApartmentUseCase(container.resolve("houseRepository"))
     );
 
+    this.register(
+      "updateHouseInfoUseCase",
+      (container) =>
+        new UpdateHouseInfoUseCase(container.resolve("houseRepository"))
+    );
+
     // Use Cases - TelegramChat
     this.register(
       "getTelegramChatsUseCase",
@@ -670,7 +677,8 @@ export class Container {
           container.resolve("getUserHousesUseCase"),
           container.resolve("getHouseInfoUseCase"),
           container.resolve("linkUserToApartmentUseCase"),
-          container.resolve("unlinkUserFromApartmentUseCase")
+          container.resolve("unlinkUserFromApartmentUseCase"),
+          container.resolve("updateHouseInfoUseCase")
         )
     );
 

@@ -5,7 +5,7 @@ import crypto from "crypto";
 /**
  * Idempotency Middleware
  * Prevents duplicate requests by using idempotency keys
- * 
+ *
  * Usage:
  * - Frontend should send 'X-Idempotency-Key' header with unique identifier
  * - Key format: UUID or timestamp-based unique string
@@ -24,7 +24,7 @@ const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000;
  */
 function generateIdempotencyKey(userId, method, url, body) {
   const data = JSON.stringify({ userId, method, url, body: body || {} });
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return crypto.createHash("sha256").update(data).digest("hex");
 }
 
 /**
@@ -47,26 +47,22 @@ setInterval(cleanExpiredKeys, 60 * 60 * 1000);
  * Apply to POST, PUT, PATCH endpoints that should be idempotent
  */
 export const idempotency = (options = {}) => {
-  const { 
-    ttl = IDEMPOTENCY_TTL,
-    generateKey = null,
-    skipPaths = [],
-  } = options;
+  const { ttl = IDEMPOTENCY_TTL, generateKey = null, skipPaths = [] } = options;
 
   return async (req, res, next) => {
     // Only apply to state-changing methods
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
       return next();
     }
 
     // Skip certain paths
-    if (skipPaths.some(path => req.path.includes(path))) {
+    if (skipPaths.some((path) => req.path.includes(path))) {
       return next();
     }
 
     // Get idempotency key from header or generate one
-    let idempotencyKey = req.headers['x-idempotency-key'];
-    
+    let idempotencyKey = req.headers["x-idempotency-key"];
+
     if (!idempotencyKey && req.user) {
       // Generate key based on user, method, url, and body
       idempotencyKey = generateIdempotencyKey(
@@ -75,10 +71,10 @@ export const idempotency = (options = {}) => {
         req.path,
         req.body
       );
-      
-      logger.debug('Generated idempotency key', { 
-        key: idempotencyKey.substring(0, 8) + '...',
-        path: req.path 
+
+      logger.debug("Generated idempotency key", {
+        key: idempotencyKey.substring(0, 8) + "...",
+        path: req.path,
       });
     }
 
@@ -89,17 +85,17 @@ export const idempotency = (options = {}) => {
 
     // Check if this request was already processed
     const cached = idempotencyCache.get(idempotencyKey);
-    
+
     if (cached) {
       const age = Date.now() - cached.timestamp;
-      
+
       // If cached response is still valid
       if (age < ttl) {
-        logger.info('Idempotent request detected - returning cached response', {
-          key: idempotencyKey.substring(0, 8) + '...',
+        logger.info("Idempotent request detected - returning cached response", {
+          key: idempotencyKey.substring(0, 8) + "...",
           age: `${Math.round(age / 1000)}s`,
           path: req.path,
-          userId: req.user?.user_id
+          userId: req.user?.user_id,
         });
 
         // Return cached response
@@ -116,13 +112,13 @@ export const idempotency = (options = {}) => {
     let statusCode = 200;
 
     // Override status to capture status code
-    res.status = function(code) {
+    res.status = function (code) {
       statusCode = code;
       return originalStatus(code);
     };
 
     // Override json to cache successful responses
-    res.json = function(body) {
+    res.json = function (body) {
       // Only cache successful responses (2xx)
       if (statusCode >= 200 && statusCode < 300) {
         idempotencyCache.set(idempotencyKey, {
@@ -131,10 +127,10 @@ export const idempotency = (options = {}) => {
           timestamp: Date.now(),
         });
 
-        logger.debug('Cached idempotent response', {
-          key: idempotencyKey.substring(0, 8) + '...',
+        logger.debug("Cached idempotent response", {
+          key: idempotencyKey.substring(0, 8) + "...",
           statusCode,
-          path: req.path
+          path: req.path,
         });
       }
 
@@ -151,13 +147,13 @@ export const idempotency = (options = {}) => {
  */
 export const strictIdempotency = (options = {}) => {
   return async (req, res, next) => {
-    const idempotencyKey = req.headers['x-idempotency-key'];
+    const idempotencyKey = req.headers["x-idempotency-key"];
 
     if (!idempotencyKey) {
       return res.status(400).json({
         success: false,
-        error: 'X-Idempotency-Key header is required for this operation',
-        code: 'IDEMPOTENCY_KEY_REQUIRED'
+        error: "X-Idempotency-Key header is required for this operation",
+        code: "IDEMPOTENCY_KEY_REQUIRED",
       });
     }
 
@@ -166,8 +162,9 @@ export const strictIdempotency = (options = {}) => {
     if (!keyPattern.test(idempotencyKey)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid idempotency key format. Use UUID or unique string (8-128 chars)',
-        code: 'INVALID_IDEMPOTENCY_KEY'
+        error:
+          "Invalid idempotency key format. Use UUID or unique string (8-128 chars)",
+        code: "INVALID_IDEMPOTENCY_KEY",
       });
     }
 
@@ -181,8 +178,7 @@ export const strictIdempotency = (options = {}) => {
  */
 export const clearIdempotencyCache = () => {
   idempotencyCache.clear();
-  logger.info('Idempotency cache cleared');
+  logger.info("Idempotency cache cleared");
 };
 
 export default idempotency;
-
