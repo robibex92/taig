@@ -72,6 +72,15 @@ export class AuthorizationError extends AppError {
 }
 
 /**
+ * Forbidden error (alias for AuthorizationError)
+ */
+export class ForbiddenError extends AppError {
+  constructor(message = "Forbidden") {
+    super(message, HTTP_STATUS.FORBIDDEN, ERROR_CODES.AUTHORIZATION_ERROR);
+  }
+}
+
+/**
  * Not found error
  */
 export class NotFoundError extends AppError {

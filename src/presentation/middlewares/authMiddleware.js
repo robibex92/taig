@@ -62,3 +62,35 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
  * Middleware for conditional authentication (alias for authenticateOptional)
  */
 export const authenticateConditional = authenticateOptional;
+
+/**
+ * Alias for authenticateJWT (for backward compatibility)
+ */
+export const authenticate = authenticateJWT;
+
+/**
+ * Middleware to authorize based on roles
+ * @param {...string} allowedRoles - Array of allowed roles
+ */
+export const authorize = (...allowedRoles) => {
+  return asyncHandler(async (req, res, next) => {
+    if (!req.user) {
+      throw new AuthenticationError("Authentication required");
+    }
+
+    // If no roles specified, just check if user is authenticated
+    if (allowedRoles.length === 0) {
+      return next();
+    }
+
+    // Check if user has required role
+    const userRole = req.user.role || "user";
+    if (!allowedRoles.includes(userRole)) {
+      throw new AuthenticationError(
+        `Access denied. Required role: ${allowedRoles.join(" or ")}`
+      );
+    }
+
+    next();
+  });
+};

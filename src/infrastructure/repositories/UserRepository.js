@@ -208,3 +208,5 @@ export class UserRepository extends IUserRepository {
     }
   }
 }
+
+export default new UserRepository();

@@ -372,3 +372,5 @@ export class AdRepository extends IAdRepository {
     });
   }
 }
+
+export default new AdRepository();
