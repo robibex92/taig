@@ -21,7 +21,7 @@ export const helmetMiddleware = helmet({
  */
 export const generalLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // Increased from 100 to 500
   message: {
     error: {
       message: "Too many requests from this IP, please try again later",
@@ -32,6 +32,11 @@ export const generalLimiter = rateLimit({
   legacyHeaders: false,
   // Trust proxy for correct IP detection behind Nginx
   validate: { trustProxy: false }, // Disable validation warning
+  // Skip certain endpoints from rate limiting
+  skip: (req) => {
+    // Skip rate limiting for refresh token endpoint to prevent lockout
+    return req.path === "/api/auth/refresh";
+  },
 });
 
 /**

@@ -21,6 +21,12 @@ router.get(
 
 router.get(`${BASE_PATH}/:id`, adController.getAdById);
 
+// Get ad images (alias for /ad-images/:id for convenience)
+router.get(`${BASE_PATH}/:id/images`, async (req, res, next) => {
+  const adImageController = container.resolve("adImageController");
+  return adImageController.getById(req, res, next);
+});
+
 router.post(`${BASE_PATH}/:id/view_count`, adController.incrementViewCount);
 
 // Protected routes

@@ -114,15 +114,36 @@ export class GetBookingsUseCase {
       logger.info("Ad booking stats retrieved successfully", {
         adId,
         activeCount: stats.activeCount,
+        totalCount: stats.totalCount,
       });
 
+      // Safely convert bookings to JSON
+      const bookingsJSON =
+        stats.bookings && Array.isArray(stats.bookings)
+          ? stats.bookings.map((b) => {
+              try {
+                return b.toJSON ? b.toJSON() : b;
+              } catch (e) {
+                logger.error("Error converting booking to JSON", {
+                  error: e.message,
+                  booking: b,
+                });
+                return b;
+              }
+            })
+          : [];
+
       return {
-        ...stats,
-        bookings: stats.bookings.map((b) => b.toJSON()),
+        activeCount: stats.activeCount || 0,
+        totalCount: stats.totalCount || 0,
+        cancelledCount: stats.cancelledCount || 0,
+        bookings: bookingsJSON,
       };
     } catch (error) {
       logger.error("Error in GetBookingsUseCase (getAdBookingStats)", {
         error: error.message,
+        stack: error.stack,
+        adId,
       });
       throw error;
     }

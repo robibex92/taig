@@ -16,6 +16,8 @@ router.post(
   authController.authenticateTelegram
 );
 
+// Refresh token - no rate limit (handled by general limiter)
+// We skip strict auth limiter to allow legitimate refresh attempts
 router.post("/auth/refresh", authController.refreshToken);
 
 // Protected routes
