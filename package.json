@@ -26,12 +26,14 @@
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "dompurify": "^3.3.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-async-handler": "^1.2.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^7.1.0",
-    "joi": "^17.11.0",
+    "isomorphic-dompurify": "^2.29.0",
+    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "node-cron": "^4.1.0",
@@ -40,7 +42,8 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "telegraf": "^4.16.3",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
