@@ -1,9 +1,9 @@
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { logger } from "../../core/utils/logger.js";
-import AdRepository from "../../infrastructure/repositories/AdRepository.js";
-import UserRepository from "../../infrastructure/repositories/UserRepository.js";
-import MessageRepository from "../../infrastructure/repositories/MessageRepository.js";
+import adRepository from "../../infrastructure/repositories/AdRepository.js";
+import userRepository from "../../infrastructure/repositories/UserRepository.js";
+import messageRepository from "../../infrastructure/repositories/MessageRepository.js";
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
@@ -14,9 +14,9 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 export class TelegramBot {
   constructor() {
     this.bot = bot;
-    this.adRepository = new AdRepository();
-    this.userRepository = new UserRepository();
-    this.messageRepository = new MessageRepository();
+    this.adRepository = adRepository;
+    this.userRepository = userRepository;
+    this.messageRepository = messageRepository;
     this.setupHandlers();
   }
 
