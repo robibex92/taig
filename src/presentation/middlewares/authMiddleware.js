@@ -29,7 +29,7 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
 
   // Load full user data from database to get status field
   const user = await userRepository.findById(decoded.id);
-  
+
   if (!user) {
     throw new AuthenticationError("User not found");
   }
@@ -40,7 +40,7 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     username: user.username,
     first_name: user.first_name,
   };
-  
+
   next();
 });
 
@@ -64,11 +64,11 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = tokenService.verifyToken(token);
-    
+
     if (decoded && decoded.id) {
       // Load full user data from database
       const user = await userRepository.findById(decoded.id);
-      
+
       if (user) {
         req.user = {
           user_id: user.user_id,
