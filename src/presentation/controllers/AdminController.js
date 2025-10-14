@@ -5,11 +5,7 @@ import { asyncHandler } from "../../core/utils/asyncHandler.js";
  * Handles admin panel requests
  */
 export class AdminController {
-  constructor(
-    getAllUsersUseCase,
-    updateUserRoleUseCase,
-    getStatisticsUseCase
-  ) {
+  constructor(getAllUsersUseCase, updateUserRoleUseCase, getStatisticsUseCase) {
     this.getAllUsersUseCase = getAllUsersUseCase;
     this.updateUserRoleUseCase = updateUserRoleUseCase;
     this.getStatisticsUseCase = getStatisticsUseCase;

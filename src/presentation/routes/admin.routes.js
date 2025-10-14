@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateJWT } from "../../core/middlewares/authMiddleware.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { checkRole } from "../../core/middlewares/checkRole.js";
 import { container } from "../../infrastructure/container/Container.js";
 
