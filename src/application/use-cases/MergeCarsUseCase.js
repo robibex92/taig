@@ -13,8 +13,8 @@ export class MergeCarsUseCase {
 
   async execute(carId1, carId2, mergeOptions = {}) {
     // Get both cars
-    const car1 = await this.carRepository.getById(carId1);
-    const car2 = await this.carRepository.getById(carId2);
+    const car1 = await this.carRepository.findById(carId1);
+    const car2 = await this.carRepository.findById(carId2);
 
     if (!car1 || !car2) {
       throw new AppError("One or both cars not found", 404);

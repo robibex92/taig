@@ -12,7 +12,7 @@ export class GetCarImagesUseCase {
 
   async execute(carId, isAdmin = false) {
     // Check if car exists
-    const car = await this.carRepository.getById(carId);
+    const car = await this.carRepository.findById(carId);
     if (!car) {
       throw new AppError("Car not found", 404);
     }
