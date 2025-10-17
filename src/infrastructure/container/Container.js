@@ -6,6 +6,8 @@ import { CategoryRepository } from "../repositories/CategoryRepository.js";
 import { FaqRepository } from "../repositories/FaqRepository.js";
 import { FloorRuleRepository } from "../repositories/FloorRuleRepository.js";
 import { CarRepository } from "../repositories/CarRepository.js";
+import { CarImageRepository } from "../repositories/CarImageRepository.js";
+import { CarAdminNoteRepository } from "../repositories/CarAdminNoteRepository.js";
 import { AdImageRepository } from "../repositories/AdImageRepository.js";
 import { HouseRepository } from "../repositories/HouseRepository.js";
 import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.js";
@@ -15,6 +17,7 @@ import { TelegramChatRepository } from "../repositories/TelegramChatRepository.j
 import { TokenService } from "../../application/services/TokenService.improved.js";
 import { TelegramService } from "../../application/services/TelegramService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
+import { CarImageUploadService } from "../../application/services/CarImageUploadService.js";
 import NotificationService from "../../application/services/NotificationService.js";
 
 // Use Cases - Ad
@@ -64,6 +67,22 @@ import { GetCarsUseCase } from "../../application/use-cases/car/GetCarsUseCase.j
 import { GetUserCarsUseCase } from "../../application/use-cases/car/GetUserCarsUseCase.js";
 import { CreateCarUseCase } from "../../application/use-cases/car/CreateCarUseCase.js";
 import { DeleteCarUseCase } from "../../application/use-cases/car/DeleteCarUseCase.js";
+
+// Use Cases - Car Images
+import { GetCarImagesUseCase } from "../../application/use-cases/GetCarImagesUseCase.js";
+import { AddCarImageUseCase } from "../../application/use-cases/AddCarImageUseCase.js";
+import { UpdateCarImageUseCase } from "../../application/use-cases/UpdateCarImageUseCase.js";
+import { DeleteCarImageUseCase } from "../../application/use-cases/DeleteCarImageUseCase.js";
+
+// Use Cases - Car Admin Notes
+import { GetCarAdminNotesUseCase } from "../../application/use-cases/GetCarAdminNotesUseCase.js";
+import { AddCarAdminNoteUseCase } from "../../application/use-cases/AddCarAdminNoteUseCase.js";
+import { UpdateCarAdminNoteUseCase } from "../../application/use-cases/UpdateCarAdminNoteUseCase.js";
+import { DeleteCarAdminNoteUseCase } from "../../application/use-cases/DeleteCarAdminNoteUseCase.js";
+
+// Use Cases - Car Management
+import { MergeCarsUseCase } from "../../application/use-cases/MergeCarsUseCase.js";
+import { AssignCarToUserUseCase } from "../../application/use-cases/AssignCarToUserUseCase.js";
 
 // Use Cases - AdImage
 import { CreateAdImagesUseCase } from "../../application/use-cases/adImage/CreateAdImagesUseCase.js";
@@ -162,6 +181,8 @@ export class Container {
     this.register("faqRepository", () => new FaqRepository());
     this.register("floorRuleRepository", () => new FloorRuleRepository());
     this.register("carRepository", () => new CarRepository());
+    this.register("carImageRepository", () => new CarImageRepository());
+    this.register("carAdminNoteRepository", () => new CarAdminNoteRepository());
     this.register("adImageRepository", () => new AdImageRepository());
     this.register("houseRepository", () => new HouseRepository());
     this.register("refreshTokenRepository", () => new RefreshTokenRepository());
@@ -178,6 +199,7 @@ export class Container {
         )
     );
     this.register("fileUploadService", () => new FileUploadService());
+    this.register("carImageUploadService", () => new CarImageUploadService());
 
     // Notification Service
     this.register(
@@ -496,6 +518,92 @@ export class Container {
       (container) => new DeleteCarUseCase(container.resolve("carRepository"))
     );
 
+    // Use Cases - Car Images
+    this.register(
+      "getCarImagesUseCase",
+      (container) =>
+        new GetCarImagesUseCase(
+          container.resolve("carImageRepository"),
+          container.resolve("carRepository")
+        )
+    );
+
+    this.register(
+      "addCarImageUseCase",
+      (container) =>
+        new AddCarImageUseCase(
+          container.resolve("carImageRepository"),
+          container.resolve("carRepository")
+        )
+    );
+
+    this.register(
+      "updateCarImageUseCase",
+      (container) =>
+        new UpdateCarImageUseCase(container.resolve("carImageRepository"))
+    );
+
+    this.register(
+      "deleteCarImageUseCase",
+      (container) =>
+        new DeleteCarImageUseCase(container.resolve("carImageRepository"))
+    );
+
+    // Use Cases - Car Admin Notes
+    this.register(
+      "getCarAdminNotesUseCase",
+      (container) =>
+        new GetCarAdminNotesUseCase(
+          container.resolve("carAdminNoteRepository"),
+          container.resolve("carRepository")
+        )
+    );
+
+    this.register(
+      "addCarAdminNoteUseCase",
+      (container) =>
+        new AddCarAdminNoteUseCase(
+          container.resolve("carAdminNoteRepository"),
+          container.resolve("carRepository")
+        )
+    );
+
+    this.register(
+      "updateCarAdminNoteUseCase",
+      (container) =>
+        new UpdateCarAdminNoteUseCase(
+          container.resolve("carAdminNoteRepository")
+        )
+    );
+
+    this.register(
+      "deleteCarAdminNoteUseCase",
+      (container) =>
+        new DeleteCarAdminNoteUseCase(
+          container.resolve("carAdminNoteRepository")
+        )
+    );
+
+    // Use Cases - Car Management
+    this.register(
+      "mergeCarsUseCase",
+      (container) =>
+        new MergeCarsUseCase(
+          container.resolve("carRepository"),
+          container.resolve("carImageRepository"),
+          container.resolve("carAdminNoteRepository")
+        )
+    );
+
+    this.register(
+      "assignCarToUserUseCase",
+      (container) =>
+        new AssignCarToUserUseCase(
+          container.resolve("carRepository"),
+          container.resolve("carAdminNoteRepository")
+        )
+    );
+
     // Controllers - Car
     this.register(
       "carController",
@@ -504,7 +612,18 @@ export class Container {
           container.resolve("getCarsUseCase"),
           container.resolve("getUserCarsUseCase"),
           container.resolve("createCarUseCase"),
-          container.resolve("deleteCarUseCase")
+          container.resolve("deleteCarUseCase"),
+          container.resolve("getCarImagesUseCase"),
+          container.resolve("addCarImageUseCase"),
+          container.resolve("updateCarImageUseCase"),
+          container.resolve("deleteCarImageUseCase"),
+          container.resolve("getCarAdminNotesUseCase"),
+          container.resolve("addCarAdminNoteUseCase"),
+          container.resolve("updateCarAdminNoteUseCase"),
+          container.resolve("deleteCarAdminNoteUseCase"),
+          container.resolve("mergeCarsUseCase"),
+          container.resolve("assignCarToUserUseCase"),
+          container.resolve("carImageUploadService")
         )
     );
 

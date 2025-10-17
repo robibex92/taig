@@ -42,6 +42,8 @@ model User {
   cars                  Car[]
   // houses              House[] // Закомментировано - несовпадение типов
   refresh_tokens        RefreshToken[] // Сессии пользователя
+  car_images_added      CarImage[] @relation("CarImagesAddedBy")
+  car_admin_notes_created CarAdminNote[] @relation("CarAdminNotesCreatedBy")
   
   // Messaging
   sent_messages         Message[]      @relation("SentMessages")
@@ -235,6 +237,8 @@ model Car {
 
   // Relations (новая)
   user       User?     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  images     CarImage[]
+  admin_notes CarAdminNote[]
 
   @@index([user_id])
   @@index([status])
@@ -450,4 +454,47 @@ model TelegramChat {
   @@index([chat_id])
   @@index([visible_to_all])
   @@map("telegram_chats")
+}
+
+// ============================================
+// CAR IMAGES (Gallery functionality)
+// ============================================
+
+model CarImage {
+  id              BigInt    @id @default(autoincrement())
+  car_id          BigInt
+  image_url       String    @db.Text
+  comment         String?   @db.Text
+  added_by_user_id BigInt?
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  car             Car       @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  added_by_user   User?     @relation("CarImagesAddedBy", fields: [added_by_user_id], references: [user_id], onDelete: SetNull)
+
+  @@index([car_id])
+  @@index([created_at(sort: Desc)])
+  @@map("car_images")
+}
+
+// ============================================
+// CAR ADMIN NOTES (Admin-only notes about car ownership)
+// ============================================
+
+model CarAdminNote {
+  id                BigInt    @id @default(autoincrement())
+  car_id            BigInt
+  note              String    @db.Text
+  created_by_admin_id BigInt
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  car               Car       @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  created_by_admin  User      @relation("CarAdminNotesCreatedBy", fields: [created_by_admin_id], references: [user_id], onDelete: Cascade)
+
+  @@index([car_id])
+  @@index([created_at(sort: Desc)])
+  @@map("car_admin_notes")
 }
