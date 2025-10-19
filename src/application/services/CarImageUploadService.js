@@ -3,6 +3,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { logger } from "../../core/utils/logger.js";
 import { AppError } from "../../core/errors/AppError.js";
+import {
+  UPLOAD_PATHS,
+  getUploadUrl,
+} from "../../core/constants/uploadPaths.js";
 import multer from "multer";
 import sharp from "sharp";
 import crypto from "crypto";
@@ -16,7 +20,8 @@ const __dirname = path.dirname(__filename);
  */
 export class CarImageUploadService {
   constructor() {
-    this.uploadsDir = path.join(__dirname, "../../../uploads/car-images");
+    // Используем единые константы путей
+    this.uploadsDir = UPLOAD_PATHS.CAR_IMAGES;
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
     this.allowedMimeTypes = [
       "image/jpeg",
@@ -129,7 +134,7 @@ export class CarImageUploadService {
    * Get file URL
    */
   getFileUrl(filename, serverUrl) {
-    return `${serverUrl}/uploads/car-images/${filename}`;
+    return getUploadUrl(filename, "car-images");
   }
 
   /**

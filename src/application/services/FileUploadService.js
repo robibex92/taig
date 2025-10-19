@@ -3,6 +3,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { logger } from "../../core/utils/logger.js";
 import { AppError } from "../../core/errors/AppError.js";
+import {
+  UPLOAD_ROOT,
+  getUploadPath,
+  getUploadUrl,
+} from "../../core/constants/uploadPaths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +18,8 @@ const __dirname = path.dirname(__filename);
  */
 export class FileUploadService {
   constructor() {
-    this.uploadsDir = path.join(__dirname, "../../../uploads");
+    // Используем единые константы путей
+    this.uploadsDir = UPLOAD_ROOT;
     this._ensureUploadsDirExists();
   }
 
@@ -35,7 +41,7 @@ export class FileUploadService {
       return [];
     }
 
-    return files.map((file) => `${serverUrl}/uploads/${file.filename}`);
+    return files.map((file) => getUploadUrl(file.filename));
   }
 
   /**

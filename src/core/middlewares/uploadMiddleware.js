@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { logger } from "../utils/logger.js";
+import { UPLOAD_ROOT } from "../constants/uploadPaths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +11,8 @@ const __dirname = path.dirname(__filename);
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, "../../uploads");
+    // Используем единые константы путей
+    const uploadDir = UPLOAD_ROOT;
 
     if (!fs.existsSync(uploadDir)) {
       logger.info("Creating upload directory", { path: uploadDir });
@@ -27,10 +29,11 @@ const storage = multer.diskStorage({
       Math.random() * 1e8
     )}${finalExt}`;
 
-    logger.debug("Processing file upload", {
+    logger.info("Processing file upload", {
       original: file.originalname,
       mime: file.mimetype,
       extension: finalExt,
+      filename: uniqueName,
     });
 
     cb(null, uniqueName);

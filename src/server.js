@@ -17,6 +17,7 @@ import {
   helmetMiddleware,
   generalLimiter,
 } from "./presentation/middlewares/securityMiddleware.js";
+import { UPLOAD_ROOT, logUploadPaths } from "./core/constants/uploadPaths.js";
 
 // Database
 import { testConnection } from "./infrastructure/database/db.js";
@@ -105,31 +106,56 @@ app.use((req, res, next) => {
 
 // ================== Static Files ==================
 
-const uploadsStaticPath = path.join(__dirname, "../../uploads");
+// Единый путь для всех загрузок
+const uploadRoot = UPLOAD_ROOT;
 
-// Middleware для добавления CORS заголовков к статическим файлам
-const corsStaticMiddleware = (req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Cache-Control", "public, max-age=31536000"); // Кэшировать на год
-  next();
-};
+// Логируем пути для отладки
+logUploadPaths();
 
-// Раздаем статические файлы через /uploads
-app.use("/uploads", corsStaticMiddleware, express.static(uploadsStaticPath));
+// Раздаем статические файлы с правильными CORS заголовками
+app.use(
+  "/uploads",
+  express.static(uploadRoot, {
+    immutable: false,
+    maxAge: "1d",
+    fallthrough: true,
+    setHeaders: (res, filePath) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization"
+      );
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Cache-Control", "public, max-age=86400"); // 1 день
+    },
+  })
+);
 
 // Также раздаем через /api-v1/uploads для консистентности с API
 app.use(
   "/api-v1/uploads",
-  corsStaticMiddleware,
-  express.static(uploadsStaticPath)
+  express.static(uploadRoot, {
+    immutable: false,
+    maxAge: "1d",
+    fallthrough: true,
+    setHeaders: (res, filePath) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization"
+      );
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Cache-Control", "public, max-age=86400"); // 1 день
+    },
+  })
 );
 
 logger.info("Static files serving", {
-  path: uploadsStaticPath,
+  path: uploadRoot,
   routes: ["/uploads", "/api-v1/uploads"],
+  resolvedPath: path.resolve(uploadRoot),
 });
 
 // ================== API Routes ==================
