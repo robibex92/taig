@@ -44,6 +44,7 @@ import messageRoutes from "./presentation/routes/messageRoutes.js";
 import bookingRoutes from "./presentation/routes/bookingRoutes.js";
 import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
 import adminRoutes from "./presentation/routes/admin.routes.js";
+import imageProxyRoutes from "./presentation/routes/imageProxy.routes.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
@@ -104,9 +105,32 @@ app.use((req, res, next) => {
 
 // ================== Static Files ==================
 
-const uploadsStaticPath = path.join(__dirname, "../../Uploads");
-app.use("/uploads", express.static(uploadsStaticPath));
-logger.info("Static files serving", { path: uploadsStaticPath });
+const uploadsStaticPath = path.join(__dirname, "../../uploads");
+
+// Middleware для добавления CORS заголовков к статическим файлам
+const corsStaticMiddleware = (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Cache-Control", "public, max-age=31536000"); // Кэшировать на год
+  next();
+};
+
+// Раздаем статические файлы через /uploads
+app.use("/uploads", corsStaticMiddleware, express.static(uploadsStaticPath));
+
+// Также раздаем через /api-v1/uploads для консистентности с API
+app.use(
+  "/api-v1/uploads",
+  corsStaticMiddleware,
+  express.static(uploadsStaticPath)
+);
+
+logger.info("Static files serving", {
+  path: uploadsStaticPath,
+  routes: ["/uploads", "/api-v1/uploads"],
+});
 
 // ================== API Routes ==================
 
@@ -135,6 +159,7 @@ app.use("/api", messageRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api", imageProxyRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅

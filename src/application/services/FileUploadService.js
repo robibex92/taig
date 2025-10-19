@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
  */
 export class FileUploadService {
   constructor() {
-    this.uploadsDir = path.join(__dirname, "../../../../Uploads");
+    this.uploadsDir = path.join(__dirname, "../../../uploads");
     this._ensureUploadsDirExists();
   }
 

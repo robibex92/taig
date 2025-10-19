@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
  */
 export class CarImageUploadService {
   constructor() {
-    this.uploadsDir = path.join(__dirname, "../../../../Uploads/car-images");
+    this.uploadsDir = path.join(__dirname, "../../../uploads/car-images");
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
     this.allowedMimeTypes = [
       "image/jpeg",

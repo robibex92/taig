@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, "../../../Uploads");
+    const uploadDir = path.join(__dirname, "../../uploads");
 
     if (!fs.existsSync(uploadDir)) {
       logger.info("Creating upload directory", { path: uploadDir });
