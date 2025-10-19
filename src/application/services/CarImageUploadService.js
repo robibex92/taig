@@ -134,7 +134,7 @@ export class CarImageUploadService {
    * Get file URL
    */
   getFileUrl(filename, serverUrl) {
-    return getUploadUrl(filename, "car-images");
+    return `${serverUrl}/api-v1/uploads/car-images/${filename}`;
   }
 
   /**

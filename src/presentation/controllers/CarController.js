@@ -166,7 +166,10 @@ export class CarController {
     // Check if file was uploaded
     if (req.file) {
       // File upload
-      const serverUrl = `${req.protocol}://${req.get("host")}`;
+      // Используем API_URL из переменных окружения для правильного домена
+      const serverUrl = process.env.API_URL
+        ? process.env.API_URL.replace("/api-v1", "")
+        : `${req.protocol}://${req.get("host")}`;
       image_url = this.carImageUploadService.getFileUrl(
         req.file.filename,
         serverUrl

@@ -14,6 +14,12 @@ const storage = multer.diskStorage({
     // Используем единые константы путей
     const uploadDir = UPLOAD_ROOT;
 
+    logger.info("Multer destination", {
+      uploadDir,
+      fileOriginalName: file.originalname,
+      resolvedPath: path.resolve(uploadDir)
+    });
+
     if (!fs.existsSync(uploadDir)) {
       logger.info("Creating upload directory", { path: uploadDir });
       fs.mkdirSync(uploadDir, { recursive: true });

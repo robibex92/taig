@@ -24,7 +24,10 @@ export class UploadController {
       throw new ValidationError("No files uploaded");
     }
 
-    const serverUrl = req.protocol + "://" + req.get("host");
+    // Используем API_URL из переменных окружения для правильного домена
+    const serverUrl = process.env.API_URL
+      ? process.env.API_URL.replace("/api-v1", "")
+      : req.protocol + "://" + req.get("host");
     const fileUrls = this.fileUploadService.getFileUrls(req.files, serverUrl);
 
     logger.info("Files uploaded successfully", {

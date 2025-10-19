@@ -41,7 +41,7 @@ export class FileUploadService {
       return [];
     }
 
-    return files.map((file) => getUploadUrl(file.filename));
+    return files.map((file) => `${serverUrl}/api-v1/uploads/${file.filename}`);
   }
 
   /**
