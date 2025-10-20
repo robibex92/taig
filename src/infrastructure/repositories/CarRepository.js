@@ -68,6 +68,37 @@ export class CarRepository extends ICarRepository {
   }
 
   /**
+   * Update car by ID
+   */
+  async update(id, updateData) {
+    const car = await prisma.car.update({
+      where: { id: BigInt(id) },
+      data: {
+        ...(updateData.user_id !== undefined && {
+          user_id: updateData.user_id ? BigInt(updateData.user_id) : null,
+        }),
+        ...(updateData.car_number !== undefined && {
+          car_number: updateData.car_number,
+        }),
+        ...(updateData.car_model !== undefined && {
+          car_model: updateData.car_model,
+        }),
+        ...(updateData.car_brand !== undefined && {
+          car_brand: updateData.car_brand,
+        }),
+        ...(updateData.car_color !== undefined && {
+          car_color: updateData.car_color,
+        }),
+        ...(updateData.info !== undefined && { info: updateData.info }),
+        ...(updateData.status !== undefined && { status: updateData.status }),
+        updated_at: new Date(),
+      },
+    });
+
+    return Car.fromDatabase(car);
+  }
+
+  /**
    * Soft delete car (set status to false)
    */
   async softDelete(id) {

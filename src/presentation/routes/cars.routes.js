@@ -31,6 +31,13 @@ router.get("/cars/user/:user_id", carController.getUserCars);
 router.get("/cars/:id", carController.getById);
 
 /**
+ * @route   PATCH /cars/:id
+ * @desc    Update car by ID
+ * @access  Private
+ */
+router.patch("/cars/:id", authenticateJWT, carController.update);
+
+/**
  * @route   POST /cars
  * @desc    Create new car
  * @access  Private

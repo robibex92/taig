@@ -16,6 +16,7 @@ export class CarController {
     getUserCarsUseCase,
     getCarByIdUseCase,
     createCarUseCase,
+    updateCarUseCase,
     deleteCarUseCase,
     getCarImagesUseCase,
     addCarImageUseCase,
@@ -33,6 +34,7 @@ export class CarController {
     this.getUserCarsUseCase = getUserCarsUseCase;
     this.getCarByIdUseCase = getCarByIdUseCase;
     this.createCarUseCase = createCarUseCase;
+    this.updateCarUseCase = updateCarUseCase;
     this.deleteCarUseCase = deleteCarUseCase;
     this.getCarImagesUseCase = getCarImagesUseCase;
     this.addCarImageUseCase = addCarImageUseCase;
@@ -108,6 +110,39 @@ export class CarController {
     res.json({
       success: true,
       data: car,
+    });
+  });
+
+  /**
+   * PATCH /api-v1/cars/:id
+   * Update car by ID
+   */
+  update = asyncHandler(async (req, res) => {
+    const { error } = carIdSchema.validate({
+      id: parseInt(req.params.id),
+    });
+
+    if (error) {
+      throw new ValidationError(error.details[0].message);
+    }
+
+    const updateData = req.body;
+    const updatedCar = await this.updateCarUseCase.execute(
+      parseInt(req.params.id),
+      updateData
+    );
+
+    if (!updatedCar) {
+      return res.status(404).json({
+        success: false,
+        message: "Car not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: updatedCar,
+      message: "Car updated successfully",
     });
   });
 

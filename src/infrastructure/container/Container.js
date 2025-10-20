@@ -67,6 +67,7 @@ import { GetCarsUseCase } from "../../application/use-cases/car/GetCarsUseCase.j
 import { GetUserCarsUseCase } from "../../application/use-cases/car/GetUserCarsUseCase.js";
 import { GetCarByIdUseCase } from "../../application/use-cases/car/GetCarByIdUseCase.js";
 import { CreateCarUseCase } from "../../application/use-cases/car/CreateCarUseCase.js";
+import { UpdateCarUseCase } from "../../application/use-cases/car/UpdateCarUseCase.js";
 import { DeleteCarUseCase } from "../../application/use-cases/car/DeleteCarUseCase.js";
 
 // Use Cases - Car Images
@@ -520,6 +521,11 @@ export class Container {
     );
 
     this.register(
+      "updateCarUseCase",
+      (container) => new UpdateCarUseCase(container.resolve("carRepository"))
+    );
+
+    this.register(
       "deleteCarUseCase",
       (container) => new DeleteCarUseCase(container.resolve("carRepository"))
     );
@@ -619,6 +625,7 @@ export class Container {
           container.resolve("getUserCarsUseCase"),
           container.resolve("getCarByIdUseCase"),
           container.resolve("createCarUseCase"),
+          container.resolve("updateCarUseCase"),
           container.resolve("deleteCarUseCase"),
           container.resolve("getCarImagesUseCase"),
           container.resolve("addCarImageUseCase"),
