@@ -1,5 +1,5 @@
 import { IHouseCommentRepository } from "../../../domain/repositories/IHouseCommentRepository.js";
-import { ValidationError, ForbiddenError } from "../../../core/errors/index.js";
+import { ValidationError, ForbiddenError } from "../../../core/errors/AppError.js";
 
 /**
  * Create House Comment Use Case

@@ -12,6 +12,8 @@ import { AdImageRepository } from "../repositories/AdImageRepository.js";
 import { HouseRepository } from "../repositories/HouseRepository.js";
 import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.js";
 import { TelegramChatRepository } from "../repositories/TelegramChatRepository.js";
+import { HouseCommentRepository } from "../repositories/HouseCommentRepository.js";
+import { EntranceCommentRepository } from "../repositories/EntranceCommentRepository.js";
 
 // Services
 import { TokenService } from "../../application/services/TokenService.improved.js";
@@ -53,6 +55,18 @@ import { GetAllSubcategoriesUseCase } from "../../application/use-cases/category
 import { GetSubcategoryByIdUseCase } from "../../application/use-cases/category/GetSubcategoryByIdUseCase.js";
 import { GetCategoriesWithCountsUseCase } from "../../application/use-cases/category/GetCategoriesWithCountsUseCase.js";
 import { GetSubcategoriesWithCountsUseCase } from "../../application/use-cases/category/GetSubcategoriesWithCountsUseCase.js";
+
+// Use Cases - House Comments
+import { CreateHouseCommentUseCase } from "../../application/use-cases/houseComment/CreateHouseCommentUseCase.js";
+import { GetHouseCommentsUseCase } from "../../application/use-cases/houseComment/GetHouseCommentsUseCase.js";
+import { UpdateHouseCommentUseCase } from "../../application/use-cases/houseComment/UpdateHouseCommentUseCase.js";
+import { DeleteHouseCommentUseCase } from "../../application/use-cases/houseComment/DeleteHouseCommentUseCase.js";
+
+// Use Cases - Entrance Comments
+import { CreateEntranceCommentUseCase } from "../../application/use-cases/entranceComment/CreateEntranceCommentUseCase.js";
+import { GetEntranceCommentUseCase } from "../../application/use-cases/entranceComment/GetEntranceCommentUseCase.js";
+import { UpdateEntranceCommentUseCase } from "../../application/use-cases/entranceComment/UpdateEntranceCommentUseCase.js";
+import { DeleteEntranceCommentUseCase } from "../../application/use-cases/entranceComment/DeleteEntranceCommentUseCase.js";
 
 // Use Cases - FAQ
 import { GetFaqsUseCase } from "../../application/use-cases/faq/GetFaqsUseCase.js";
@@ -191,6 +205,11 @@ export class Container {
     this.register("houseRepository", () => new HouseRepository());
     this.register("refreshTokenRepository", () => new RefreshTokenRepository());
     this.register("telegramChatRepository", () => new TelegramChatRepository());
+    this.register("houseCommentRepository", () => new HouseCommentRepository());
+    this.register(
+      "entranceCommentRepository",
+      () => new EntranceCommentRepository()
+    );
 
     // Services
     this.register("tokenService", () => new TokenService());
@@ -445,6 +464,70 @@ export class Container {
       (container) =>
         new GetSubcategoriesWithCountsUseCase(
           container.resolve("categoryRepository")
+        )
+    );
+
+    // Use Cases - House Comments
+    this.register(
+      "createHouseCommentUseCase",
+      (container) =>
+        new CreateHouseCommentUseCase(
+          container.resolve("houseCommentRepository")
+        )
+    );
+
+    this.register(
+      "getHouseCommentsUseCase",
+      (container) =>
+        new GetHouseCommentsUseCase(container.resolve("houseCommentRepository"))
+    );
+
+    this.register(
+      "updateHouseCommentUseCase",
+      (container) =>
+        new UpdateHouseCommentUseCase(
+          container.resolve("houseCommentRepository")
+        )
+    );
+
+    this.register(
+      "deleteHouseCommentUseCase",
+      (container) =>
+        new DeleteHouseCommentUseCase(
+          container.resolve("houseCommentRepository")
+        )
+    );
+
+    // Use Cases - Entrance Comments
+    this.register(
+      "createEntranceCommentUseCase",
+      (container) =>
+        new CreateEntranceCommentUseCase(
+          container.resolve("entranceCommentRepository")
+        )
+    );
+
+    this.register(
+      "getEntranceCommentUseCase",
+      (container) =>
+        new GetEntranceCommentUseCase(
+          container.resolve("entranceCommentRepository")
+        )
+    );
+
+    this.register(
+      "updateEntranceCommentUseCase",
+      (container) =>
+        new UpdateEntranceCommentUseCase(
+          container.resolve("entranceCommentRepository")
+        )
+    );
+
+    this.register(
+      "deleteEntranceCommentUseCase",
+      (container) =>
+        new DeleteEntranceCommentUseCase(
+          container.resolve("entranceCommentRepository")
         )
     );
 
@@ -838,7 +921,16 @@ export class Container {
           container.resolve("getHouseInfoUseCase"),
           container.resolve("linkUserToApartmentUseCase"),
           container.resolve("unlinkUserFromApartmentUseCase"),
-          container.resolve("updateHouseInfoUseCase")
+          container.resolve("updateHouseInfoUseCase"),
+          // Comment use cases
+          container.resolve("createHouseCommentUseCase"),
+          container.resolve("getHouseCommentsUseCase"),
+          container.resolve("updateHouseCommentUseCase"),
+          container.resolve("deleteHouseCommentUseCase"),
+          container.resolve("createEntranceCommentUseCase"),
+          container.resolve("getEntranceCommentUseCase"),
+          container.resolve("updateEntranceCommentUseCase"),
+          container.resolve("deleteEntranceCommentUseCase")
         )
     );
 

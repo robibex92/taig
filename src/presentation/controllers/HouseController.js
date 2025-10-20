@@ -318,6 +318,7 @@ export class HouseController {
       parseInt(entrance)
     );
 
+    // Если комментарий не найден, возвращаем null
     res.json(comment);
   });
 

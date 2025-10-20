@@ -65,4 +65,108 @@ router.patch(
   houseController.updateHouseInfo
 );
 
+// ================== HOUSE COMMENTS ==================
+
+/**
+ * @route   GET /nearby/test-comments
+ * @desc    Test endpoint for comments
+ * @access  Public
+ */
+router.get("/nearby/test-comments", async (req, res) => {
+  try {
+    res.json({
+      message: "Comments API is working",
+      timestamp: new Date().toISOString(),
+      tables: "Checking if tables exist...",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route   GET /nearby/:house_id/comments
+ * @desc    Get comments for a specific house
+ * @access  Public
+ */
+router.get("/nearby/:house_id/comments", houseController.getHouseComments);
+
+/**
+ * @route   POST /nearby/:house_id/comments
+ * @desc    Create a comment for a house (admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  "/nearby/:house_id/comments",
+  authenticateJWT,
+  houseController.createHouseComment
+);
+
+/**
+ * @route   PUT /nearby/comments/:comment_id
+ * @desc    Update a house comment (admin only)
+ * @access  Private (Admin only)
+ */
+router.put(
+  "/nearby/comments/:comment_id",
+  authenticateJWT,
+  houseController.updateHouseComment
+);
+
+/**
+ * @route   DELETE /nearby/comments/:comment_id
+ * @desc    Delete a house comment (admin only)
+ * @access  Private (Admin only)
+ */
+router.delete(
+  "/nearby/comments/:comment_id",
+  authenticateJWT,
+  houseController.deleteHouseComment
+);
+
+// ================== ENTRANCE COMMENTS ==================
+
+/**
+ * @route   GET /nearby/:house_id/entrances/:entrance/comments
+ * @desc    Get comment for a specific house entrance
+ * @access  Public
+ */
+router.get(
+  "/nearby/:house_id/entrances/:entrance/comments",
+  houseController.getEntranceComment
+);
+
+/**
+ * @route   POST /nearby/:house_id/entrances/:entrance/comments
+ * @desc    Create a comment for a house entrance (admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  "/nearby/:house_id/entrances/:entrance/comments",
+  authenticateJWT,
+  houseController.createEntranceComment
+);
+
+/**
+ * @route   PUT /nearby/entrance-comments/:comment_id
+ * @desc    Update an entrance comment (admin only)
+ * @access  Private (Admin only)
+ */
+router.put(
+  "/nearby/entrance-comments/:comment_id",
+  authenticateJWT,
+  houseController.updateEntranceComment
+);
+
+/**
+ * @route   DELETE /nearby/entrance-comments/:comment_id
+ * @desc    Delete an entrance comment (admin only)
+ * @access  Private (Admin only)
+ */
+router.delete(
+  "/nearby/entrance-comments/:comment_id",
+  authenticateJWT,
+  houseController.deleteEntranceComment
+);
+
 export default router;

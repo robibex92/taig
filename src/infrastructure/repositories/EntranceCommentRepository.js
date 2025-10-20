@@ -85,10 +85,6 @@ export class EntranceCommentRepository {
    * Get comment for a specific house entrance
    */
   async findByHouseAndEntrance(house_id, entrance) {
- /**
-   * Get comment for a specific house entrance
-   */
-  async findByHouseAndEntrance(house_id, entrance) {
     try {
       const comment = await prisma.entranceComment.findUnique({
         where: {
@@ -117,7 +113,10 @@ export class EntranceCommentRepository {
 
       return comment;
     } catch (error) {
-      logger.error("Error finding entrance comment by house and entrance:", error);
+      logger.error(
+        "Error finding entrance comment by house and entrance:",
+        error
+      );
       throw error;
     }
   }
@@ -145,7 +144,7 @@ export class EntranceCommentRepository {
             },
           },
         },
-        orderBy: { entrance: 'asc' },
+        orderBy: { entrance: "asc" },
       });
 
       return comments;
@@ -235,11 +234,13 @@ export class EntranceCommentRepository {
       });
 
       return (
-        comment.author_id === BigInt(userId) || 
-        user?.role === true // Admin check
+        comment.author_id === BigInt(userId) || user?.role === true // Admin check
       );
     } catch (error) {
-      logger.error("Error checking user permissions for entrance comment:", error);
+      logger.error(
+        "Error checking user permissions for entrance comment:",
+        error
+      );
       return false;
     }
   }

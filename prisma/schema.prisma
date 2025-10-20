@@ -245,7 +245,7 @@ model EntranceComment {
   house       House    @relation(fields: [house_id], references: [id], onDelete: Cascade)
   author      User     @relation("EntranceCommentAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   
-  @@unique([house_id, entrance])
+  @@unique([house_id, entrance], name: "house_id_entrance")
   @@index([author_id])
   @@index([created_at])
   @@map("entrance_comments")
