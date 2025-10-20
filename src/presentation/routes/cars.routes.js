@@ -24,6 +24,13 @@ router.get("/cars", carController.getAll);
 router.get("/cars/user/:user_id", carController.getUserCars);
 
 /**
+ * @route   GET /cars/:id
+ * @desc    Get car by ID
+ * @access  Public
+ */
+router.get("/cars/:id", carController.getById);
+
+/**
  * @route   POST /cars
  * @desc    Create new car
  * @access  Private

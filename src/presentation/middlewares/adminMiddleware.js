@@ -11,8 +11,8 @@ export const requireAdmin = asyncHandler(async (req, res, next) => {
     throw new AppError("Authentication required", 401);
   }
 
-  // Check if user has admin role
-  if (!req.user.role) {
+  // Check if user has admin status
+  if (req.user.status !== "admin") {
     throw new AppError("Admin privileges required", 403);
   }
 

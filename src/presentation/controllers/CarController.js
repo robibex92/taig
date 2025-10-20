@@ -14,6 +14,7 @@ export class CarController {
   constructor(
     getCarsUseCase,
     getUserCarsUseCase,
+    getCarByIdUseCase,
     createCarUseCase,
     deleteCarUseCase,
     getCarImagesUseCase,
@@ -30,6 +31,7 @@ export class CarController {
   ) {
     this.getCarsUseCase = getCarsUseCase;
     this.getUserCarsUseCase = getUserCarsUseCase;
+    this.getCarByIdUseCase = getCarByIdUseCase;
     this.createCarUseCase = createCarUseCase;
     this.deleteCarUseCase = deleteCarUseCase;
     this.getCarImagesUseCase = getCarImagesUseCase;
@@ -78,6 +80,34 @@ export class CarController {
     res.json({
       success: true,
       data: cars,
+    });
+  });
+
+  /**
+   * GET /api-v1/cars/:id
+   * Get car by ID
+   */
+  getById = asyncHandler(async (req, res) => {
+    const { error } = carIdSchema.validate({
+      id: parseInt(req.params.id),
+    });
+
+    if (error) {
+      throw new ValidationError(error.details[0].message);
+    }
+
+    const car = await this.getCarByIdUseCase.execute(parseInt(req.params.id));
+
+    if (!car) {
+      return res.status(404).json({
+        success: false,
+        message: "Car not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: car,
     });
   });
 

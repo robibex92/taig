@@ -65,6 +65,7 @@ import { UpsertFloorRuleUseCase } from "../../application/use-cases/floorRule/Up
 // Use Cases - Car
 import { GetCarsUseCase } from "../../application/use-cases/car/GetCarsUseCase.js";
 import { GetUserCarsUseCase } from "../../application/use-cases/car/GetUserCarsUseCase.js";
+import { GetCarByIdUseCase } from "../../application/use-cases/car/GetCarByIdUseCase.js";
 import { CreateCarUseCase } from "../../application/use-cases/car/CreateCarUseCase.js";
 import { DeleteCarUseCase } from "../../application/use-cases/car/DeleteCarUseCase.js";
 
@@ -509,6 +510,11 @@ export class Container {
     );
 
     this.register(
+      "getCarByIdUseCase",
+      (container) => new GetCarByIdUseCase(container.resolve("carRepository"))
+    );
+
+    this.register(
       "createCarUseCase",
       (container) => new CreateCarUseCase(container.resolve("carRepository"))
     );
@@ -611,6 +617,7 @@ export class Container {
         new CarController(
           container.resolve("getCarsUseCase"),
           container.resolve("getUserCarsUseCase"),
+          container.resolve("getCarByIdUseCase"),
           container.resolve("createCarUseCase"),
           container.resolve("deleteCarUseCase"),
           container.resolve("getCarImagesUseCase"),
