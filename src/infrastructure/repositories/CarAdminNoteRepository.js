@@ -11,12 +11,17 @@ export class CarAdminNoteRepository extends ICarAdminNoteRepository {
    * Get all admin notes for a specific car
    */
   async getByCarId(carId) {
-    const rows = await prisma.carAdminNote.findMany({
-      where: { car_id: carId },
-      orderBy: { created_at: "desc" },
-    });
+    try {
+      const rows = await prisma.carAdminNote.findMany({
+        where: { car_id: BigInt(carId) },
+        orderBy: { created_at: "desc" },
+      });
 
-    return rows.map((row) => CarAdminNote.fromDatabase(row));
+      return rows.map((row) => CarAdminNote.fromDatabase(row));
+    } catch (error) {
+      console.error("Error in CarAdminNoteRepository.getByCarId:", error);
+      throw error;
+    }
   }
 
   /**
@@ -75,7 +80,7 @@ export class CarAdminNoteRepository extends ICarAdminNoteRepository {
    */
   async deleteByCarId(carId) {
     await prisma.carAdminNote.deleteMany({
-      where: { car_id: carId },
+      where: { car_id: BigInt(carId) },
     });
 
     return true;
