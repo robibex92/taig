@@ -22,7 +22,16 @@ export class HouseController {
     getHouseInfoUseCase,
     linkUserToApartmentUseCase,
     unlinkUserFromApartmentUseCase,
-    updateHouseInfoUseCase
+    updateHouseInfoUseCase,
+    // Comment use cases
+    createHouseCommentUseCase,
+    getHouseCommentsUseCase,
+    updateHouseCommentUseCase,
+    deleteHouseCommentUseCase,
+    createEntranceCommentUseCase,
+    getEntranceCommentsUseCase,
+    updateEntranceCommentUseCase,
+    deleteEntranceCommentUseCase
   ) {
     this.getUniqueHousesUseCase = getUniqueHousesUseCase;
     this.getEntrancesByHouseUseCase = getEntrancesByHouseUseCase;
@@ -32,6 +41,16 @@ export class HouseController {
     this.linkUserToApartmentUseCase = linkUserToApartmentUseCase;
     this.unlinkUserFromApartmentUseCase = unlinkUserFromApartmentUseCase;
     this.updateHouseInfoUseCase = updateHouseInfoUseCase;
+
+    // Comment use cases
+    this.createHouseCommentUseCase = createHouseCommentUseCase;
+    this.getHouseCommentsUseCase = getHouseCommentsUseCase;
+    this.updateHouseCommentUseCase = updateHouseCommentUseCase;
+    this.deleteHouseCommentUseCase = deleteHouseCommentUseCase;
+    this.createEntranceCommentUseCase = createEntranceCommentUseCase;
+    this.getEntranceCommentsUseCase = getEntranceCommentsUseCase;
+    this.updateEntranceCommentUseCase = updateEntranceCommentUseCase;
+    this.deleteEntranceCommentUseCase = deleteEntranceCommentUseCase;
   }
 
   /**
@@ -196,5 +215,143 @@ export class HouseController {
       data: updatedHouse.toJSON(),
       message: "House info updated successfully",
     });
+  });
+
+  // ================== HOUSE COMMENTS ==================
+
+  /**
+   * POST /api-v1/nearby/:house_id/comments
+   * Create house comment (admin only)
+   */
+  createHouseComment = asyncHandler(async (req, res) => {
+    const { house_id } = req.params;
+    const { comment } = req.body;
+    const user = req.user;
+
+    const newComment = await this.createHouseCommentUseCase.execute({
+      house_id: parseInt(house_id),
+      author_id: user.user_id,
+      comment,
+    });
+
+    res.status(201).json(newComment);
+  });
+
+  /**
+   * GET /api-v1/nearby/:house_id/comments
+   * Get house comments
+   */
+  getHouseComments = asyncHandler(async (req, res) => {
+    const { house_id } = req.params;
+
+    const comments = await this.getHouseCommentsUseCase.execute(
+      parseInt(house_id)
+    );
+
+    res.json(comments);
+  });
+
+  /**
+   * PUT /api-v1/nearby/comments/:comment_id
+   * Update house comment (admin only)
+   */
+  updateHouseComment = asyncHandler(async (req, res) => {
+    const { comment_id } = req.params;
+    const { comment } = req.body;
+    const user = req.user;
+
+    const updatedComment = await this.updateHouseCommentUseCase.execute(
+      parseInt(comment_id),
+      comment,
+      user.user_id
+    );
+
+    res.json(updatedComment);
+  });
+
+  /**
+   * DELETE /api-v1/nearby/comments/:comment_id
+   * Delete house comment (admin only)
+   */
+  deleteHouseComment = asyncHandler(async (req, res) => {
+    const { comment_id } = req.params;
+    const user = req.user;
+
+    await this.deleteHouseCommentUseCase.execute(
+      parseInt(comment_id),
+      user.user_id
+    );
+
+    res.status(204).send();
+  });
+
+  // ================== ENTRANCE COMMENTS ==================
+
+  /**
+   * POST /api-v1/nearby/:house_id/entrances/:entrance/comments
+   * Create entrance comment (admin only)
+   */
+  createEntranceComment = asyncHandler(async (req, res) => {
+    const { house_id, entrance } = req.params;
+    const { comment } = req.body;
+    const user = req.user;
+
+    const newComment = await this.createEntranceCommentUseCase.execute({
+      house_id: parseInt(house_id),
+      entrance: parseInt(entrance),
+      author_id: user.user_id,
+      comment,
+    });
+
+    res.status(201).json(newComment);
+  });
+
+  /**
+   * GET /api-v1/nearby/:house_id/entrances/:entrance/comments
+   * Get entrance comment
+   */
+  getEntranceComment = asyncHandler(async (req, res) => {
+    const { house_id, entrance } = req.params;
+
+    const comment = await this.getEntranceCommentsUseCase.execute(
+      parseInt(house_id),
+      parseInt(entrance)
+    );
+
+    res.json(comment);
+  });
+
+  /**
+   * PUT /api-v1/nearby/entrance-comments/:comment_id
+   * Update entrance comment (admin only)
+   */
+  updateEntranceComment = asyncHandler(async (req, res) => {
+    const { comment_id } = req.params;
+    const { comment } = req.body;
+    const user = req.user;
+
+    const updatedComment = await this.updateEntranceCommentUseCase.execute(
+      parseInt(comment_id),
+      comment,
+      user.user_id
+    );
+
+    res.json(updatedComment);
+  });
+
+  /**
+   * DELETE /api-v1/nearby/entrance-comments/:comment_id
+   * Delete entrance comment (admin only)
+   */
+  deleteEntranceComment = asyncHandler(async (req, res) => {
+    const { comment_id } = req.params;
+    const user = req.user;
+
+    await this.deleteEntranceCommentUseCase.execute(
+      parseInt(comment_id),
+      user.user_id
+    );
+
+    res.status(204).send();
   });
 }

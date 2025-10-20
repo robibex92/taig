@@ -1,6 +1,7 @@
 import express from "express";
 import container from "../../infrastructure/container/Container.js";
 import { authenticateConditional } from "../middlewares/authMiddleware.js";
+import { feedbackLimiter } from "../middlewares/securityMiddleware.js";
 import { validate } from "../../core/validation/validator.js";
 import Joi from "joi";
 import { logger } from "../../core/utils/logger.js";
@@ -37,6 +38,13 @@ const sendMessageSchema = Joi.object({
   parse_mode: Joi.string()
     .valid("HTML", "Markdown", "MarkdownV2")
     .default("HTML"),
+  captcha: Joi.string().when("contextType", {
+    is: "feedback",
+    then: Joi.required().messages({
+      "any.required": "Captcha is required for feedback messages",
+    }),
+    otherwise: Joi.optional(),
+  }),
 });
 
 /**
@@ -78,6 +86,7 @@ const sendMessageSchema = Joi.object({
  */
 router.post(
   `${BASE_ROUTE}/send`,
+  feedbackLimiter,
   authenticateConditional,
   async (req, res, next) => {
     try {
@@ -90,10 +99,23 @@ router.post(
         contextType,
         contextData,
         parse_mode = "HTML",
+        captcha,
       } = validatedData;
 
       // Get user_id from token (may be null for feedback)
       const user_id = req.user?.user_id;
+
+      // Простая проверка капчи для анонимной обратной связи
+      if (contextType === "feedback" && !user_id) {
+        // В реальном приложении здесь должна быть проверка капчи
+        // Пока что просто проверяем, что капча не пустая
+        if (!captcha || captcha.length !== 5) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid captcha",
+          });
+        }
+      }
 
       logger.info("Telegram send request", {
         contextType,

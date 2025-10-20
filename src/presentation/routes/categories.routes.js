@@ -45,4 +45,24 @@ router.get(
   categoryController.getSubcategoryById
 );
 
+/**
+ * @route   GET /categories/with-counts
+ * @desc    Get all categories with ad counts
+ * @access  Public
+ */
+router.get(
+  "/categories/with-counts",
+  categoryController.getCategoriesWithCounts
+);
+
+/**
+ * @route   GET /categories/:category_id/subcategories/with-counts
+ * @desc    Get subcategories with ad counts for a category
+ * @access  Public
+ */
+router.get(
+  "/categories/:category_id/subcategories/with-counts",
+  categoryController.getSubcategoriesWithCounts
+);
+
 export default router;

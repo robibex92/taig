@@ -16,13 +16,17 @@ export class CategoryController {
     getCategoryByIdUseCase,
     getSubcategoriesUseCase,
     getAllSubcategoriesUseCase,
-    getSubcategoryByIdUseCase
+    getSubcategoryByIdUseCase,
+    getCategoriesWithCountsUseCase,
+    getSubcategoriesWithCountsUseCase
   ) {
     this.getCategoriesUseCase = getCategoriesUseCase;
     this.getCategoryByIdUseCase = getCategoryByIdUseCase;
     this.getSubcategoriesUseCase = getSubcategoriesUseCase;
     this.getAllSubcategoriesUseCase = getAllSubcategoriesUseCase;
     this.getSubcategoryByIdUseCase = getSubcategoryByIdUseCase;
+    this.getCategoriesWithCountsUseCase = getCategoriesWithCountsUseCase;
+    this.getSubcategoriesWithCountsUseCase = getSubcategoriesWithCountsUseCase;
   }
 
   /**
@@ -105,5 +109,34 @@ export class CategoryController {
     );
 
     res.json(result);
+  });
+
+  /**
+   * GET /api/categories/with-counts
+   * Get all categories with ad counts
+   */
+  getCategoriesWithCounts = asyncHandler(async (req, res) => {
+    const categories = await this.getCategoriesWithCountsUseCase.execute();
+    res.json(categories);
+  });
+
+  /**
+   * GET /api/categories/:category_id/subcategories/with-counts
+   * Get subcategories with ad counts for a category
+   */
+  getSubcategoriesWithCounts = asyncHandler(async (req, res) => {
+    const { error } = getSubcategoriesByCategoryIdSchema.validate({
+      category_id: parseInt(req.params.category_id),
+    });
+
+    if (error) {
+      throw new ValidationError(error.details[0].message);
+    }
+
+    const subcategories = await this.getSubcategoriesWithCountsUseCase.execute(
+      parseInt(req.params.category_id)
+    );
+
+    res.json(subcategories);
   });
 }

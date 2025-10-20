@@ -85,4 +85,61 @@ export class CategoryRepository extends ICategoryRepository {
       subcategory: Subcategory.fromDatabase(subcategory),
     };
   }
+
+  /**
+   * Get categories with ad counts
+   */
+  async getCategoriesWithAdCounts() {
+    const categoriesWithCounts = await prisma.category.findMany({
+      include: {
+        _count: {
+          select: {
+            ads: {
+              where: {
+                status: "active",
+              },
+            },
+          },
+        },
+      },
+      orderBy: { id: "asc" },
+    });
+
+    return categoriesWithCounts.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      image: cat.image,
+      adCount: cat._count.ads,
+    }));
+  }
+
+  /**
+   * Get subcategories with ad counts for a category
+   */
+  async getSubcategoriesWithAdCounts(categoryId) {
+    const subcategoriesWithCounts = await prisma.subcategory.findMany({
+      where: {
+        category_id: Number(categoryId),
+      },
+      include: {
+        _count: {
+          select: {
+            ads: {
+              where: {
+                status: "active",
+              },
+            },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return subcategoriesWithCounts.map((sub) => ({
+      id: sub.id,
+      name: sub.name,
+      category_id: sub.category_id,
+      adCount: sub._count.ads,
+    }));
+  }
 }

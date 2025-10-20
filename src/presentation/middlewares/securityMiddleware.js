@@ -70,3 +70,22 @@ export const createAdLimiter = rateLimit({
   },
   validate: { trustProxy: false }, // Disable validation warning
 });
+
+/**
+ * Rate limiter for feedback messages
+ */
+export const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Limit to 3 feedback messages per hour per IP
+  message: {
+    error: {
+      message: "Too many feedback messages sent. Please try again later.",
+      code: "FEEDBACK_RATE_LIMIT_EXCEEDED",
+    },
+  },
+  validate: { trustProxy: false }, // Disable validation warning
+  skip: (req) => {
+    // Skip rate limiting for authenticated users (they have higher limits)
+    return req.user && req.user.user_id;
+  },
+});

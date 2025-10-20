@@ -48,4 +48,23 @@ export class ICategoryRepository {
   async findSubcategoryById(subcategoryId, categoryId) {
     throw new Error("Method 'findSubcategoryById()' must be implemented");
   }
+
+  /**
+   * Get categories with ad counts
+   * @returns {Promise<Array<{id: number, name: string, image: string, adCount: number}>>}
+   */
+  async getCategoriesWithAdCounts() {
+    throw new Error("Method 'getCategoriesWithAdCounts()' must be implemented");
+  }
+
+  /**
+   * Get subcategories with ad counts for a category
+   * @param {number} categoryId
+   * @returns {Promise<Array<{id: number, name: string, category_id: number, adCount: number}>>}
+   */
+  async getSubcategoriesWithAdCounts(categoryId) {
+    throw new Error(
+      "Method 'getSubcategoriesWithAdCounts()' must be implemented"
+    );
+  }
 }

@@ -51,6 +51,8 @@ import { GetCategoryByIdUseCase } from "../../application/use-cases/category/Get
 import { GetSubcategoriesUseCase } from "../../application/use-cases/category/GetSubcategoriesUseCase.js";
 import { GetAllSubcategoriesUseCase } from "../../application/use-cases/category/GetAllSubcategoriesUseCase.js";
 import { GetSubcategoryByIdUseCase } from "../../application/use-cases/category/GetSubcategoryByIdUseCase.js";
+import { GetCategoriesWithCountsUseCase } from "../../application/use-cases/category/GetCategoriesWithCountsUseCase.js";
+import { GetSubcategoriesWithCountsUseCase } from "../../application/use-cases/category/GetSubcategoriesWithCountsUseCase.js";
 
 // Use Cases - FAQ
 import { GetFaqsUseCase } from "../../application/use-cases/faq/GetFaqsUseCase.js";
@@ -430,6 +432,22 @@ export class Container {
         new GetSubcategoryByIdUseCase(container.resolve("categoryRepository"))
     );
 
+    this.register(
+      "getCategoriesWithCountsUseCase",
+      (container) =>
+        new GetCategoriesWithCountsUseCase(
+          container.resolve("categoryRepository")
+        )
+    );
+
+    this.register(
+      "getSubcategoriesWithCountsUseCase",
+      (container) =>
+        new GetSubcategoriesWithCountsUseCase(
+          container.resolve("categoryRepository")
+        )
+    );
+
     // Controllers - Category
     this.register(
       "categoryController",
@@ -439,7 +457,9 @@ export class Container {
           container.resolve("getCategoryByIdUseCase"),
           container.resolve("getSubcategoriesUseCase"),
           container.resolve("getAllSubcategoriesUseCase"),
-          container.resolve("getSubcategoryByIdUseCase")
+          container.resolve("getSubcategoryByIdUseCase"),
+          container.resolve("getCategoriesWithCountsUseCase"),
+          container.resolve("getSubcategoriesWithCountsUseCase")
         )
     );
 
