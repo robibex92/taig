@@ -92,6 +92,13 @@ router.get("/nearby/test-comments", async (req, res) => {
 router.get("/nearby/:house_id/comments", houseController.getHouseComments);
 
 /**
+ * @route   GET /nearby/:house_id/comment
+ * @desc    Get latest comment for a specific house (simplified)
+ * @access  Public
+ */
+router.get("/nearby/:house_id/comment", houseController.getHouseComment);
+
+/**
  * @route   POST /nearby/:house_id/comments
  * @desc    Create a comment for a house (admin only)
  * @access  Private (Admin only)
@@ -134,6 +141,16 @@ router.delete(
 router.get(
   "/nearby/:house_id/entrances/:entrance/comments",
   houseController.getEntranceComment
+);
+
+/**
+ * @route   GET /nearby/:house_id/entrances/:entrance/comment
+ * @desc    Get comment for a specific house entrance (simplified)
+ * @access  Public
+ */
+router.get(
+  "/nearby/:house_id/entrances/:entrance/comment",
+  houseController.getEntranceCommentSimple
 );
 
 /**

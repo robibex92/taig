@@ -252,6 +252,24 @@ export class HouseController {
   });
 
   /**
+   * GET /api-v1/nearby/:house_id/comment
+   * Get simplified house comment (only comment text)
+   */
+  getHouseComment = asyncHandler(async (req, res) => {
+    const { house_id } = req.params;
+
+    const comments = await this.getHouseCommentsUseCase.execute(
+      parseInt(house_id)
+    );
+
+    if (comments && comments.length > 0 && comments[0].comment) {
+      res.json({ comment: comments[0].comment });
+    } else {
+      res.json(null);
+    }
+  });
+
+  /**
    * PUT /api-v1/nearby/comments/:comment_id
    * Update house comment (admin only)
    */
@@ -320,6 +338,25 @@ export class HouseController {
 
     // Если комментарий не найден, возвращаем null
     res.json(comment);
+  });
+
+  /**
+   * GET /api-v1/nearby/:house_id/entrances/:entrance/comment
+   * Get simplified entrance comment (only comment text)
+   */
+  getEntranceCommentSimple = asyncHandler(async (req, res) => {
+    const { house_id, entrance } = req.params;
+
+    const comment = await this.getEntranceCommentsUseCase.execute(
+      parseInt(house_id),
+      parseInt(entrance)
+    );
+
+    if (comment && comment.comment) {
+      res.json({ comment: comment.comment });
+    } else {
+      res.json(null);
+    }
   });
 
   /**
