@@ -10,6 +10,16 @@ export class HouseCommentRepository {
    */
   async create(commentData) {
     try {
+      // Проверяем, существует ли модель в Prisma клиенте
+      if (!prisma.houseComment) {
+        console.error(
+          "Prisma model 'houseComment' not found. Please run 'npx prisma generate'"
+        );
+        throw new Error(
+          "Prisma model not found. Please regenerate Prisma client."
+        );
+      }
+
       const comment = await prisma.houseComment.create({
         data: {
           house_id: commentData.house_id,
