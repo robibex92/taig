@@ -91,7 +91,6 @@ export class CarRepository extends ICarRepository {
         }),
         ...(updateData.info !== undefined && { info: updateData.info }),
         ...(updateData.status !== undefined && { status: updateData.status }),
-        updated_at: new Date(),
       },
     });
 
