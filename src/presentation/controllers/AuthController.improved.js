@@ -82,60 +82,13 @@ export class AuthController {
       refreshTokenLength: result.refreshToken ? result.refreshToken.length : 0,
     });
 
-    // Security: Set refresh token in httpOnly cookie (more secure than localStorage)
-    // This prevents XSS attacks from stealing the refresh token
-    const refreshTokenExpiration =
-      this.tokenService.getRefreshTokenExpiration(rememberMe);
-
-    // iPhone Safari specific cookie settings
-    const isProduction = process.env.NODE_ENV === "production";
-    const isHTTPS = process.env.HTTPS === "true";
-    const userAgent = req.get("User-Agent") || "";
-    const isIPhone =
-      userAgent.includes("iPhone") || userAgent.includes("Mobile");
-    const isSafari =
-      userAgent.includes("Safari") && !userAgent.includes("Chrome");
-    const isMobileSafari =
-      isIPhone || (isSafari && userAgent.includes("Mobile"));
-
-    logger.info("🔐 Browser detection", {
-      isProduction,
-      isHTTPS,
-      isIPhone,
-      isSafari,
-      isMobileSafari,
-      userAgent,
-    });
-
-    // For iPhone Safari, use more permissive settings
-    const cookieOptions = {
-      httpOnly: true,
-      secure: isHTTPS, // Only true if explicitly set to HTTPS
-      sameSite: isProduction && isHTTPS ? "none" : "lax", // Use 'lax' for development, 'none' only for HTTPS production
-      maxAge: refreshTokenExpiration * 1000,
-      // iPhone Safari specific: add domain if needed
-      ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
-    };
-
-    res.cookie("refreshToken", result.refreshToken, cookieOptions);
-
-    // Debug: Log cookie setting for iPhone
-    logger.info("Setting refresh token cookie", {
-      options: cookieOptions,
-      hasRefreshToken: !!result.refreshToken,
-      userAgent: userAgent,
-      isIPhone,
-      isSafari,
-      isMobileSafari,
-    });
-
+    // В кросс-доменной среде отправляем ВСЕ в body
     const responseData = {
       success: true,
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        // Send refresh token in body for Safari as fallback (when cookies don't work)
-        refreshToken: isSafari ? result.refreshToken : undefined,
+        refreshToken: result.refreshToken, // Всегда отправляем refresh token
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
     };
@@ -144,15 +97,13 @@ export class AuthController {
       hasUser: !!responseData.data.user,
       hasAccessToken: !!responseData.data.accessToken,
       hasRefreshToken: !!responseData.data.refreshToken,
-      refreshTokenInBody: isSafari,
-      userAgent: userAgent,
     });
 
     res.status(HTTP_STATUS.OK).json(responseData);
   });
 
   /**
-   * Refresh access token
+   * Refresh access token - UPDATED for cross-domain
    * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
@@ -160,30 +111,14 @@ export class AuthController {
       ip: req.ip,
       userAgent: req.get("User-Agent"),
       cookies: req.cookies,
-      headers: req.headers,
       body: req.body,
     });
 
-    // Try to get refresh token from cookie (preferred)
-    let refreshToken = req.cookies?.refreshToken;
-
-    // Fallback to Authorization header (for mobile apps)
-    if (!refreshToken) {
-      const authHeader = req.headers.authorization;
-      refreshToken = authHeader?.split(" ")[1];
-    }
-
-    // Fallback to request body (for Safari when cookies don't work)
-    if (!refreshToken && req.body?.refreshToken) {
-      refreshToken = req.body.refreshToken;
-      logger.info("Using refresh token from request body", {
-        hasRefreshToken: !!refreshToken,
-      });
-    }
+    // В кросс-доменной среде используем ТОЛЬКО body
+    let refreshToken = req.body?.refreshToken;
 
     logger.info("Refresh token source", {
       fromCookie: !!req.cookies?.refreshToken,
-      fromHeader: !!req.headers.authorization,
       fromBody: !!req.body?.refreshToken,
       hasRefreshToken: !!refreshToken,
     });
@@ -196,14 +131,6 @@ export class AuthController {
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
 
     // Refresh tokens
-    logger.info("🔄 Calling refreshTokenUseCase", {
-      refreshTokenLength: refreshToken ? refreshToken.length : 0,
-      refreshTokenValue: refreshToken
-        ? refreshToken.substring(0, 20) + "..."
-        : "null",
-      deviceInfo,
-    });
-
     const tokens = await this.refreshTokenUseCase.execute(
       refreshToken,
       deviceInfo
@@ -212,44 +139,19 @@ export class AuthController {
     logger.info("🔄 Token refresh successful", {
       hasAccessToken: !!tokens.accessToken,
       hasRefreshToken: !!tokens.refreshToken,
-      accessTokenLength: tokens.accessToken ? tokens.accessToken.length : 0,
-      refreshTokenLength: tokens.refreshToken ? tokens.refreshToken.length : 0,
     });
 
-    // Update refresh token in cookie
-    const refreshTokenExpiration =
-      this.tokenService.getRefreshTokenExpiration();
-
-    // iPhone Safari specific cookie settings
-    const isProduction = process.env.NODE_ENV === "production";
-    const isHTTPS =
-      process.env.HTTPS === "true" || process.env.NODE_ENV === "production";
-
-    const cookieOptions = {
-      httpOnly: true,
-      secure: isHTTPS, // Must be true for sameSite: 'none' to work
-      sameSite: isProduction ? "none" : "lax",
-      maxAge: refreshTokenExpiration * 1000,
-      // iPhone Safari specific: add domain if needed
-      ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
-    };
-
-    res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
-
-    logger.info("🔄 Sending refresh response", {
-      hasAccessToken: !!tokens.accessToken,
-      accessTokenLength: tokens.accessToken ? tokens.accessToken.length : 0,
-      cookieOptions,
-    });
-
-    res.status(HTTP_STATUS.OK).json({
+    // В кросс-доменной среде НЕ используем куки - отправляем все в body
+    const responseData = {
       success: true,
       data: {
         accessToken: tokens.accessToken,
-        // refreshToken: tokens.refreshToken, // Don't send in body
+        refreshToken: tokens.refreshToken, // Всегда отправляем новый refresh token
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
-    });
+    };
+
+    res.status(HTTP_STATUS.OK).json(responseData);
   });
 
   /**
@@ -367,48 +269,6 @@ export class AuthController {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: "Logged out from all devices successfully",
-    });
-  });
-
-  /**
-   * Get tokens for PWA (when auth happens in browser)
-   * GET /api/auth/pwa-tokens
-   */
-  getPWATokens = asyncHandler(async (req, res) => {
-    const refreshToken = req.cookies?.refreshToken;
-
-    if (!refreshToken) {
-      throw new ValidationError("No active session found");
-    }
-
-    const deviceInfo = this.tokenService.extractDeviceInfo(req);
-    const tokens = await this.refreshTokenUseCase.execute(
-      refreshToken,
-      deviceInfo
-    );
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken, // Отправляем в теле для PWA
-      },
-    });
-  });
-
-  /**
-   * Check cookies availability
-   * GET /api/auth/check-cookies
-   */
-  checkCookies = asyncHandler(async (req, res) => {
-    const refreshToken = req.cookies?.refreshToken;
-
-    res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: {
-        hasCookies: !!refreshToken,
-        refreshToken: refreshToken || null,
-      },
     });
   });
 }
