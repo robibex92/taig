@@ -36,51 +36,17 @@ export class AuthController {
    * POST /api-v1/auth/telegram
    */
   authenticateTelegram = asyncHandler(async (req, res) => {
-    logger.info("🔐 Starting Telegram authentication", {
-      ip: req.ip,
-      userAgent: req.get("User-Agent"),
-      body: req.body,
-    });
-
     const telegramData = req.body;
     const rememberMe = req.body.remember_me || false;
 
-    logger.info("🔐 Telegram data received", {
-      hasId: !!telegramData.id,
-      hasUsername: !!telegramData.username,
-      hasFirstName: !!telegramData.first_name,
-      rememberMe,
-    });
-
     // Extract device information
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
-
-    logger.info("🔐 Device info extracted", {
-      deviceInfo,
-    });
-
-    // Authenticate user
-    logger.info("🔐 Calling authenticateUserUseCase", {
-      telegramDataId: telegramData.id,
-      deviceInfo,
-      rememberMe,
-    });
 
     const result = await this.authenticateUserUseCase.execute(
       telegramData,
       deviceInfo,
       rememberMe
     );
-
-    logger.info("🔐 User authentication successful", {
-      user_id: result.user.id,
-      username: result.user.username,
-      ip: req.ip,
-      hasAccessToken: !!result.accessToken,
-      hasRefreshToken: !!result.refreshToken,
-      accessTokenLength: result.accessToken ? result.accessToken.length : 0,
-      refreshTokenLength: result.refreshToken ? result.refreshToken.length : 0,
-    });
 
     // В кросс-доменной среде отправляем ВСЕ в body
     const responseData = {
@@ -93,12 +59,6 @@ export class AuthController {
       },
     };
 
-    logger.info("🔐 Sending response", {
-      hasUser: !!responseData.data.user,
-      hasAccessToken: !!responseData.data.accessToken,
-      hasRefreshToken: !!responseData.data.refreshToken,
-    });
-
     res.status(HTTP_STATUS.OK).json(responseData);
   });
 
@@ -107,21 +67,8 @@ export class AuthController {
    * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
-    logger.info("🔄 Starting token refresh", {
-      ip: req.ip,
-      userAgent: req.get("User-Agent"),
-      cookies: req.cookies,
-      body: req.body,
-    });
-
     // В кросс-доменной среде используем ТОЛЬКО body
     let refreshToken = req.body?.refreshToken;
-
-    logger.info("Refresh token source", {
-      fromCookie: !!req.cookies?.refreshToken,
-      fromBody: !!req.body?.refreshToken,
-      hasRefreshToken: !!refreshToken,
-    });
 
     if (!refreshToken) {
       throw new ValidationError("Refresh token is required");
@@ -135,11 +82,6 @@ export class AuthController {
       refreshToken,
       deviceInfo
     );
-
-    logger.info("🔄 Token refresh successful", {
-      hasAccessToken: !!tokens.accessToken,
-      hasRefreshToken: !!tokens.refreshToken,
-    });
 
     // В кросс-доменной среде НЕ используем куки - отправляем все в body
     const responseData = {
