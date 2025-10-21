@@ -92,8 +92,8 @@ export class AuthController {
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        // Send refresh token in body for mobile Safari as fallback
-        refreshToken: isMobileSafari ? result.refreshToken : undefined,
+        // Send refresh token in body for Safari as fallback (when cookies don't work)
+        refreshToken: isSafari ? result.refreshToken : undefined,
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
     });
