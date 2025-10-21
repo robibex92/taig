@@ -369,4 +369,46 @@ export class AuthController {
       message: "Logged out from all devices successfully",
     });
   });
+
+  /**
+   * Get tokens for PWA (when auth happens in browser)
+   * GET /api/auth/pwa-tokens
+   */
+  getPWATokens = asyncHandler(async (req, res) => {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      throw new ValidationError("No active session found");
+    }
+
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const tokens = await this.refreshTokenUseCase.execute(
+      refreshToken,
+      deviceInfo
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken, // Отправляем в теле для PWA
+      },
+    });
+  });
+
+  /**
+   * Check cookies availability
+   * GET /api/auth/check-cookies
+   */
+  checkCookies = asyncHandler(async (req, res) => {
+    const refreshToken = req.cookies?.refreshToken;
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        hasCookies: !!refreshToken,
+        refreshToken: refreshToken || null,
+      },
+    });
+  });
 }

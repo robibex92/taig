@@ -20,6 +20,10 @@ router.post(
 // We skip strict auth limiter to allow legitimate refresh attempts
 router.post("/auth/refresh", authController.refreshToken);
 
+// PWA-specific routes
+router.get("/auth/check-cookies", authController.checkCookies);
+router.get("/auth/pwa-tokens", authController.getPWATokens);
+
 // Protected routes
 router.get("/auth/session", authenticateJWT, authController.getSession);
 
