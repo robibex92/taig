@@ -36,18 +36,51 @@ export class AuthController {
    * POST /api-v1/auth/telegram
    */
   authenticateTelegram = asyncHandler(async (req, res) => {
+    logger.info("🔐 Starting Telegram authentication", {
+      ip: req.ip,
+      userAgent: req.get("User-Agent"),
+      body: req.body,
+    });
+
     const telegramData = req.body;
     const rememberMe = req.body.remember_me || false;
+
+    logger.info("🔐 Telegram data received", {
+      hasId: !!telegramData.id,
+      hasUsername: !!telegramData.username,
+      hasFirstName: !!telegramData.first_name,
+      rememberMe,
+    });
 
     // Extract device information
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
 
+    logger.info("🔐 Device info extracted", {
+      deviceInfo,
+    });
+
     // Authenticate user
+    logger.info("🔐 Calling authenticateUserUseCase", {
+      telegramDataId: telegramData.id,
+      deviceInfo,
+      rememberMe,
+    });
+
     const result = await this.authenticateUserUseCase.execute(
       telegramData,
       deviceInfo,
       rememberMe
     );
+
+    logger.info("🔐 User authentication successful", {
+      user_id: result.user.id,
+      username: result.user.username,
+      ip: req.ip,
+      hasAccessToken: !!result.accessToken,
+      hasRefreshToken: !!result.refreshToken,
+      accessTokenLength: result.accessToken ? result.accessToken.length : 0,
+      refreshTokenLength: result.refreshToken ? result.refreshToken.length : 0,
+    });
 
     // Security: Set refresh token in httpOnly cookie (more secure than localStorage)
     // This prevents XSS attacks from stealing the refresh token
@@ -64,6 +97,15 @@ export class AuthController {
       userAgent.includes("Safari") && !userAgent.includes("Chrome");
     const isMobileSafari =
       isIPhone || (isSafari && userAgent.includes("Mobile"));
+
+    logger.info("🔐 Browser detection", {
+      isProduction,
+      isHTTPS,
+      isIPhone,
+      isSafari,
+      isMobileSafari,
+      userAgent,
+    });
 
     // For iPhone Safari, use more permissive settings
     const cookieOptions = {
@@ -87,7 +129,7 @@ export class AuthController {
       isMobileSafari,
     });
 
-    res.status(HTTP_STATUS.OK).json({
+    const responseData = {
       success: true,
       data: {
         user: result.user,
@@ -96,7 +138,17 @@ export class AuthController {
         refreshToken: isSafari ? result.refreshToken : undefined,
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
+    };
+
+    logger.info("🔐 Sending response", {
+      hasUser: !!responseData.data.user,
+      hasAccessToken: !!responseData.data.accessToken,
+      hasRefreshToken: !!responseData.data.refreshToken,
+      refreshTokenInBody: isSafari,
+      userAgent: userAgent,
     });
+
+    res.status(HTTP_STATUS.OK).json(responseData);
   });
 
   /**
@@ -104,6 +156,14 @@ export class AuthController {
    * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
+    logger.info("🔄 Starting token refresh", {
+      ip: req.ip,
+      userAgent: req.get("User-Agent"),
+      cookies: req.cookies,
+      headers: req.headers,
+      body: req.body,
+    });
+
     // Try to get refresh token from cookie (preferred)
     let refreshToken = req.cookies?.refreshToken;
 
@@ -136,10 +196,25 @@ export class AuthController {
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
 
     // Refresh tokens
+    logger.info("🔄 Calling refreshTokenUseCase", {
+      refreshTokenLength: refreshToken ? refreshToken.length : 0,
+      refreshTokenValue: refreshToken
+        ? refreshToken.substring(0, 20) + "..."
+        : "null",
+      deviceInfo,
+    });
+
     const tokens = await this.refreshTokenUseCase.execute(
       refreshToken,
       deviceInfo
     );
+
+    logger.info("🔄 Token refresh successful", {
+      hasAccessToken: !!tokens.accessToken,
+      hasRefreshToken: !!tokens.refreshToken,
+      accessTokenLength: tokens.accessToken ? tokens.accessToken.length : 0,
+      refreshTokenLength: tokens.refreshToken ? tokens.refreshToken.length : 0,
+    });
 
     // Update refresh token in cookie
     const refreshTokenExpiration =
@@ -160,6 +235,12 @@ export class AuthController {
     };
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
+
+    logger.info("🔄 Sending refresh response", {
+      hasAccessToken: !!tokens.accessToken,
+      accessTokenLength: tokens.accessToken ? tokens.accessToken.length : 0,
+      cookieOptions,
+    });
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
