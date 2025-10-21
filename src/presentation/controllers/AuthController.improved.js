@@ -56,13 +56,16 @@ export class AuthController {
 
     // iPhone Safari specific cookie settings
     const isProduction = process.env.NODE_ENV === "production";
-    const isHTTPS =
-      process.env.HTTPS === "true" || process.env.NODE_ENV === "production";
+    const isHTTPS = process.env.HTTPS === "true";
+    const isIPhone =
+      req.get("User-Agent")?.includes("iPhone") ||
+      req.get("User-Agent")?.includes("Mobile");
 
+    // For iPhone Safari, use more permissive settings
     const cookieOptions = {
       httpOnly: true,
-      secure: isHTTPS, // Must be true for sameSite: 'none' to work
-      sameSite: isProduction ? "none" : "lax", // "none" for cross-domain in production
+      secure: isHTTPS, // Only true if explicitly set to HTTPS
+      sameSite: isIPhone ? "lax" : isProduction ? "none" : "lax", // Use 'lax' for iPhone
       maxAge: refreshTokenExpiration * 1000,
       // iPhone Safari specific: add domain if needed
       ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
@@ -70,13 +73,23 @@ export class AuthController {
 
     res.cookie("refreshToken", result.refreshToken, cookieOptions);
 
+    // Debug: Log cookie setting for iPhone
+    logger.info("Setting refresh token cookie", {
+      options: cookieOptions,
+      hasRefreshToken: !!result.refreshToken,
+      userAgent: req.get("User-Agent"),
+      isIPhone:
+        req.get("User-Agent")?.includes("iPhone") ||
+        req.get("User-Agent")?.includes("Mobile"),
+    });
+
     res.status(HTTP_STATUS.OK).json({
       success: true,
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        // Don't send refresh token in body when using cookies
-        // refreshToken: result.refreshToken,
+        // Send refresh token in body for iPhone Safari as fallback
+        refreshToken: isIPhone ? result.refreshToken : undefined,
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
     });
