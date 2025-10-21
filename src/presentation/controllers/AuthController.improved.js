@@ -53,12 +53,27 @@ export class AuthController {
     const refreshTokenExpiration =
       this.tokenService.getRefreshTokenExpiration(rememberMe);
 
-    res.cookie("refreshToken", result.refreshToken, {
+    // iPhone Safari specific cookie settings
+    const isProduction = process.env.NODE_ENV === "production";
+    const isHTTPS =
+      process.env.HTTPS === "true" || process.env.NODE_ENV === "production";
+
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // HTTPS only in production
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-domain in production
+      secure: isHTTPS, // Must be true for sameSite: 'none' to work
+      sameSite: isProduction ? "none" : "lax", // "none" for cross-domain in production
       maxAge: refreshTokenExpiration * 1000,
+      // iPhone Safari specific: add domain if needed
+      ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
+    };
+
+    logger.info("Setting refresh token cookie", {
+      options: cookieOptions,
+      hasRefreshToken: !!result.refreshToken,
+      userAgent: req.headers["user-agent"],
     });
+
+    res.cookie("refreshToken", result.refreshToken, cookieOptions);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -77,6 +92,12 @@ export class AuthController {
    * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
+    logger.info("Refresh token request", {
+      cookies: req.cookies,
+      hasRefreshTokenCookie: !!req.cookies?.refreshToken,
+      userAgent: req.headers["user-agent"],
+    });
+
     // Try to get refresh token from cookie (preferred)
     let refreshToken = req.cookies?.refreshToken;
 
@@ -103,12 +124,27 @@ export class AuthController {
     const refreshTokenExpiration =
       this.tokenService.getRefreshTokenExpiration();
 
-    res.cookie("refreshToken", tokens.refreshToken, {
+    // iPhone Safari specific cookie settings
+    const isProduction = process.env.NODE_ENV === "production";
+    const isHTTPS =
+      process.env.HTTPS === "true" || process.env.NODE_ENV === "production";
+
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: isHTTPS, // Must be true for sameSite: 'none' to work
+      sameSite: isProduction ? "none" : "lax",
       maxAge: refreshTokenExpiration * 1000,
+      // iPhone Safari specific: add domain if needed
+      ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
+    };
+
+    logger.info("Updating refresh token cookie", {
+      options: cookieOptions,
+      hasRefreshToken: !!tokens.refreshToken,
+      userAgent: req.headers["user-agent"],
     });
+
+    res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
