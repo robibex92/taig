@@ -68,12 +68,6 @@ export class AuthController {
       ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
     };
 
-    logger.info("Setting refresh token cookie", {
-      options: cookieOptions,
-      hasRefreshToken: !!result.refreshToken,
-      userAgent: req.headers["user-agent"],
-    });
-
     res.cookie("refreshToken", result.refreshToken, cookieOptions);
 
     res.status(HTTP_STATUS.OK).json({
@@ -93,12 +87,6 @@ export class AuthController {
    * POST /api-v1/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
-    logger.info("Refresh token request", {
-      cookies: req.cookies,
-      hasRefreshTokenCookie: !!req.cookies?.refreshToken,
-      userAgent: req.headers["user-agent"],
-    });
-
     // Try to get refresh token from cookie (preferred)
     let refreshToken = req.cookies?.refreshToken;
 
@@ -138,12 +126,6 @@ export class AuthController {
       // iPhone Safari specific: add domain if needed
       ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
     };
-
-    logger.info("Updating refresh token cookie", {
-      options: cookieOptions,
-      hasRefreshToken: !!tokens.refreshToken,
-      userAgent: req.headers["user-agent"],
-    });
 
     res.cookie("refreshToken", tokens.refreshToken, cookieOptions);
 
