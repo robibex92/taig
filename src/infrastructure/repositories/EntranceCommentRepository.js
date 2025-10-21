@@ -96,12 +96,24 @@ export class EntranceCommentRepository {
    */
   async findByHouseAndEntrance(house_id, entrance) {
     try {
-      const comment = await prisma.entranceComment.findUnique({
+      // Проверяем, существует ли модель в Prisma клиенте
+      if (!prisma.entranceComment) {
+        console.error(
+          "Prisma model 'entranceComment' not found. Please run 'npx prisma generate'"
+        );
+        throw new Error(
+          "Prisma model not found. Please regenerate Prisma client."
+        );
+      }
+
+      console.log(
+        `Looking for entrance comment: house_id=${house_id}, entrance=${entrance}`
+      );
+
+      const comment = await prisma.entranceComment.findFirst({
         where: {
-          house_id_entrance: {
-            house_id: BigInt(house_id),
-            entrance: entrance,
-          },
+          house_id: BigInt(house_id),
+          entrance: entrance,
         },
         include: {
           author: {
@@ -121,12 +133,14 @@ export class EntranceCommentRepository {
         },
       });
 
+      console.log(`Found entrance comment:`, comment ? "yes" : "no");
       return comment;
     } catch (error) {
       logger.error(
         "Error finding entrance comment by house and entrance:",
         error
       );
+      console.error("Detailed error:", error);
       throw error;
     }
   }

@@ -12,6 +12,10 @@ export class GetEntranceCommentUseCase {
 
   async execute(house_id, entrance) {
     try {
+      console.log(
+        `GetEntranceCommentUseCase.execute called with house_id=${house_id}, entrance=${entrance}`
+      );
+
       if (!house_id || !entrance) {
         throw new ValidationError("House ID and entrance are required");
       }
@@ -21,6 +25,11 @@ export class GetEntranceCommentUseCase {
           house_id,
           entrance
         );
+
+      console.log(
+        `GetEntranceCommentUseCase result:`,
+        comment ? "found" : "not found"
+      );
       return comment; // Может быть null если комментарий не найден
     } catch (error) {
       console.error("Error getting entrance comment:", error);

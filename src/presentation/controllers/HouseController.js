@@ -347,15 +347,31 @@ export class HouseController {
   getEntranceCommentSimple = asyncHandler(async (req, res) => {
     const { house_id, entrance } = req.params;
 
-    const comment = await this.getEntranceCommentsUseCase.execute(
-      parseInt(house_id),
-      parseInt(entrance)
+    console.log(
+      `getEntranceCommentSimple called with house_id=${house_id}, entrance=${entrance}`
     );
 
-    if (comment && comment.comment) {
-      res.json({ comment: comment.comment });
-    } else {
-      res.json(null);
+    try {
+      const comment = await this.getEntranceCommentsUseCase.execute(
+        parseInt(house_id),
+        parseInt(entrance)
+      );
+
+      console.log(`getEntranceCommentSimple result:`, comment);
+
+      if (comment && comment.comment) {
+        res.json({ comment: comment.comment });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error in getEntranceCommentSimple:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        message: error.message,
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
+      });
     }
   });
 
