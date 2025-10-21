@@ -60,18 +60,51 @@ class ArchiveExpiredAdsJob {
             },
           });
 
-          // Update Telegram messages
+          // Update Telegram messages - delete them for archived ads
           if (ad.telegram_messages && ad.telegram_messages.length > 0) {
-            const messageIds = ad.telegram_messages.map((tm) => ({
-              chatId: tm.chat_id,
-              messageId: tm.message_id,
-            }));
-
-            await this.telegramService.updateAdInTelegram(
-              ad.id,
-              messageIds,
-              "archived"
+            logger.info(
+              `Deleting ${ad.telegram_messages.length} Telegram messages for auto-archived ad ${ad.id}`
             );
+
+            const deletePromises = ad.telegram_messages.map(async (msg) => {
+              try {
+                return await this.telegramService.deleteMessage({
+                  chatId: msg.chat_id,
+                  messageId: msg.message_id,
+                  threadId: msg.thread_id || undefined,
+                });
+              } catch (err) {
+                logger.error(
+                  `Failed to delete Telegram message ${msg.message_id} for auto-archived ad`,
+                  {
+                    error: err.message,
+                    chat_id: msg.chat_id,
+                    message_id: msg.message_id,
+                    ad_id: ad.id,
+                  }
+                );
+                return { success: false, error: err.message };
+              }
+            });
+
+            const results = await Promise.allSettled(deletePromises);
+            const successCount = results.filter(
+              (r) => r.status === "fulfilled" && r.value?.success
+            ).length;
+
+            logger.info(
+              `Deleted ${successCount}/${ad.telegram_messages.length} Telegram messages for auto-archived ad`,
+              {
+                ad_id: ad.id,
+                success_count: successCount,
+                total_count: ad.telegram_messages.length,
+              }
+            );
+
+            // Remove telegram message records from database
+            await prisma.telegramMessage.deleteMany({
+              where: { ad_id: BigInt(ad.id) },
+            });
           }
 
           // Notify owner

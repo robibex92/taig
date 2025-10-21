@@ -14,7 +14,7 @@ const options = {
       description: "REST API for Taiginsky residential community platform",
       contact: {
         name: "Taiginsky Development Team",
-        email: "support@taiginsky.md",
+        email: "support",
       },
       license: {
         name: "ISC",

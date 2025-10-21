@@ -56,59 +56,100 @@ export class UpdateAdUseCase {
 
         if (telegramMessages && telegramMessages.length > 0) {
           logger.info(
-            `Found ${telegramMessages.length} Telegram messages to update for ad ${adId}`
+            `Found ${telegramMessages.length} Telegram messages to handle for ad ${adId}`
           );
 
-          // Prepare status text
-          const statusEmoji = newStatus === "archive" ? "🗃" : "🚫";
-          const statusText =
-            newStatus === "archive"
-              ? "АРХИВ - Объявление снято с продажи"
-              : "УДАЛЕНО - Объявление больше не доступно";
+          if (newStatus === "archive") {
+            // For archived ads, delete messages from Telegram
+            logger.info(
+              `Deleting ${telegramMessages.length} Telegram messages for archived ad ${adId}`
+            );
 
-          // Update caption for each message
-          const updatePromises = telegramMessages.map(async (msg) => {
-            try {
-              const originalCaption =
-                msg.caption ||
-                `${updatedAd.title}\n\n${updatedAd.content}\n\nЦена: ${updatedAd.price}`;
-              const updatedCaption = `${statusEmoji} <b>${statusText}</b>\n\n<s>${originalCaption}</s>`;
+            const deletePromises = telegramMessages.map(async (msg) => {
+              try {
+                return await this.telegramService.deleteMessage({
+                  chatId: msg.chat_id,
+                  messageId: msg.message_id,
+                  threadId: msg.thread_id || undefined,
+                });
+              } catch (err) {
+                logger.error(
+                  `Failed to delete Telegram message ${msg.message_id}`,
+                  {
+                    error: err.message,
+                    chat_id: msg.chat_id,
+                    message_id: msg.message_id,
+                  }
+                );
+                return { success: false, error: err.message };
+              }
+            });
 
-              return await this.telegramService.editMessageCaption({
-                chatId: msg.chat_id,
-                messageId: msg.message_id,
-                caption: updatedCaption,
-                threadId: msg.thread_id || undefined,
-                parse_mode: "HTML",
-              });
-            } catch (err) {
-              logger.error(
-                `Failed to update Telegram message ${msg.message_id}`,
-                {
-                  error: err.message,
-                  chat_id: msg.chat_id,
-                  message_id: msg.message_id,
-                }
-              );
-              return { success: false, error: err.message };
-            }
-          });
+            const results = await Promise.allSettled(deletePromises);
+            const successCount = results.filter(
+              (r) => r.status === "fulfilled" && r.value?.success
+            ).length;
 
-          const results = await Promise.allSettled(updatePromises);
-          const successCount = results.filter(
-            (r) => r.status === "fulfilled" && r.value?.success
-          ).length;
+            logger.info(
+              `Deleted ${successCount}/${telegramMessages.length} Telegram messages for archived ad`,
+              {
+                ad_id: adId,
+                success_count: successCount,
+                total_count: telegramMessages.length,
+              }
+            );
 
-          logger.info(
-            `Updated ${successCount}/${telegramMessages.length} Telegram messages for archived/deleted ad`,
-            {
-              ad_id: adId,
-              new_status: newStatus,
-            }
-          );
+            // Remove telegram message records from database
+            await this.adRepository.deleteTelegramMessagesByAdId(adId);
+          } else if (newStatus === "deleted") {
+            // For deleted ads, update messages with deletion notice
+            const statusEmoji = "🚫";
+            const statusText = "УДАЛЕНО - Объявление больше не доступно";
+
+            const updatePromises = telegramMessages.map(async (msg) => {
+              try {
+                const originalCaption =
+                  msg.caption ||
+                  `${updatedAd.title}\n\n${updatedAd.content}\n\nЦена: ${updatedAd.price}`;
+                const updatedCaption = `${statusEmoji} <b>${statusText}</b>\n\n<s>${originalCaption}</s>`;
+
+                return await this.telegramService.editMessageCaption({
+                  chatId: msg.chat_id,
+                  messageId: msg.message_id,
+                  caption: updatedCaption,
+                  threadId: msg.thread_id || undefined,
+                  parse_mode: "HTML",
+                });
+              } catch (err) {
+                logger.error(
+                  `Failed to update Telegram message ${msg.message_id}`,
+                  {
+                    error: err.message,
+                    chat_id: msg.chat_id,
+                    message_id: msg.message_id,
+                  }
+                );
+                return { success: false, error: err.message };
+              }
+            });
+
+            const results = await Promise.allSettled(updatePromises);
+            const successCount = results.filter(
+              (r) => r.status === "fulfilled" && r.value?.success
+            ).length;
+
+            logger.info(
+              `Updated ${successCount}/${telegramMessages.length} Telegram messages for deleted ad`,
+              {
+                ad_id: adId,
+                success_count: successCount,
+                total_count: telegramMessages.length,
+              }
+            );
+          }
         }
       } catch (err) {
-        logger.error("Failed to update Telegram messages for status change", {
+        logger.error("Failed to handle Telegram messages for status change", {
           ad_id: adId,
           error: err.message,
           stack: err.stack,
