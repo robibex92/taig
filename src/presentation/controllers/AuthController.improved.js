@@ -113,6 +113,21 @@ export class AuthController {
       refreshToken = authHeader?.split(" ")[1];
     }
 
+    // Fallback to request body (for Safari when cookies don't work)
+    if (!refreshToken && req.body?.refreshToken) {
+      refreshToken = req.body.refreshToken;
+      logger.info("Using refresh token from request body", {
+        hasRefreshToken: !!refreshToken,
+      });
+    }
+
+    logger.info("Refresh token source", {
+      fromCookie: !!req.cookies?.refreshToken,
+      fromHeader: !!req.headers.authorization,
+      fromBody: !!req.body?.refreshToken,
+      hasRefreshToken: !!refreshToken,
+    });
+
     if (!refreshToken) {
       throw new ValidationError("Refresh token is required");
     }
