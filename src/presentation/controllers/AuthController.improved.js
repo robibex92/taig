@@ -1,6 +1,7 @@
 import { HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
+import { logger } from "../../core/utils/logger.js";
 
 /**
  * Improved Auth Controller with enhanced security
