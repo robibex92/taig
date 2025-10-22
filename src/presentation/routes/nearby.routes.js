@@ -92,11 +92,25 @@ router.get("/nearby/test-comments", async (req, res) => {
 router.get("/nearby/:house_id/comments", houseController.getHouseComments);
 
 /**
+ * @route   GET /nearby/comments
+ * @desc    Get comments for a specific house by house number (query param)
+ * @access  Public
+ */
+router.get("/nearby/comments", houseController.getHouseCommentsByNumber);
+
+/**
  * @route   GET /nearby/:house_id/comment
  * @desc    Get latest comment for a specific house (simplified)
  * @access  Public
  */
 router.get("/nearby/:house_id/comment", houseController.getHouseComment);
+
+/**
+ * @route   GET /nearby/comment
+ * @desc    Get latest comment for a specific house by house number (simplified, query param)
+ * @access  Public
+ */
+router.get("/nearby/comment", houseController.getHouseCommentByNumber);
 
 /**
  * @route   POST /nearby/:house_id/comments
@@ -107,6 +121,17 @@ router.post(
   "/nearby/:house_id/comments",
   authenticateJWT,
   houseController.createHouseComment
+);
+
+/**
+ * @route   POST /nearby/comments
+ * @desc    Create a comment for a house by house number (admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  "/nearby/comments",
+  authenticateJWT,
+  houseController.createHouseCommentByNumber
 );
 
 /**

@@ -115,7 +115,8 @@ export class HouseCommentRepository {
         orderBy: { created_at: "desc" },
       });
 
-      return comments;
+      // Filter out comments where author is null (broken references)
+      return comments.filter((comment) => comment.author !== null);
     } catch (error) {
       logger.error("Error finding house comments by house ID:", error);
       throw error;
@@ -127,21 +128,18 @@ export class HouseCommentRepository {
    */
   async findByHouseNumber(houseNumber) {
     try {
+      // Сначала получаем все комментарии без include author
       const comments = await prisma.houseComment.findMany({
         where: {
           house: {
             house: houseNumber,
           },
         },
-        include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
+        select: {
+          id: true,
+          comment: true,
+          created_at: true,
+          author_id: true,
           house: {
             select: {
               id: true,
@@ -152,7 +150,36 @@ export class HouseCommentRepository {
         orderBy: { created_at: "desc" },
       });
 
-      return comments;
+      // Фильтруем комментарии с валидными авторами
+      const validComments = comments.filter(comment => comment.author_id !== null);
+
+      // Теперь получаем данные авторов только для валидных комментариев
+      const commentsWithAuthors = [];
+      for (const comment of validComments) {
+        try {
+          const author = await prisma.user.findUnique({
+            where: { user_id: comment.author_id },
+            select: {
+              user_id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+            },
+          });
+
+          if (author) {
+            commentsWithAuthors.push({
+              ...comment,
+              author,
+            });
+          }
+        } catch (authorError) {
+          // Пропускаем комментарии с проблемными авторами
+          logger.warn(`Skipping comment ${comment.id} due to author lookup error:`, authorError);
+        }
+      }
+
+      return commentsWithAuthors;
     } catch (error) {
       logger.error("Error finding house comments by house number:", error);
       throw error;
@@ -172,6 +199,35 @@ export class HouseCommentRepository {
       return house ? Number(house.id) : null;
     } catch (error) {
       logger.error("Error finding house ID by house number:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get simple comment text for a house by house number (no author details)
+   */
+  async findSimpleCommentByHouseNumber(houseNumber) {
+    try {
+      // Сначала получаем все комментарии для дома
+      const comments = await prisma.houseComment.findMany({
+        where: {
+          house: {
+            house: houseNumber,
+          },
+        },
+        select: {
+          comment: true,
+          author_id: true,
+        },
+        orderBy: { created_at: "desc" },
+      });
+
+      // Фильтруем комментарии с валидными авторами и возвращаем первый
+      const validComment = comments.find(comment => comment.author_id !== null);
+      
+      return validComment ? validComment.comment : null;
+    } catch (error) {
+      logger.error("Error finding simple comment by house number:", error);
       throw error;
     }
   }

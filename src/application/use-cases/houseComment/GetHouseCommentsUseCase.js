@@ -39,4 +39,32 @@ export class GetHouseCommentsUseCase {
       throw error;
     }
   }
+
+  async executeSimple(house_number) {
+    try {
+      console.log(`executeSimple called with house_number: "${house_number}"`);
+      
+      if (!house_number) {
+        throw new ValidationError("House number is required");
+      }
+
+      // Получаем только текст комментария без подробностей
+      const comment =
+        await this.houseCommentRepository.findSimpleCommentByHouseNumber(
+          house_number
+        );
+      
+      console.log(`executeSimple result: ${comment ? `"${comment}"` : 'null'}`);
+      
+      return comment;
+    } catch (error) {
+      console.error("Error getting simple house comment:", error);
+      // Если это ошибка "таблица не найдена", возвращаем null
+      if (error.code === "P2021" || error.message.includes("does not exist")) {
+        console.log("Table does not exist yet, returning null");
+        return null;
+      }
+      throw error;
+    }
+  }
 }
