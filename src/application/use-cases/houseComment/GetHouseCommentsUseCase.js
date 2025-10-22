@@ -10,16 +10,25 @@ export class GetHouseCommentsUseCase {
     this.houseCommentRepository = houseCommentRepository;
   }
 
-  async execute(house_id) {
+  async execute(house_id_or_number) {
     try {
-      if (!house_id) {
-        throw new ValidationError("House ID is required");
+      if (!house_id_or_number) {
+        throw new ValidationError("House ID or number is required");
       }
 
-      const comments = await this.houseCommentRepository.findByHouseId(
-        house_id
-      );
-      return comments;
+      // Если это число, используем поиск по house_id
+      if (!isNaN(house_id_or_number)) {
+        const comments = await this.houseCommentRepository.findByHouseId(
+          parseInt(house_id_or_number)
+        );
+        return comments;
+      } else {
+        // Если это строка, используем поиск по номеру дома
+        const comments = await this.houseCommentRepository.findByHouseNumber(
+          house_id_or_number
+        );
+        return comments;
+      }
     } catch (error) {
       console.error("Error getting house comments:", error);
       // Если это ошибка "таблица не найдена", возвращаем пустой массив

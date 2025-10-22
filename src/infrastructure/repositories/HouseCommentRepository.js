@@ -123,6 +123,60 @@ export class HouseCommentRepository {
   }
 
   /**
+   * Get comments for a specific house by house number
+   */
+  async findByHouseNumber(houseNumber) {
+    try {
+      const comments = await prisma.houseComment.findMany({
+        where: {
+          house: {
+            house: houseNumber,
+          },
+        },
+        include: {
+          author: {
+            select: {
+              user_id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+            },
+          },
+          house: {
+            select: {
+              id: true,
+              house: true,
+            },
+          },
+        },
+        orderBy: { created_at: "desc" },
+      });
+
+      return comments;
+    } catch (error) {
+      logger.error("Error finding house comments by house number:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find house ID by house number
+   */
+  async findHouseIdByNumber(houseNumber) {
+    try {
+      const house = await prisma.house.findFirst({
+        where: { house: houseNumber },
+        select: { id: true },
+      });
+
+      return house ? Number(house.id) : null;
+    } catch (error) {
+      logger.error("Error finding house ID by house number:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Update a comment
    */
   async update(id, updateData) {

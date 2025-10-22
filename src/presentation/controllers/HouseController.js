@@ -229,7 +229,7 @@ export class HouseController {
     const user = req.user;
 
     const newComment = await this.createHouseCommentUseCase.execute({
-      house_id: parseInt(house_id),
+      house_id: house_id, // Pass as string to support both house_id and house number
       author_id: user.user_id,
       comment,
     });
@@ -244,9 +244,7 @@ export class HouseController {
   getHouseComments = asyncHandler(async (req, res) => {
     const { house_id } = req.params;
 
-    const comments = await this.getHouseCommentsUseCase.execute(
-      parseInt(house_id)
-    );
+    const comments = await this.getHouseCommentsUseCase.execute(house_id);
 
     res.json(comments);
   });
@@ -258,9 +256,7 @@ export class HouseController {
   getHouseComment = asyncHandler(async (req, res) => {
     const { house_id } = req.params;
 
-    const comments = await this.getHouseCommentsUseCase.execute(
-      parseInt(house_id)
-    );
+    const comments = await this.getHouseCommentsUseCase.execute(house_id);
 
     if (comments && comments.length > 0 && comments[0].comment) {
       res.json({ comment: comments[0].comment });
