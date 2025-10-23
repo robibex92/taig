@@ -31,44 +31,33 @@ export class AuthenticateUserUseCase {
       .update(checkString)
       .digest("hex");
 
-    // Debug logging
-    logger.info("Telegram auth verification details", {
-      received_hash: hash ? `${hash.substring(0, 10)}...` : "missing",
-      calculated_hash: `${hmac.substring(0, 10)}...`,
-      check_string: checkString,
-      bot_token_length: process.env.TELEGRAM_BOT_TOKEN
-        ? process.env.TELEGRAM_BOT_TOKEN.length
-        : 0,
-      data_keys: Object.keys(data).sort(),
-    });
+    // Simple debug logging
+    console.log("=== VERIFICATION DEBUG ===");
+    console.log("Received hash:", hash);
+    console.log("Calculated hash:", hmac);
+    console.log("Check string:", checkString);
+    console.log("Data keys:", Object.keys(data).sort());
+    console.log("Hashes match:", hmac === hash);
 
     return hmac === hash;
   }
 
   async execute(telegramAuthData) {
-    // Debug logging
-    logger.info("Telegram auth attempt", {
-      telegram_id: telegramAuthData.id,
-      username: telegramAuthData.username,
-      first_name: telegramAuthData.first_name,
-      auth_date: telegramAuthData.auth_date,
-      hash: telegramAuthData.hash
-        ? `${telegramAuthData.hash.substring(0, 10)}...`
-        : "missing",
-      bot_token_set: !!process.env.TELEGRAM_BOT_TOKEN,
-    });
+    // Simple debug logging
+    console.log("=== TELEGRAM AUTH DEBUG ===");
+    console.log("Received data:", JSON.stringify(telegramAuthData, null, 2));
+    console.log("Bot token exists:", !!process.env.TELEGRAM_BOT_TOKEN);
+    console.log(
+      "Bot token length:",
+      process.env.TELEGRAM_BOT_TOKEN ? process.env.TELEGRAM_BOT_TOKEN.length : 0
+    );
 
     // Verify Telegram authentication
-    if (!this.verifyTelegramAuth(telegramAuthData)) {
-      logger.warn("Telegram auth verification failed", {
-        telegram_id: telegramAuthData.id,
-        received_hash: telegramAuthData.hash
-          ? `${telegramAuthData.hash.substring(0, 10)}...`
-          : "missing",
-        bot_token_length: process.env.TELEGRAM_BOT_TOKEN
-          ? process.env.TELEGRAM_BOT_TOKEN.length
-          : 0,
-      });
+    const isValid = this.verifyTelegramAuth(telegramAuthData);
+    console.log("Auth verification result:", isValid);
+
+    if (!isValid) {
+      console.log("=== AUTH FAILED ===");
       throw new AuthenticationError("Invalid Telegram authentication");
     }
 
