@@ -494,7 +494,7 @@ model Booking {
 // ============================================
 
 model TelegramChat {
-  id             Int       @id @default(autoincrement())
+  id             BigInt    @id @default(autoincrement())
   chat_id        String    @db.VarChar(255)
   thread_id      String?   @db.VarChar(255)
   name           String    @db.VarChar(255)
