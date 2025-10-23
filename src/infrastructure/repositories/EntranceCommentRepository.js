@@ -28,12 +28,12 @@ export class EntranceCommentRepository {
           comment: commentData.comment,
         },
         include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -59,12 +59,12 @@ export class EntranceCommentRepository {
       const comment = await prisma.entranceComment.findUnique({
         where: { id: BigInt(id) },
         include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -100,12 +100,12 @@ export class EntranceCommentRepository {
           entrance: entrance,
         },
         include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -182,12 +182,12 @@ export class EntranceCommentRepository {
       const comments = await prisma.entranceComment.findMany({
         where: { house_id: BigInt(house_id) },
         include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
         orderBy: { entrance: "asc" },
       });
@@ -211,12 +211,12 @@ export class EntranceCommentRepository {
           updated_at: new Date(),
         },
         include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
