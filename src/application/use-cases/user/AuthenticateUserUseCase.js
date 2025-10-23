@@ -16,6 +16,17 @@ export class AuthenticateUserUseCase {
    */
   verifyTelegramAuth(authData) {
     const { hash, ...data } = authData;
+    
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      logger.error("TELEGRAM_BOT_TOKEN not configured");
+      return false;
+    }
+    
+    if (!hash) {
+      logger.error("No hash provided in Telegram auth data");
+      return false;
+    }
+    
     const secret = crypto
       .createHash("sha256")
       .update(process.env.TELEGRAM_BOT_TOKEN)
@@ -31,12 +42,36 @@ export class AuthenticateUserUseCase {
       .update(checkString)
       .digest("hex");
 
-    return hmac === hash;
+    const isValid = hmac === hash;
+    
+    if (!isValid) {
+      logger.warn("Telegram hash validation failed", {
+        expected: hmac,
+        received: hash,
+        checkString: checkString.substring(0, 100) + "..."
+      });
+    }
+    
+    return isValid;
   }
 
   async execute(telegramAuthData) {
+    // Log received data for debugging
+    logger.info("Telegram auth data received", {
+      id: telegramAuthData.id,
+      username: telegramAuthData.username,
+      first_name: telegramAuthData.first_name,
+      auth_date: telegramAuthData.auth_date,
+      hash: telegramAuthData.hash ? "present" : "missing",
+      hasToken: !!process.env.TELEGRAM_BOT_TOKEN
+    });
+
     // Verify Telegram authentication
     if (!this.verifyTelegramAuth(telegramAuthData)) {
+      logger.warn("Invalid Telegram authentication attempt", {
+        telegram_id: telegramAuthData.id,
+        ip: telegramAuthData.ip || "unknown"
+      });
       throw new AuthenticationError("Invalid Telegram authentication");
     }
 
