@@ -11,18 +11,10 @@ export class RefreshTokenUseCase {
   }
 
   async execute(refreshToken) {
-    console.log("=== REFRESH TOKEN DEBUG ===");
-    console.log(
-      "Received refresh token:",
-      refreshToken ? `${refreshToken.substring(0, 20)}...` : "missing"
-    );
-
     // Verify refresh token
     const decoded = this.tokenService.verifyToken(refreshToken);
-    console.log("Decoded token:", decoded);
 
     if (!decoded) {
-      console.log("Token verification failed");
       throw new AuthenticationError("Invalid refresh token");
     }
 

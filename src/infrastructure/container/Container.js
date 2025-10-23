@@ -146,30 +146,6 @@ import { UploadController } from "../../presentation/controllers/UploadControlle
 import { HouseController } from "../../presentation/controllers/HouseController.js";
 import { TelegramChatController } from "../../presentation/controllers/TelegramChatController.js";
 import { AdminController } from "../../presentation/controllers/AdminController.js";
-import { EventController } from "../../presentation/controllers/EventController.js";
-import { BannerController } from "../../presentation/controllers/BannerController.js";
-import { ParkingController } from "../../presentation/controllers/ParkingController.js";
-
-// Real Use Cases for Events
-import { GetEventsUseCase } from "../../application/use-cases/event/GetEventsUseCase.js";
-import { GetEventByIdUseCase } from "../../application/use-cases/event/GetEventByIdUseCase.js";
-import { CreateEventUseCase } from "../../application/use-cases/event/CreateEventUseCase.js";
-import { UpdateEventUseCase } from "../../application/use-cases/event/UpdateEventUseCase.js";
-import { DeleteEventUseCase } from "../../application/use-cases/event/DeleteEventUseCase.js";
-import { RegisterForEventUseCase } from "../../application/use-cases/event/RegisterForEventUseCase.js";
-import { UnregisterFromEventUseCase } from "../../application/use-cases/event/UnregisterFromEventUseCase.js";
-
-import {
-  GetBannersUseCase,
-  GetBannerByIdUseCase,
-  CreateBannerUseCase,
-  UpdateBannerUseCase,
-  DeleteBannerUseCase,
-  ToggleBannerStatusUseCase,
-  ClickBannerUseCase,
-} from "../../application/use-cases/banner/MockBannerUseCases.js";
-
-import { ParkingUseCases } from "../../application/use-cases/parking/ParkingUseCases.js";
 
 /**
  * Dependency Injection Container
@@ -920,36 +896,6 @@ export class Container {
         )
     );
 
-    // Use Cases - Event (Real)
-    this.register("getEventsUseCase", () => new GetEventsUseCase());
-    this.register("getEventByIdUseCase", () => new GetEventByIdUseCase());
-    this.register("createEventUseCase", () => new CreateEventUseCase());
-    this.register("updateEventUseCase", () => new UpdateEventUseCase());
-    this.register("deleteEventUseCase", () => new DeleteEventUseCase());
-    this.register(
-      "registerForEventUseCase",
-      () => new RegisterForEventUseCase()
-    );
-    this.register(
-      "unregisterFromEventUseCase",
-      () => new UnregisterFromEventUseCase()
-    );
-
-    // Use Cases - Banner (Mock)
-    this.register("getBannersUseCase", () => new GetBannersUseCase());
-    this.register("getBannerByIdUseCase", () => new GetBannerByIdUseCase());
-    this.register("createBannerUseCase", () => new CreateBannerUseCase());
-    this.register("updateBannerUseCase", () => new UpdateBannerUseCase());
-    this.register("deleteBannerUseCase", () => new DeleteBannerUseCase());
-    this.register(
-      "toggleBannerStatusUseCase",
-      () => new ToggleBannerStatusUseCase()
-    );
-    this.register("clickBannerUseCase", () => new ClickBannerUseCase());
-
-    // Use Cases - Parking (Real)
-    this.register("parkingUseCases", () => new ParkingUseCases());
-
     // Controllers - TelegramChat
     this.register(
       "telegramChatController",
@@ -1012,39 +958,6 @@ export class Container {
           container.resolve("getStatisticsUseCase")
         )
     );
-
-    // Controllers - Event
-    this.register(
-      "eventController",
-      (container) =>
-        new EventController(
-          container.resolve("getEventsUseCase"),
-          container.resolve("getEventByIdUseCase"),
-          container.resolve("createEventUseCase"),
-          container.resolve("updateEventUseCase"),
-          container.resolve("deleteEventUseCase"),
-          container.resolve("registerForEventUseCase"),
-          container.resolve("unregisterFromEventUseCase")
-        )
-    );
-
-    // Controllers - Banner
-    this.register(
-      "bannerController",
-      (container) =>
-        new BannerController(
-          container.resolve("getBannersUseCase"),
-          container.resolve("getBannerByIdUseCase"),
-          container.resolve("createBannerUseCase"),
-          container.resolve("updateBannerUseCase"),
-          container.resolve("deleteBannerUseCase"),
-          container.resolve("toggleBannerStatusUseCase"),
-          container.resolve("clickBannerUseCase")
-        )
-    );
-
-    // Controllers - Parking
-    this.register("parkingController", () => new ParkingController());
   }
 }
 

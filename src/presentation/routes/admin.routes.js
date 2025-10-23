@@ -8,40 +8,29 @@ const router = express.Router();
 // Get admin controller from DI container
 const adminController = container.resolve("adminController");
 
-// Apply authentication to all routes
+// Apply authentication and admin role check to all routes
 router.use(authenticateJWT);
+router.use(checkRole("admin"));
 
 /**
  * @route   GET /api/admin/users
  * @desc    Get all users with pagination and filters
- * @access  Private (admin and moderators)
+ * @access  Private (admin only)
  */
-router.get(
-  "/users",
-  checkRole("admin", "moderator"),
-  adminController.getAllUsers
-);
+router.get("/users", adminController.getAllUsers);
 
 /**
  * @route   PATCH /api/admin/users/:id/role
  * @desc    Update user role (user/moderator/admin)
  * @access  Private (admin only)
  */
-router.patch(
-  "/users/:id/role",
-  checkRole("admin"),
-  adminController.updateUserRole
-);
+router.patch("/users/:id/role", adminController.updateUserRole);
 
 /**
  * @route   GET /api/admin/statistics
  * @desc    Get system statistics
- * @access  Private (admin and moderators)
+ * @access  Private (admin only)
  */
-router.get(
-  "/statistics",
-  checkRole("admin", "moderator"),
-  adminController.getStatistics
-);
+router.get("/statistics", adminController.getStatistics);
 
 export default router;

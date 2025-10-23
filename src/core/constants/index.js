@@ -41,11 +41,10 @@ export const USER_STATUS = {
 };
 
 export const USER_ROLES = {
-  ACTIVE: "active", // Обычный пользователь (ранее "user")
-  ACTIVIST: "activist", // Активист - может создавать события и получать уведомления
+  ACTIVE: "active",      // Обычный пользователь (ранее "user")
   MODERATOR: "moderator",
   ADMIN: "admin",
-  BLOCKED: "blocked", // Заблокированный пользователь
+  BLOCKED: "blocked",    // Заблокированный пользователь
 };
 
 export const TOKEN_TYPES = {

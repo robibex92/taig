@@ -2,10 +2,7 @@ import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
-import {
-  telegramAuthSchema,
-  refreshTokenSchema,
-} from "../../core/validation/schemas/auth.schema.js";
+import { telegramAuthSchema } from "../../core/validation/schemas/user.schema.js";
 import { authLimiter } from "../middlewares/securityMiddleware.js";
 
 const router = express.Router();

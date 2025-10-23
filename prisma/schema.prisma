@@ -57,17 +57,6 @@ model User {
   
   // Bookings
   bookings              Booking[]
-  
-  // Parking
-  owned_parking_spots   ParkingSpot[] @relation("ParkingSpotOwner")
-  parking_messages_sent ParkingMessage[] @relation("ParkingMessageSender")
-  parking_messages_received ParkingMessage[] @relation("ParkingMessageReceiver")
-  parking_history_changes ParkingSpotHistory[] @relation("ParkingSpotHistoryChangedBy")
-  
-  // Events
-  events_created          Event[]               @relation("EventCreator")
-  event_registrations     EventRegistration[]   @relation("EventRegistrations")
-  event_waitlist          EventWaitlist[]       @relation("EventWaitlist")
 
   @@index([username])
   @@index([status])
@@ -494,20 +483,17 @@ model Booking {
 // ============================================
 
 model TelegramChat {
-  id             BigInt    @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   chat_id        String    @db.VarChar(255)
   thread_id      String?   @db.VarChar(255)
   name           String    @db.VarChar(255)
   description    String?   @db.Text
   chat_type      String    @default("group") @db.VarChar(50) // group, channel, supergroup
   is_active      Boolean   @default(true)
-  purpose        String    @default("general") @db.VarChar(50) // ads, news, general, notifications, events
+  purpose        String    @default("general") @db.VarChar(50) // ads, news, general, notifications
   visible_to_all Boolean   @default(true) // if false, only admins can see this chat
   created_at     DateTime  @default(now()) @db.Timestamp(6)
   updated_at     DateTime  @default(now()) @db.Timestamp(6)
-  
-  // Relations
-  events         EventTelegramChat[] // События, отправленные в этот чат
 
   @@unique([chat_id, thread_id])
   @@index([purpose])
@@ -558,244 +544,4 @@ model CarAdminNote {
   @@index([car_id])
   @@index([created_at(sort: Desc)])
   @@map("car_admin_notes")
-}
-
-// ============================================
-// PARKING SPOTS SYSTEM
-// ============================================
-
-model ParkingSpot {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Основная информация
-  spot_number     Int       @unique // Номер парковочного места (1-99)
-  floor           Int       @default(1) // Этаж парковки
-  section         String?   @db.VarChar(50) // Секция (A, B, C, etc.)
-  
-  // Владелец
-  owner_id        BigInt?   // Владелец места
-  
-  // Статус места
-  status          String    @default("undefined") @db.VarChar(50) 
-  // undefined - не определен (серое)
-  // owned - во владении (зеленое)
-  // for_sale - продается (синее)
-  // for_rent - аренда (оранжевое)
-  // maintenance - техническое обслуживание (красное)
-  // reserved - зарезервировано (фиолетовое)
-  
-  // Дополнительная информация
-  price           String?   @db.VarChar(50) // Цена продажи/аренды
-  description     String?   @db.Text // Описание
-  contact_info    String?   @db.Text // Контактная информация
-  
-  // Технические поля
-  is_active       Boolean   @default(true)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  owner           User?     @relation("ParkingSpotOwner", fields: [owner_id], references: [user_id], onDelete: SetNull)
-  messages        ParkingMessage[]
-  history         ParkingSpotHistory[]
-  
-  @@index([spot_number])
-  @@index([owner_id])
-  @@index([status])
-  @@index([floor])
-  @@index([is_active])
-  @@map("parking_spots")
-}
-
-// История изменений парковочного места
-model ParkingSpotHistory {
-  id              BigInt    @id @default(autoincrement())
-  parking_spot_id BigInt
-  
-  // Что изменилось
-  field_name      String    @db.VarChar(100) // owner_id, status, price, etc.
-  old_value       String?   @db.Text
-  new_value       String?   @db.Text
-  
-  // Кто изменил
-  changed_by_id   BigInt?   // null для системных изменений
-  
-  // Когда
-  changed_at      DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  parking_spot    ParkingSpot @relation(fields: [parking_spot_id], references: [id], onDelete: Cascade)
-  changed_by      User?     @relation("ParkingSpotHistoryChangedBy", fields: [changed_by_id], references: [user_id], onDelete: SetNull)
-  
-  @@index([parking_spot_id])
-  @@index([changed_at(sort: Desc)])
-  @@map("parking_spot_history")
-}
-
-// ============================================
-// EVENTS SYSTEM
-// ============================================
-
-model Event {
-  id                  BigInt              @id @default(autoincrement())
-  
-  // Основная информация
-  title               String              @db.VarChar(255)
-  description         String?             @db.Text
-  image_url           String?             @db.Text // Изображение события
-  
-  // Тип события
-  event_type          String              @default("general") @db.VarChar(50)
-  // general - общее
-  // meeting - собрание
-  // cleanup - субботник
-  // celebration - праздник
-  // repair - ремонт
-  
-  // Место и время
-  location            String?             @db.VarChar(255)
-  start_date          DateTime            @db.Timestamptz(6)
-  end_date            DateTime?           @db.Timestamptz(6)
-  
-  // Участники
-  max_participants    Int?                // null = без ограничений
-  
-  // Статус
-  status              String              @default("active") @db.VarChar(50)
-  // active - активно
-  // cancelled - отменено
-  // completed - завершено
-  
-  // Создатель
-  created_by          BigInt
-  
-  // Технические поля
-  created_at          DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime            @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  creator             User                @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
-  registrations       EventRegistration[]
-  waitlist            EventWaitlist[]
-  telegram_chats      EventTelegramChat[] // Связь Many-to-Many с Telegram чатами
-  
-  @@index([status])
-  @@index([event_type])
-  @@index([start_date])
-  @@index([created_by])
-  @@map("events")
-}
-
-model EventRegistration {
-  id                  BigInt    @id @default(autoincrement())
-  
-  event_id            BigInt
-  user_id             BigInt?   // Nullable для гостей
-  
-  // Статус регистрации
-  status              String    @default("registered") @db.VarChar(50)
-  // registered - зарегистрирован
-  // cancelled - отменена регистрация
-  // attended - посетил
-  
-  // Дополнительная информация
-  notes               String?   @db.Text
-  
-  // Для гостей (не авторизованных пользователей)
-  guest_name          String?   @db.VarChar(255)
-  guest_phone         String?   @db.VarChar(50)
-  guest_email         String?   @db.VarChar(255)
-  
-  registered_at       DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime  @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  event               Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user                User?     @relation("EventRegistrations", fields: [user_id], references: [user_id], onDelete: Cascade)
-  
-  @@unique([event_id, user_id]) // Один пользователь не может зарегистрироваться дважды
-  @@index([event_id])
-  @@index([user_id])
-  @@index([status])
-  @@map("event_registrations")
-}
-
-// Лист ожидания для событий с полной вместимостью
-model EventWaitlist {
-  id                  BigInt    @id @default(autoincrement())
-  
-  event_id            BigInt
-  user_id             BigInt?   // Nullable для гостей
-  
-  // Для гостей
-  guest_name          String?   @db.VarChar(255)
-  guest_phone         String?   @db.VarChar(50)
-  guest_email         String?   @db.VarChar(255)
-  
-  notes               String?   @db.Text
-  notified            Boolean   @default(false) // Уведомлен ли пользователь о свободном месте
-  
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  event               Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user                User?     @relation("EventWaitlist", fields: [user_id], references: [user_id], onDelete: Cascade)
-  
-  @@index([event_id])
-  @@index([user_id])
-  @@index([notified])
-  @@map("event_waitlist")
-}
-
-// Связь Many-to-Many между Events и TelegramChats
-model EventTelegramChat {
-  id                  BigInt    @id @default(autoincrement())
-  
-  event_id            BigInt
-  telegram_chat_id    BigInt
-  
-  message_sent        Boolean   @default(false) // Отправлено ли сообщение в чат
-  telegram_message_id BigInt?   // ID сообщения в Telegram для редактирования
-  
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  event               Event         @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  telegram_chat       TelegramChat  @relation(fields: [telegram_chat_id], references: [id], onDelete: Cascade)
-  
-  @@unique([event_id, telegram_chat_id])
-  @@index([event_id])
-  @@index([telegram_chat_id])
-  @@map("event_telegram_chats")
-}
-
-// Сообщения по парковочным местам (аналог сообщений по объявлениям)
-model ParkingMessage {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Связи
-  parking_spot_id BigInt
-  sender_id       BigInt
-  receiver_id     BigInt
-  
-  // Содержимое
-  content         String    @db.Text
-  
-  // Статус
-  is_read         Boolean   @default(false)
-  is_deleted      Boolean   @default(false)
-  
-  // Timestamps
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  read_at         DateTime? @db.Timestamptz(6)
-  
-  // Relations
-  parking_spot    ParkingSpot @relation(fields: [parking_spot_id], references: [id], onDelete: Cascade)
-  sender          User      @relation("ParkingMessageSender", fields: [sender_id], references: [user_id], onDelete: Cascade)
-  receiver        User      @relation("ParkingMessageReceiver", fields: [receiver_id], references: [user_id], onDelete: Cascade)
-  
-  @@index([parking_spot_id])
-  @@index([sender_id, receiver_id])
-  @@index([created_at(sort: Desc)])
-  @@map("parking_messages")
 }

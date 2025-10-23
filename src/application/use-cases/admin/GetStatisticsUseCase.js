@@ -65,44 +65,6 @@ export class GetStatisticsUseCase {
       where: { status: "active" },
     });
 
-    // Get events statistics
-    let totalEvents = 0;
-    let activeEvents = 0;
-    try {
-      totalEvents = await prisma.event.count();
-      activeEvents = await prisma.event.count({
-        where: { status: "active" },
-      });
-    } catch (error) {
-      console.warn("Event table not found, skipping event statistics");
-    }
-
-    // Get banners statistics
-    let totalBanners = 0;
-    let activeBanners = 0;
-    try {
-      totalBanners = await prisma.banner.count();
-      activeBanners = await prisma.banner.count({
-        where: { is_active: true },
-      });
-    } catch (error) {
-      console.warn("Banner table not found, skipping banner statistics");
-    }
-
-    // Get parking statistics
-    let totalParkingSpots = 0;
-    let occupiedParkingSpots = 0;
-    try {
-      totalParkingSpots = await prisma.parkingSpot.count();
-      occupiedParkingSpots = await prisma.parkingSpot.count({
-        where: {
-          OR: [{ status: "owned" }, { status: "reserved" }],
-        },
-      });
-    } catch (error) {
-      console.warn("ParkingSpot table not found, skipping parking statistics");
-    }
-
     // Get popular categories (top 5 by ad count)
     const categoriesWithCount = await prisma.ad.groupBy({
       by: ["category"],
@@ -207,19 +169,6 @@ export class GetStatisticsUseCase {
       posts: {
         total: totalPosts,
         active: activePosts,
-      },
-      events: {
-        total: totalEvents,
-        active: activeEvents,
-      },
-      banners: {
-        total: totalBanners,
-        active: activeBanners,
-      },
-      parking: {
-        total: totalParkingSpots,
-        occupied: occupiedParkingSpots,
-        free: totalParkingSpots - occupiedParkingSpots,
       },
       popular_categories: popularCategories,
       peak_hours: peakHoursWithPercent,
