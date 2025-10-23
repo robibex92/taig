@@ -19,7 +19,7 @@ export class AuthenticateUserUseCase {
    * Verify Telegram authentication data
    */
   verifyTelegramAuth(authData) {
-    const { hash, ...data } = authData;
+    const { hash, remember_me, ...data } = authData; // ИСКЛЮЧАЕМ remember_me из хеширования
     const secret = crypto
       .createHash("sha256")
       .update(process.env.TELEGRAM_BOT_TOKEN)
