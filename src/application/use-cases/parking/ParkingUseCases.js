@@ -420,20 +420,10 @@ class ParkingUseCases {
         throw new Error("Номер парковочного места обязателен");
       }
 
-      if (!spotData.floor) {
-        throw new Error("Этаж обязателен");
-      }
-
-      if (!spotData.section) {
-        throw new Error("Секция обязательна");
-      }
-
-      // Проверяем, не существует ли уже такое место
+      // Проверяем, не существует ли уже такое место (только по номеру)
       const existingSpot = await prisma.parkingSpot.findFirst({
         where: {
           spot_number: spotData.spotNumber,
-          floor: spotData.floor,
-          section: spotData.section,
         },
       });
 
@@ -445,8 +435,8 @@ class ParkingUseCases {
       const newSpot = await prisma.parkingSpot.create({
         data: {
           spot_number: spotData.spotNumber,
-          floor: spotData.floor,
-          section: spotData.section,
+          floor: null, // Этаж не используется
+          section: null, // Секция не используется
           status: spotData.status || PARKING_STATUSES.UNDEFINED,
           price: spotData.price || null,
           description: spotData.description || null,
