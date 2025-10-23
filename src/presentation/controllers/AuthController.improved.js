@@ -37,15 +37,13 @@ export class AuthController {
    */
   authenticateTelegram = asyncHandler(async (req, res) => {
     const telegramData = req.body;
-    const rememberMe = req.body.remember_me || false;
 
     // Extract device information
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
 
     const result = await this.authenticateUserUseCase.execute(
       telegramData,
-      deviceInfo,
-      rememberMe
+      deviceInfo
     );
 
     // В кросс-доменной среде отправляем ВСЕ в body
