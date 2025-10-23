@@ -135,9 +135,9 @@ app.use(
   })
 );
 
-// Также раздаем через /api-v1/uploads для консистентности с API
+// Также раздаем через /api/uploads для консистентности с API
 app.use(
-  "/api-v1/uploads",
+  "/api/uploads",
   express.static(uploadRoot, {
     immutable: false,
     maxAge: "1d",
@@ -157,7 +157,7 @@ app.use(
 
 logger.info("Static files serving", {
   path: uploadRoot,
-  routes: ["/uploads", "/api-v1/uploads"],
+  routes: ["/uploads", "/api/uploads"],
   resolvedPath: path.resolve(uploadRoot),
 });
 
@@ -169,29 +169,29 @@ if (process.env.TELEGRAM_WEBHOOK_URL) {
   logger.info("Telegram webhook middleware registered");
 }
 
-// ================== Clean Architecture Routes (v1) ==================
-// Prefix /api is applied here (Nginx rewrites /api-v1/ → /api/)
-app.use("/api-v1", adsRoutes);
-app.use("/api-v1", authRoutes);
-app.use("/api-v1", postRoutes);
-app.use("/api-v1", telegramRoutes);
-app.use("/api-v1", categoryRoutes);
-app.use("/api-v1", faqRoutes);
-app.use("/api-v1", floorRuleRoutes);
-app.use("/api-v1", carRoutes);
-app.use("/api-v1", adImageRoutes);
-app.use("/api-v1", uploadRoutes);
-app.use("/api-v1", nearbyRoutes);
-app.use("/api-v1", publicUserRoutes);
-app.use("/api-v1", userRoutes);
-app.use("/api-v1", messageRoutes);
-app.use("/api-v1", bookingRoutes);
-app.use("/api-v1/telegram-chats", telegramChatRoutes);
+// ================== Clean Architecture Routes ==================
+// All routes use /api prefix
+app.use("/api", adsRoutes);
+app.use("/api", authRoutes);
+app.use("/api", postRoutes);
+app.use("/api", telegramRoutes);
+app.use("/api", categoryRoutes);
+app.use("/api", faqRoutes);
+app.use("/api", floorRuleRoutes);
+app.use("/api", carRoutes);
+app.use("/api", adImageRoutes);
+app.use("/api", uploadRoutes);
+app.use("/api", nearbyRoutes);
+app.use("/api", publicUserRoutes);
+app.use("/api", userRoutes);
+app.use("/api", messageRoutes);
+app.use("/api", bookingRoutes);
+app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api-v1", imageProxyRoutes);
-app.use("/api-v1", eventsRoutes);
-app.use("/api-v1", bannersRoutes);
-app.use("/api-v1", parkingRoutes);
+app.use("/api", imageProxyRoutes);
+app.use("/api", eventsRoutes);
+app.use("/api", bannersRoutes);
+app.use("/api", parkingRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅

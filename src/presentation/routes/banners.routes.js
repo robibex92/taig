@@ -1,5 +1,5 @@
 import express from "express";
-import container from "../../infrastructure/container/Container.js";
+import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { requireAdmin } from "../middlewares/adminMiddleware.js";
 

@@ -1,13 +1,11 @@
 import express from "express";
-import container from "../../infrastructure/container/Container.js";
+import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { requireAdmin } from "../middlewares/adminMiddleware.js";
 import { checkRole } from "../../core/middlewares/checkRole.js";
 
 const router = express.Router();
 const eventController = container.resolve("eventController");
-const bannerController = container.resolve("bannerController");
-const parkingController = container.resolve("parkingController");
 
 const BASE_ROUTE = "/events";
 
@@ -60,7 +58,17 @@ const BASE_ROUTE = "/events";
  *       500:
  *         description: Internal Server Error
  */
-router.get(BASE_ROUTE, eventController.getEvents);
+router.get(BASE_ROUTE, (req, res, next) => {
+  console.log(
+    "Events route hit, eventController:",
+    typeof eventController.getEvents
+  );
+  if (typeof eventController.getEvents === "function") {
+    eventController.getEvents(req, res, next);
+  } else {
+    res.status(500).json({ error: "EventController method not found" });
+  }
+});
 
 /**
  * @swagger
