@@ -1,14 +1,3 @@
-// ============================================
-// IMPROVED PRISMA SCHEMA
-// ============================================
-// Улучшения:
-// - Добавлены Foreign Keys и Relations
-// - Добавлены индексы для производительности
-// - Улучшены типы данных и constraints
-// - Добавлены каскадные удаления
-// - Сохранены все поля в защищенных таблицах
-// ============================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,466 +7,222 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================
-// USERS (Protected - сохранены все поля)
-// ============================================
-
 model User {
-  user_id             BigInt    @id @default(autoincrement())
-  username            String?   @db.VarChar(100)
-  first_name          String?   @db.VarChar(100)
-  last_name           String?   @db.VarChar(100)
-  joined_at           DateTime  @default(now()) @db.Timestamp(6)
-  avatar              String?   @db.Text
+  user_id             BigInt              @id @default(autoincrement())
+  username            String?
+  first_name          String?
+  last_name           String?
+  joined_at           DateTime?           @default(now()) @db.Timestamp(6)
+  avatar              String?
   Invited             Int?
-  role                Boolean?  @default(false)
-  is_manually_updated String?   @db.VarChar(10) // 'true' or 'false' as string - legacy
-  telegram_first_name String?   @db.VarChar(100)
-  telegram_last_name  String?   @db.VarChar(100)
-  status              String?   @default("active") @db.VarChar(50)
-  refresh_token       String?   @db.VarChar(500)
+  role                Boolean?
+  is_manually_updated String?
+  telegram_first_name String?
+  telegram_last_name  String?
+  status              String?
+  refresh_token       String?             @db.VarChar(500)
+  bookings            Booking[]
+  event_registrations EventRegistration[] @relation("EventRegistrations")
+  event_waitlist      EventWaitlist[]     @relation("EventWaitlist")
+  events_created      Event[]             @relation("EventCreator")
 
-  // Relations (новые)
-  ads                   Ad[]
-  cars                  Car[]
-  // houses              House[] // Закомментировано - несовпадение типов
-  refresh_tokens        RefreshToken[] // Сессии пользователя
-  car_images_added      CarImage[] @relation("CarImagesAddedBy")
-  car_admin_notes_created CarAdminNote[] @relation("CarAdminNotesCreatedBy")
-  
-  // Комментарии для домов и подъездов
-  house_comments        HouseComment[] @relation("HouseCommentAuthor")
-  entrance_comments     EntranceComment[] @relation("EntranceCommentAuthor")
-  
-  // Messaging
-  sent_messages         Message[]      @relation("SentMessages")
-  received_messages     Message[]      @relation("ReceivedMessages")
-  conversations_as_user1 Conversation[] @relation("ConversationsAsUser1")
-  conversations_as_user2 Conversation[] @relation("ConversationsAsUser2")
-  
-  // Bookings
-  bookings              Booking[]
-  
-  // Parking
-  owned_parking_spots   ParkingSpot[] @relation("ParkingSpotOwner")
-  parking_messages_sent ParkingMessage[] @relation("ParkingMessageSender")
-  parking_messages_received ParkingMessage[] @relation("ParkingMessageReceiver")
-  parking_history_changes ParkingSpotHistory[] @relation("ParkingSpotHistoryChangedBy")
-  
-  // Events
-  events_created          Event[]               @relation("EventCreator")
-  event_registrations     EventRegistration[]   @relation("EventRegistrations")
-  event_waitlist          EventWaitlist[]       @relation("EventWaitlist")
-
-  @@index([username])
-  @@index([status])
   @@map("users")
 }
 
-// ============================================
-// ADS (Улучшено)
-// ============================================
-
 model Ad {
   id          BigInt    @id @default(autoincrement())
-  user_id     BigInt?   // nullable для обратной совместимости
-  title       String?   @db.VarChar(255)
-  content     String?   @db.Text
-  status      String?   @default("active") @db.VarChar(50) // active, archive, deleted
+  user_id     BigInt?
+  title       String?
+  content     String?
+  status      String?
   created_at  DateTime? @db.Timestamptz(6)
-  updated_at  DateTime? @updatedAt @db.Timestamptz(6)
-  category    Int?      // nullable для обратной совместимости
   subcategory Int?
-  price       String?   @db.VarChar(50)
-  view_count  Int?      @default(0)
+  updated_at  DateTime? @updatedAt @db.Timestamptz(6)
+  category    Int?
+  price       String?
+  view_count  Int?
+  bookings    Booking[]
 
-  // Relations
-  user                User?             @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  category_rel        Category?         @relation(fields: [category], references: [id], onDelete: Restrict)
-  subcategory_rel     Subcategory?      @relation(fields: [subcategory], references: [id], onDelete: SetNull)
-  // images            AdImage[] // Закомментировано - несовпадение типов
-  telegram_messages   TelegramMessage[]
-  conversations       Conversation[]
-  messages            Message[]
-  bookings            Booking[]
-
-  @@index([user_id])
-  @@index([category])
-  @@index([subcategory])
-  @@index([status])
-  @@index([created_at(sort: Desc)])
   @@map("ads")
 }
-
-// ============================================
-// AD IMAGES (Улучшено)
-// ============================================
 
 model AdImage {
   id         Int       @id @default(autoincrement())
   ad_id      Int?
-  post_id    Int?
-  image_url  String?   @db.Text
-  is_main    Boolean?  @default(false)
+  image_url  String?
+  is_main    Boolean?
   created_at DateTime? @db.Timestamptz(6)
+  post_id    Int?
 
-  // Relations закомментированы - несовпадение типов (ad_id/post_id Int vs id BigInt)
-  // В legacy БД нет FK, поэтому это нормально
-  // ad         Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  // post       Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
-
-  @@index([ad_id])
-  @@index([post_id])
-  @@index([is_main])
   @@map("ad_images")
 }
 
-// ============================================
-// POSTS/NEWS (Улучшено)
-// ============================================
-
 model Post {
   id         BigInt    @id @default(autoincrement())
-  title      String?   @db.VarChar(255)
-  content    String?   @db.Text
-  image_url  String?   @db.Text
-  status     String?   @default("active") @db.VarChar(50) // active, deleted
-  source     String?   @db.VarChar(100)
-  marker     String?   @db.VarChar(100)
+  title      String?
   created_at DateTime? @db.Timestamptz(6)
   updated_at DateTime? @updatedAt @db.Timestamptz(6)
+  content    String?
+  image_url  String?
+  status     String?
+  source     String?
+  marker     String?
 
-  // Relations
-  // images           AdImage[] // Закомментировано - несовпадение типов
-  telegram_messages  TelegramMessage[]
-
-  @@index([status])
-  @@index([created_at(sort: Desc)])
   @@map("posts")
 }
 
-// ============================================
-// TELEGRAM MESSAGES (Улучшено и упрощено)
-// ============================================
-
 model TelegramMessage {
   id             BigInt    @id @default(autoincrement())
-  ad_id          BigInt?
   post_id        BigInt?
-  chat_id        String?   @db.VarChar(100)
-  thread_id      String?   @db.VarChar(100)
-  message_id     String?   @db.VarChar(100)
-  caption        String?   @db.Text
-  is_media       Boolean?  @default(false)
-  media_group_id BigInt?
-  price          String?   @db.VarChar(50)
+  ad_id          BigInt?
+  chat_id        String?
+  message_id     String?
   created_at     DateTime? @db.Timestamptz(6)
-
-  // Deprecated/Legacy поля (для обратной совместимости)
-  message_type   String?   @db.VarChar(50)
+  thread_id      String?
+  message_type   String?
   context_id     BigInt?
-  context_type   String?   @db.VarChar(50)
-  message_text   String?   @db.Text
-  recipient_id   String?   @db.VarChar(100)
-  sender_id      String?   @db.VarChar(100)
-  url_img        String[]  @default([])
+  context_type   String?
+  message_text   String?
+  recipient_id   String?
+  sender_id      String?
+  media_group_id BigInt?
+  caption        String?
+  is_media       Boolean?  @default(false)
+  price          String?
+  url_img        String[]
 
-  // Relations
-  ad             Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  post           Post?     @relation(fields: [post_id], references: [id], onDelete: Cascade)
-
-  @@index([ad_id])
-  @@index([post_id])
-  @@index([chat_id])
-  @@index([created_at(sort: Desc)])
   @@map("telegram_messages")
 }
 
-// ============================================
-// HOUSES (Protected - сохранены все поля)
-// ============================================
-
 model House {
   id           BigInt    @id @default(autoincrement())
-  house        String?   @db.VarChar(50)
+  house        String?
   entrance     Int?
   number       Int?
   floor        Int?
-  facade_color String?   @db.VarChar(50)
-  info         String?   @db.Text
-  position     Int?      @default(1)
-  status       Boolean?  @default(true)
+  facade_color String?
+  info         String?
+  position     Int?
+  status       Boolean?
   created_at   DateTime? @db.Timestamptz(6)
   id_telegram  Int?
 
-  // Relations (закомментирована - несовпадение типов: id_telegram Int vs user_id BigInt)
-  // user         User?     @relation(fields: [id_telegram], references: [user_id], onDelete: SetNull)
-  
-  // Связи с комментариями удалены - теперь используются строки вместо foreign keys
-
-  @@index([house, entrance, number])
-  @@index([id_telegram])
-  @@index([status])
   @@map("houses")
 }
 
-// Комментарии для домов (только администраторы)
 model HouseComment {
-  id          BigInt   @id @default(autoincrement())
-  house_id    String   @db.VarChar(50) // Номер дома как строка (например, "39" или "39/1")
-  author_id   BigInt
-  comment     String   @db.Text
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  author      User     @relation("HouseCommentAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
-  
+  id         BigInt   @id @default(autoincrement())
+  house_id   BigInt
+  author_id  BigInt
+  comment    String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
   @@index([house_id])
   @@index([author_id])
   @@index([created_at])
   @@map("house_comments")
 }
 
-// Комментарии для подъездов (только администраторы)
 model EntranceComment {
-  id          BigInt   @id @default(autoincrement())
-  house_id    String   @db.VarChar(50) // Номер дома как строка (например, "39" или "39/1")
-  entrance    Int
-  author_id   BigInt
-  comment     String   @db.Text
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  author      User     @relation("EntranceCommentAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
-  
+  id         BigInt   @id @default(autoincrement())
+  house_id   BigInt
+  entrance   Int
+  author_id  BigInt
+  comment    String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
   @@unique([house_id, entrance], name: "house_id_entrance")
   @@index([author_id])
   @@index([created_at])
   @@map("entrance_comments")
 }
 
-// ============================================
-// FLOOR RULES (Protected - сохранены все поля)
-// ============================================
-
 model FloorRule {
   id       BigInt  @id
-  house    String? @db.VarChar(50)
+  house    String?
   entrance Int?
   floor    Int?
   position Int?
 
-  @@unique([house, entrance, floor], name: "unique_floor_rule")
-  @@index([house, entrance])
   @@map("floor_rules")
 }
-
-// ============================================
-// CARS (Protected - сохранены все поля)
-// ============================================
 
 model Car {
   id         BigInt    @id @default(autoincrement())
   user_id    BigInt?
-  car_number String?   @db.VarChar(50)
-  car_model  String?   @db.VarChar(100)
-  car_brand  String?   @db.VarChar(100)
-  car_color  String?   @db.VarChar(50)
-  info       Json?
-  status     Boolean?  @default(true)
+  car_number String?
+  car_model  String?
   created_at DateTime? @db.Timestamptz(6)
+  status     Boolean?
+  info       Json?
+  car_brand  String?
+  car_color  String?
 
-  // Relations (новая)
-  user       User?     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  images     CarImage[]
-  admin_notes CarAdminNote[]
-
-  @@index([user_id])
-  @@index([status])
-  @@index([car_number])
   @@map("cars")
 }
 
-// ============================================
-// FAQ (Улучшено)
-// ============================================
-
 model Faq {
   id         BigInt    @id
-  question   String?   @db.Text
-  answer     String?   @db.Text
-  status     String?   @default("active") @db.VarChar(50)
+  question   String?
+  answer     String?
+  status     String?
   created_at DateTime? @db.Timestamptz(6)
   updated_at DateTime? @db.Timestamptz(6)
 
-  @@index([status])
   @@map("faq")
 }
 
-// ============================================
-// CATEGORIES (Protected - сохранены все поля)
-// ============================================
-
 model Category {
-  id    Int     @id
-  name  String? @db.VarChar(100)
-  image String? @db.VarChar(255)
+  id    BigInt  @id
+  name  String?
+  image String?
 
-  // Relations (новые)
-  ads           Ad[]
-  subcategories Subcategory[]
-
-  @@index([name])
   @@map("categories")
 }
 
-// ============================================
-// SUBCATEGORIES (Protected - сохранены все поля)
-// ============================================
-
 model Subcategory {
-  id          Int       @id
-  category_id Int?
-  name        String?   @db.VarChar(100)
+  id          BigInt  @id
+  category_id BigInt?
+  name        String?
 
-  // Relations (новые)
-  category    Category? @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  ads         Ad[]
-
-  @@index([category_id])
-  @@index([name])
   @@map("subcategories")
 }
 
-// ============================================
-// REFRESH TOKENS (New - для Session Management)
-// ============================================
-
 model RefreshToken {
   id                 BigInt    @id @default(autoincrement())
-  user_id            BigInt    // Связь с пользователем
-  token              String    @unique @db.Text // Сам refresh token
-  jti                String    @unique @db.VarChar(255) // JWT ID для ротации
-  device_fingerprint String?   @db.VarChar(255) // Хеш устройства
-  ip_address         String?   @db.VarChar(100) // IP адрес
-  user_agent         String?   @db.Text // User Agent
-  device_info        Json?     // Дополнительная информация об устройстве
-  expires_at         DateTime  @db.Timestamptz(6) // Когда истекает
+  user_id            BigInt
+  token              String    @unique
+  jti                String    @unique @db.VarChar(255)
+  device_fingerprint String?   @db.VarChar(255)
+  ip_address         String?   @db.VarChar(100)
+  user_agent         String?
+  device_info        Json?
+  expires_at         DateTime  @db.Timestamptz(6)
   created_at         DateTime  @default(now()) @db.Timestamptz(6)
-  last_used_at       DateTime? @db.Timestamptz(6) // Последнее использование
-  is_revoked         Boolean   @default(false) // Отозван ли токен
-  revoked_at         DateTime? @db.Timestamptz(6) // Когда отозван
+  last_used_at       DateTime? @db.Timestamptz(6)
+  is_revoked         Boolean   @default(false)
+  revoked_at         DateTime? @db.Timestamptz(6)
 
-  // Relations
-  user               User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-
-  @@index([user_id])
-  @@index([jti])
-  @@index([expires_at])
-  @@index([is_revoked])
+  @@index([expires_at], map: "idx_refresh_tokens_expires_at")
+  @@index([is_revoked], map: "idx_refresh_tokens_is_revoked")
+  @@index([jti], map: "idx_refresh_tokens_jti")
+  @@index([user_id], map: "idx_refresh_tokens_user_id")
   @@map("refresh_tokens")
 }
 
-// ============================================
-// MESSAGING SYSTEM
-// ============================================
-
-model Message {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Связи
-  sender_id       BigInt
-  receiver_id     BigInt
-  ad_id           BigInt?   // Контекст (объявление)
-  
-  // Для threading (ответы в ветке)
-  parent_id       BigInt?
-  thread_id       BigInt?
-  
-  // Содержимое
-  content         String    @db.Text
-  
-  // Статус
-  is_read         Boolean   @default(false)
-  is_deleted      Boolean   @default(false)
-  
-  // Timestamps
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
-  read_at         DateTime? @db.Timestamptz(6)
-  
-  // Отношения
-  sender          User      @relation("SentMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
-  receiver        User      @relation("ReceivedMessages", fields: [receiver_id], references: [user_id], onDelete: Cascade)
-  ad              Ad?       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  parent          Message?  @relation("MessageReplies", fields: [parent_id], references: [id], onDelete: SetNull)
-  replies         Message[] @relation("MessageReplies")
-  
-  @@index([sender_id, receiver_id])
-  @@index([ad_id])
-  @@index([thread_id])
-  @@index([created_at(sort: Desc)])
-  @@map("messages")
-}
-
-model Conversation {
-  id                BigInt   @id @default(autoincrement())
-  
-  // Участники
-  user1_id          BigInt
-  user2_id          BigInt
-  
-  // Контекст
-  ad_id             BigInt?
-  
-  // Последнее сообщение
-  last_message_id   BigInt?
-  last_message_at   DateTime? @db.Timestamptz(6)
-  
-  // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime @updatedAt @db.Timestamptz(6)
-  
-  // Отношения
-  user1             User     @relation("ConversationsAsUser1", fields: [user1_id], references: [user_id], onDelete: Cascade)
-  user2             User     @relation("ConversationsAsUser2", fields: [user2_id], references: [user_id], onDelete: Cascade)
-  ad                Ad?      @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  
-  @@unique([user1_id, user2_id, ad_id])
-  @@index([user1_id])
-  @@index([user2_id])
-  @@index([ad_id])
-  @@index([last_message_at(sort: Desc)])
-  @@map("conversations")
-}
-
-// ============================================
-// BOOKING SYSTEM
-// ============================================
-
 model Booking {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Связи
-  ad_id           BigInt
-  user_id         BigInt
-  
-  // Порядок бронирования
-  booking_order   Int
-  
-  // Статус
-  status          String    @default("active") @db.VarChar(50) // active, cancelled
-  
-  // Timestamps
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  cancelled_at    DateTime? @db.Timestamptz(6)
-  
-  // Отношения
-  ad              Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
-  user            User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
-  
+  id            BigInt    @id @default(autoincrement())
+  ad_id         BigInt
+  user_id       BigInt
+  booking_order Int
+  status        String    @default("active") @db.VarChar(50)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  cancelled_at  DateTime? @db.Timestamptz(6)
+  ad            Ad        @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
   @@unique([ad_id, user_id, status])
   @@index([ad_id, status])
   @@index([user_id, status])
@@ -485,196 +230,113 @@ model Booking {
   @@map("bookings")
 }
 
-// ============================================
-// TELEGRAM CHATS (Управление чатами)
-// ============================================
-
 model TelegramChat {
-  id             BigInt    @id @default(autoincrement())
-  chat_id        String    @db.VarChar(255)
-  thread_id      String?   @db.VarChar(255)
-  name           String    @db.VarChar(255)
-  description    String?   @db.Text
-  chat_type      String    @default("group") @db.VarChar(50) // group, channel, supergroup
-  is_active      Boolean   @default(true)
-  purpose        String    @default("general") @db.VarChar(50) // ads, news, general, notifications, events
-  visible_to_all Boolean   @default(true) // if false, only admins can see this chat
-  created_at     DateTime  @default(now()) @db.Timestamp(6)
-  updated_at     DateTime  @default(now()) @db.Timestamp(6)
-  
-  // Relations
-  events         EventTelegramChat[] // События, отправленные в этот чат
+  id             BigInt   @id @default(autoincrement())
+  chat_id        String   @db.VarChar(255)
+  thread_id      String?  @db.VarChar(255)
+  name           String   @db.VarChar(255)
+  description    String?
+  chat_type      String   @default("group") @db.VarChar(50)
+  is_active      Boolean  @default(true)
+  purpose        String   @default("general") @db.VarChar(50)
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  visible_to_all Boolean  @default(true)
 
   @@unique([chat_id, thread_id])
-  @@index([purpose])
-  @@index([is_active])
-  @@index([chat_id])
-  @@index([visible_to_all])
+  @@index([chat_id], map: "idx_telegram_chats_chat_id")
+  @@index([is_active], map: "idx_telegram_chats_is_active")
+  @@index([purpose], map: "idx_telegram_chats_purpose")
+  @@index([visible_to_all], map: "idx_telegram_chats_visible_to_all")
   @@map("telegram_chats")
 }
 
-// ============================================
-// CAR IMAGES (Gallery functionality)
-// ============================================
-
 model CarImage {
-  id              BigInt    @id @default(autoincrement())
-  car_id          BigInt
-  image_url       String    @db.Text
-  comment         String?   @db.Text
+  id               BigInt    @id @default(autoincrement())
+  car_id           BigInt
+  image_url        String
+  comment          String?
   added_by_user_id BigInt?
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime? @updatedAt @db.Timestamptz(6)
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @updatedAt @db.Timestamptz(6)
 
-  // Relations
-  car             Car       @relation(fields: [car_id], references: [id], onDelete: Cascade)
-  added_by_user   User?     @relation("CarImagesAddedBy", fields: [added_by_user_id], references: [user_id], onDelete: SetNull)
-
-  @@index([car_id])
-  @@index([created_at(sort: Desc)])
+  @@index([car_id], map: "idx_car_images_car_id")
+  @@index([created_at(sort: Desc)], map: "idx_car_images_created_at")
   @@map("car_images")
 }
 
-// ============================================
-// CAR ADMIN NOTES (Admin-only notes about car ownership)
-// ============================================
-
 model CarAdminNote {
-  id                BigInt    @id @default(autoincrement())
-  car_id            BigInt
-  note              String    @db.Text
+  id                  BigInt    @id @default(autoincrement())
+  car_id              BigInt
+  note                String
   created_by_admin_id BigInt
-  created_at        DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime? @updatedAt @db.Timestamptz(6)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @updatedAt @db.Timestamptz(6)
 
-  // Relations
-  car               Car       @relation(fields: [car_id], references: [id], onDelete: Cascade)
-  created_by_admin  User      @relation("CarAdminNotesCreatedBy", fields: [created_by_admin_id], references: [user_id], onDelete: Cascade)
-
-  @@index([car_id])
-  @@index([created_at(sort: Desc)])
+  @@index([car_id], map: "idx_car_admin_notes_car_id")
+  @@index([created_at(sort: Desc)], map: "idx_car_admin_notes_created_at")
   @@map("car_admin_notes")
 }
 
-// ============================================
-// PARKING SPOTS SYSTEM
-// ============================================
-
 model ParkingSpot {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Основная информация
-  spot_number     Int       @unique // Номер парковочного места (1-99)
-  floor           Int       @default(1) // Этаж парковки
-  section         String?   @db.VarChar(50) // Секция (A, B, C, etc.)
-  
-  // Владелец
-  owner_id        BigInt?   // Владелец места
-  
-  // Статус места
-  status          String    @default("undefined") @db.VarChar(50) 
-  // undefined - не определен (серое)
-  // owned - во владении (зеленое)
-  // for_sale - продается (синее)
-  // for_rent - аренда (оранжевое)
-  // maintenance - техническое обслуживание (красное)
-  // reserved - зарезервировано (фиолетовое)
-  
-  // Дополнительная информация
-  price           String?   @db.VarChar(50) // Цена продажи/аренды
-  description     String?   @db.Text // Описание
-  contact_info    String?   @db.Text // Контактная информация
-  
-  // Технические поля
-  is_active       Boolean   @default(true)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  owner           User?     @relation("ParkingSpotOwner", fields: [owner_id], references: [user_id], onDelete: SetNull)
-  messages        ParkingMessage[]
-  history         ParkingSpotHistory[]
-  
-  @@index([spot_number])
-  @@index([owner_id])
-  @@index([status])
-  @@index([floor])
-  @@index([is_active])
+  id           BigInt   @id @default(autoincrement())
+  spot_number  String   @unique @db.VarChar(10)
+  floor        Int      @default(1)
+  section      String?  @db.VarChar(50)
+  status       String   @default("undefined") @db.VarChar(50)
+  price        String?  @db.VarChar(100)
+  description  String?
+  contact_info String?
+  is_active    Boolean  @default(true)
+  owner_id     BigInt?
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_parking_spots_is_active")
+  @@index([owner_id], map: "idx_parking_spots_owner_id")
+  @@index([spot_number], map: "idx_parking_spots_spot_number")
+  @@index([status], map: "idx_parking_spots_status")
   @@map("parking_spots")
 }
 
-// История изменений парковочного места
 model ParkingSpotHistory {
-  id              BigInt    @id @default(autoincrement())
-  parking_spot_id BigInt
-  
-  // Что изменилось
-  field_name      String    @db.VarChar(100) // owner_id, status, price, etc.
-  old_value       String?   @db.Text
-  new_value       String?   @db.Text
-  
-  // Кто изменил
-  changed_by_id   BigInt?   // null для системных изменений
-  
-  // Когда
-  changed_at      DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  parking_spot    ParkingSpot @relation(fields: [parking_spot_id], references: [id], onDelete: Cascade)
-  changed_by      User?     @relation("ParkingSpotHistoryChangedBy", fields: [changed_by_id], references: [user_id], onDelete: SetNull)
-  
-  @@index([parking_spot_id])
-  @@index([changed_at(sort: Desc)])
+  id               BigInt   @id @default(autoincrement())
+  parking_spot_id  BigInt
+  changed_by_id    BigInt?
+  old_status       String?  @db.VarChar(50)
+  new_status       String   @db.VarChar(50)
+  old_price        String?  @db.VarChar(100)
+  new_price        String?  @db.VarChar(100)
+  old_description  String?
+  new_description  String?
+  old_contact_info String?
+  new_contact_info String?
+  change_reason    String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([parking_spot_id], map: "idx_parking_spot_history_parking_spot_id")
   @@map("parking_spot_history")
 }
 
-// ============================================
-// EVENTS SYSTEM
-// ============================================
-
 model Event {
-  id                  BigInt              @id @default(autoincrement())
-  
-  // Основная информация
-  title               String              @db.VarChar(255)
-  description         String?             @db.Text
-  image_url           String?             @db.Text // Изображение события
-  
-  // Тип события
-  event_type          String              @default("general") @db.VarChar(50)
-  // general - общее
-  // meeting - собрание
-  // cleanup - субботник
-  // celebration - праздник
-  // repair - ремонт
-  
-  // Место и время
-  location            String?             @db.VarChar(255)
-  start_date          DateTime            @db.Timestamptz(6)
-  end_date            DateTime?           @db.Timestamptz(6)
-  
-  // Участники
-  max_participants    Int?                // null = без ограничений
-  
-  // Статус
-  status              String              @default("active") @db.VarChar(50)
-  // active - активно
-  // cancelled - отменено
-  // completed - завершено
-  
-  // Создатель
-  created_by          BigInt
-  
-  // Технические поля
-  created_at          DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime            @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  creator             User                @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
-  registrations       EventRegistration[]
-  waitlist            EventWaitlist[]
-  telegram_chats      EventTelegramChat[] // Связь Many-to-Many с Telegram чатами
-  
+  id               BigInt              @id @default(autoincrement())
+  title            String              @db.VarChar(255)
+  description      String?
+  event_type       String              @default("general") @db.VarChar(50)
+  location         String?             @db.VarChar(255)
+  start_date       DateTime            @db.Timestamptz(6)
+  end_date         DateTime?           @db.Timestamptz(6)
+  max_participants Int?
+  status           String              @default("active") @db.VarChar(50)
+  created_by       BigInt
+  created_at       DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  image_url        String?
+  registrations    EventRegistration[]
+  telegram_chats   EventTelegramChat[]
+  waitlist         EventWaitlist[]
+  creator          User                @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
+
   @@index([status])
   @@index([event_type])
   @@index([start_date])
@@ -683,115 +345,69 @@ model Event {
 }
 
 model EventRegistration {
-  id                  BigInt    @id @default(autoincrement())
-  
-  event_id            BigInt
-  user_id             BigInt?   // Nullable для гостей
-  
-  // Статус регистрации
-  status              String    @default("registered") @db.VarChar(50)
-  // registered - зарегистрирован
-  // cancelled - отменена регистрация
-  // attended - посетил
-  
-  // Дополнительная информация
-  notes               String?   @db.Text
-  
-  // Для гостей (не авторизованных пользователей)
-  guest_name          String?   @db.VarChar(255)
-  guest_phone         String?   @db.VarChar(50)
-  guest_email         String?   @db.VarChar(255)
-  
-  registered_at       DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime  @updatedAt @db.Timestamptz(6)
-  
-  // Relations
-  event               Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user                User?     @relation("EventRegistrations", fields: [user_id], references: [user_id], onDelete: Cascade)
-  
-  @@unique([event_id, user_id]) // Один пользователь не может зарегистрироваться дважды
+  id            BigInt   @id @default(autoincrement())
+  event_id      BigInt
+  user_id       BigInt?
+  status        String   @default("registered") @db.VarChar(50)
+  notes         String?
+  registered_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  guest_name    String?  @db.VarChar(255)
+  guest_phone   String?  @db.VarChar(50)
+  guest_email   String?  @db.VarChar(255)
+  event         Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user          User?    @relation("EventRegistrations", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
   @@index([event_id])
   @@index([user_id])
   @@index([status])
   @@map("event_registrations")
 }
 
-// Лист ожидания для событий с полной вместимостью
 model EventWaitlist {
-  id                  BigInt    @id @default(autoincrement())
-  
-  event_id            BigInt
-  user_id             BigInt?   // Nullable для гостей
-  
-  // Для гостей
-  guest_name          String?   @db.VarChar(255)
-  guest_phone         String?   @db.VarChar(50)
-  guest_email         String?   @db.VarChar(255)
-  
-  notes               String?   @db.Text
-  notified            Boolean   @default(false) // Уведомлен ли пользователь о свободном месте
-  
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  event               Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user                User?     @relation("EventWaitlist", fields: [user_id], references: [user_id], onDelete: Cascade)
-  
+  id          BigInt   @id @default(autoincrement())
+  event_id    BigInt
+  user_id     BigInt?
+  guest_name  String?  @db.VarChar(255)
+  guest_phone String?  @db.VarChar(50)
+  guest_email String?  @db.VarChar(255)
+  notes       String?
+  notified    Boolean  @default(false)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  event       Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user        User?    @relation("EventWaitlist", fields: [user_id], references: [user_id], onDelete: Cascade)
+
   @@index([event_id])
   @@index([user_id])
   @@index([notified])
   @@map("event_waitlist")
 }
 
-// Связь Many-to-Many между Events и TelegramChats
 model EventTelegramChat {
-  id                  BigInt    @id @default(autoincrement())
-  
+  id                  BigInt   @id @default(autoincrement())
   event_id            BigInt
-  telegram_chat_id    BigInt
-  
-  message_sent        Boolean   @default(false) // Отправлено ли сообщение в чат
-  telegram_message_id BigInt?   // ID сообщения в Telegram для редактирования
-  
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  
-  // Relations
-  event               Event         @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  telegram_chat       TelegramChat  @relation(fields: [telegram_chat_id], references: [id], onDelete: Cascade)
-  
+  telegram_chat_id    Int
+  message_sent        Boolean  @default(false)
+  telegram_message_id BigInt?
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  event               Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
   @@unique([event_id, telegram_chat_id])
   @@index([event_id])
   @@index([telegram_chat_id])
   @@map("event_telegram_chats")
 }
 
-// Сообщения по парковочным местам (аналог сообщений по объявлениям)
 model ParkingMessage {
-  id              BigInt    @id @default(autoincrement())
-  
-  // Связи
+  id              BigInt   @id @default(autoincrement())
   parking_spot_id BigInt
   sender_id       BigInt
   receiver_id     BigInt
-  
-  // Содержимое
-  content         String    @db.Text
-  
-  // Статус
-  is_read         Boolean   @default(false)
-  is_deleted      Boolean   @default(false)
-  
-  // Timestamps
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  read_at         DateTime? @db.Timestamptz(6)
-  
-  // Relations
-  parking_spot    ParkingSpot @relation(fields: [parking_spot_id], references: [id], onDelete: Cascade)
-  sender          User      @relation("ParkingMessageSender", fields: [sender_id], references: [user_id], onDelete: Cascade)
-  receiver        User      @relation("ParkingMessageReceiver", fields: [receiver_id], references: [user_id], onDelete: Cascade)
-  
-  @@index([parking_spot_id])
-  @@index([sender_id, receiver_id])
-  @@index([created_at(sort: Desc)])
+  content         String
+  is_read         Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([parking_spot_id], map: "idx_parking_messages_parking_spot_id")
   @@map("parking_messages")
 }

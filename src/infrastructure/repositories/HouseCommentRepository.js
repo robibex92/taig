@@ -20,9 +20,23 @@ export class HouseCommentRepository {
         );
       }
 
+      // Находим house_id по номеру дома
+      const house = await prisma.house.findFirst({
+        where: {
+          house: String(commentData.house_id),
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!house) {
+        throw new Error(`House with number "${commentData.house_id}" not found`);
+      }
+
       const comment = await prisma.houseComment.create({
         data: {
-          house_id: String(commentData.house_id), // Сохраняем как строку
+          house_id: house.id, // Используем найденный house_id
           author_id: commentData.author_id,
           comment: commentData.comment,
         },
@@ -123,10 +137,24 @@ export class HouseCommentRepository {
    */
   async findByHouseNumber(houseNumber) {
     try {
-      // Ищем комментарии напрямую по house_id (теперь это строка)
+      // Находим house_id по номеру дома
+      const house = await prisma.house.findFirst({
+        where: {
+          house: houseNumber,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!house) {
+        return [];
+      }
+
+      // Ищем комментарии по найденному house_id
       const comments = await prisma.houseComment.findMany({
         where: {
-          house_id: houseNumber,
+          house_id: house.id,
         },
         select: {
           id: true,
@@ -205,10 +233,24 @@ export class HouseCommentRepository {
     try {
       console.log(`Looking for comments with house_id: "${houseNumber}"`);
 
-      // Ищем комментарии напрямую по house_id (теперь это строка)
+      // Находим house_id по номеру дома
+      const house = await prisma.house.findFirst({
+        where: {
+          house: houseNumber,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!house) {
+        return null;
+      }
+
+      // Ищем комментарии по найденному house_id
       const comments = await prisma.houseComment.findMany({
         where: {
-          house_id: houseNumber,
+          house_id: house.id,
         },
         select: {
           comment: true,
