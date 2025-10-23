@@ -28,14 +28,6 @@ export class EntranceCommentRepository {
           comment: commentData.comment,
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -67,14 +59,6 @@ export class EntranceCommentRepository {
       const comment = await prisma.entranceComment.findUnique({
         where: { id: BigInt(id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -116,14 +100,6 @@ export class EntranceCommentRepository {
           entrance: entrance,
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -206,14 +182,6 @@ export class EntranceCommentRepository {
       const comments = await prisma.entranceComment.findMany({
         where: { house_id: BigInt(house_id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -243,14 +211,6 @@ export class EntranceCommentRepository {
           updated_at: new Date(),
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
