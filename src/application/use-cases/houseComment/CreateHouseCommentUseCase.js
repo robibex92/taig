@@ -26,33 +26,30 @@ export class CreateHouseCommentUseCase {
         throw new ValidationError("Comment cannot exceed 1000 characters");
       }
 
-      // Determine if house_id is a number or house number string
-      let actualHouseId;
-      if (!isNaN(house_id)) {
-        // It's already a number (house_id)
-        actualHouseId = BigInt(parseInt(house_id));
+      // Теперь house_id - это номер дома как строка (например, "39" или "39/1")
+      const houseNumber = String(house_id);
+
+      // Проверяем, существует ли уже комментарий для этого дома
+      const existingComments = await this.houseCommentRepository.findByHouseNumber(houseNumber);
+      
+      if (existingComments.length > 0) {
+        // Если комментарий существует, обновляем первый (самый новый)
+        const existingComment = existingComments[0];
+        const updatedComment = await this.houseCommentRepository.update(existingComment.id, {
+          comment: comment.trim(),
+        });
+        return updatedComment;
       } else {
-        // It's a house number string, find the corresponding house_id
-        const foundHouseId =
-          await this.houseCommentRepository.findHouseIdByNumber(house_id);
-        if (!foundHouseId) {
-          throw new ValidationError(
-            `House with number "${house_id}" not found`
-          );
-        }
-        actualHouseId = BigInt(foundHouseId);
+        // Если комментария нет, создаем новый
+        const newComment = await this.houseCommentRepository.create({
+          house_id: houseNumber, // Передаем строку, репозиторий сам найдет house.id
+          author_id: BigInt(author_id),
+          comment: comment.trim(),
+        });
+        return newComment;
       }
-
-      // Create the comment
-      const newComment = await this.houseCommentRepository.create({
-        house_id: actualHouseId,
-        author_id: BigInt(author_id),
-        comment: comment.trim(),
-      });
-
-      return newComment;
     } catch (error) {
-      console.error("Error creating house comment:", error);
+      console.error("Error creating/updating house comment:", error);
       throw error;
     }
   }

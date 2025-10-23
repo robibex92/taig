@@ -22,7 +22,7 @@ export class HouseCommentRepository {
 
       const comment = await prisma.houseComment.create({
         data: {
-          house_id: commentData.house_id,
+          house_id: String(commentData.house_id), // Сохраняем как строку
           author_id: commentData.author_id,
           comment: commentData.comment,
         },
@@ -35,12 +35,6 @@ export class HouseCommentRepository {
               last_name: true,
             },
           },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
         },
       });
 
@@ -48,6 +42,7 @@ export class HouseCommentRepository {
         commentId: comment.id,
         houseId: comment.house_id,
         authorId: comment.author_id,
+        authorIdType: typeof comment.author_id,
       });
 
       return comment;
@@ -115,8 +110,8 @@ export class HouseCommentRepository {
         orderBy: { created_at: "desc" },
       });
 
-      // Filter out comments where author is null (broken references)
-      return comments.filter((comment) => comment.author !== null);
+      // Возвращаем все комментарии без фильтрации по автору
+      return comments;
     } catch (error) {
       logger.error("Error finding house comments by house ID:", error);
       throw error;
@@ -128,58 +123,23 @@ export class HouseCommentRepository {
    */
   async findByHouseNumber(houseNumber) {
     try {
-      // Сначала получаем все комментарии без include author
+      // Ищем комментарии напрямую по house_id (теперь это строка)
       const comments = await prisma.houseComment.findMany({
         where: {
-          house: {
-            house: houseNumber,
-          },
+          house_id: houseNumber,
         },
         select: {
           id: true,
           comment: true,
           created_at: true,
           author_id: true,
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          house_id: true,
         },
         orderBy: { created_at: "desc" },
       });
 
-      // Фильтруем комментарии с валидными авторами
-      const validComments = comments.filter(comment => comment.author_id !== null);
-
-      // Теперь получаем данные авторов только для валидных комментариев
-      const commentsWithAuthors = [];
-      for (const comment of validComments) {
-        try {
-          const author = await prisma.user.findUnique({
-            where: { user_id: comment.author_id },
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          });
-
-          if (author) {
-            commentsWithAuthors.push({
-              ...comment,
-              author,
-            });
-          }
-        } catch (authorError) {
-          // Пропускаем комментарии с проблемными авторами
-          logger.warn(`Skipping comment ${comment.id} due to author lookup error:`, authorError);
-        }
-      }
-
-      return commentsWithAuthors;
+      // Возвращаем все комментарии без фильтрации по автору
+      return comments;
     } catch (error) {
       logger.error("Error finding house comments by house number:", error);
       throw error;
@@ -191,10 +151,45 @@ export class HouseCommentRepository {
    */
   async findHouseIdByNumber(houseNumber) {
     try {
-      const house = await prisma.house.findFirst({
+      console.log(
+        `findHouseIdByNumber: Looking for house with number: "${houseNumber}"`
+      );
+
+      // Ищем дом точно по номеру
+      let house = await prisma.house.findFirst({
         where: { house: houseNumber },
-        select: { id: true },
+        select: { id: true, house: true },
       });
+
+      console.log(`findHouseIdByNumber: Exact house found:`, house);
+
+      // Если точного совпадения нет, ищем дом который начинается с этого номера
+      // НО только если номер дома не содержит "/" и не является частью другого номера
+      if (!house && houseNumber && !houseNumber.includes("/")) {
+        console.log(
+          `findHouseIdByNumber: Looking for house that starts with: "${houseNumber}"`
+        );
+        house = await prisma.house.findFirst({
+          where: {
+            house: {
+              startsWith: houseNumber,
+            },
+          },
+          select: { id: true, house: true },
+        });
+        console.log(
+          `findHouseIdByNumber: House starting with "${houseNumber}" found:`,
+          house
+        );
+
+        // Проверяем, что найденный дом не является поддомом (например, 39/1 когда ищем 39)
+        if (house && house.house !== houseNumber && house.house.includes("/")) {
+          console.log(
+            `findHouseIdByNumber: Found house "${house.house}" but it's a sub-house, not exact match for "${houseNumber}"`
+          );
+          house = null;
+        }
+      }
 
       return house ? Number(house.id) : null;
     } catch (error) {
@@ -208,24 +203,12 @@ export class HouseCommentRepository {
    */
   async findSimpleCommentByHouseNumber(houseNumber) {
     try {
-      // Сначала находим house_id по номеру дома
-      const house = await prisma.house.findFirst({
-        where: {
-          house: houseNumber,
-        },
-        select: {
-          id: true,
-        },
-      });
+      console.log(`Looking for comments with house_id: "${houseNumber}"`);
 
-      if (!house) {
-        return null;
-      }
-
-      // Затем получаем комментарии для этого дома
+      // Ищем комментарии напрямую по house_id (теперь это строка)
       const comments = await prisma.houseComment.findMany({
         where: {
-          house_id: house.id,
+          house_id: houseNumber,
         },
         select: {
           comment: true,
@@ -234,10 +217,17 @@ export class HouseCommentRepository {
         orderBy: { created_at: "desc" },
       });
 
-      // Фильтруем комментарии с валидными авторами и возвращаем первый
-      const validComment = comments.find(comment => comment.author_id !== null);
-      
-      return validComment ? validComment.comment : null;
+      console.log(
+        `Found ${comments.length} comments for house ${houseNumber}:`,
+        comments
+      );
+
+      // Возвращаем первый комментарий (самый новый), если он есть
+      const latestComment = comments.length > 0 ? comments[0] : null;
+
+      console.log(`Latest comment found:`, latestComment);
+
+      return latestComment ? latestComment.comment : null;
     } catch (error) {
       logger.error("Error finding simple comment by house number:", error);
       throw error;

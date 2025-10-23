@@ -213,9 +213,7 @@ model House {
   // Relations (закомментирована - несовпадение типов: id_telegram Int vs user_id BigInt)
   // user         User?     @relation(fields: [id_telegram], references: [user_id], onDelete: SetNull)
   
-  // Новые связи для комментариев
-  house_comments    HouseComment[]
-  entrance_comments EntranceComment[]
+  // Связи с комментариями удалены - теперь используются строки вместо foreign keys
 
   @@index([house, entrance, number])
   @@index([id_telegram])
@@ -226,14 +224,13 @@ model House {
 // Комментарии для домов (только администраторы)
 model HouseComment {
   id          BigInt   @id @default(autoincrement())
-  house_id    BigInt
+  house_id    String   @db.VarChar(50) // Номер дома как строка (например, "39" или "39/1")
   author_id   BigInt
   comment     String   @db.Text
   created_at  DateTime @default(now()) @db.Timestamptz(6)
   updated_at  DateTime @updatedAt @db.Timestamptz(6)
   
   // Relations
-  house       House    @relation(fields: [house_id], references: [id], onDelete: Cascade)
   author      User     @relation("HouseCommentAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   
   @@index([house_id])
@@ -245,7 +242,7 @@ model HouseComment {
 // Комментарии для подъездов (только администраторы)
 model EntranceComment {
   id          BigInt   @id @default(autoincrement())
-  house_id    BigInt
+  house_id    String   @db.VarChar(50) // Номер дома как строка (например, "39" или "39/1")
   entrance    Int
   author_id   BigInt
   comment     String   @db.Text
@@ -253,7 +250,6 @@ model EntranceComment {
   updated_at  DateTime @updatedAt @db.Timestamptz(6)
   
   // Relations
-  house       House    @relation(fields: [house_id], references: [id], onDelete: Cascade)
   author      User     @relation("EntranceCommentAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   
   @@unique([house_id, entrance], name: "house_id_entrance")
