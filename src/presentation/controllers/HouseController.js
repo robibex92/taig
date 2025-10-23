@@ -229,7 +229,28 @@ export class HouseController {
     const user = req.user;
 
     const newComment = await this.createHouseCommentUseCase.execute({
-      house_id: parseInt(house_id),
+      house_id: house_id, // Pass as string to support both house_id and house number
+      author_id: user.user_id,
+      comment,
+    });
+
+    res.status(201).json(newComment);
+  });
+
+  /**
+   * POST /api-v1/nearby/comments
+   * Create house comment by house number (admin only)
+   */
+  createHouseCommentByNumber = asyncHandler(async (req, res) => {
+    const { house, comment } = req.body;
+    const user = req.user;
+
+    if (!house) {
+      return res.status(400).json({ error: "House number is required" });
+    }
+
+    const newComment = await this.createHouseCommentUseCase.execute({
+      house_id: house, // Pass house number as string
       author_id: user.user_id,
       comment,
     });
@@ -244,9 +265,7 @@ export class HouseController {
   getHouseComments = asyncHandler(async (req, res) => {
     const { house_id } = req.params;
 
-    const comments = await this.getHouseCommentsUseCase.execute(
-      parseInt(house_id)
-    );
+    const comments = await this.getHouseCommentsUseCase.execute(house_id);
 
     res.json(comments);
   });
@@ -258,14 +277,76 @@ export class HouseController {
   getHouseComment = asyncHandler(async (req, res) => {
     const { house_id } = req.params;
 
-    const comments = await this.getHouseCommentsUseCase.execute(
-      parseInt(house_id)
-    );
-
-    if (comments && comments.length > 0 && comments[0].comment) {
-      res.json({ comment: comments[0].comment });
+    // Если это число, используем обычный метод
+    if (!isNaN(house_id)) {
+      const comments = await this.getHouseCommentsUseCase.execute(house_id);
+      if (comments && comments.length > 0 && comments[0].comment) {
+        res.json({ comment: comments[0].comment });
+      } else {
+        res.json(null);
+      }
     } else {
-      res.json(null);
+      // Если это строка (номер дома), используем упрощенный метод
+      const comment = await this.getHouseCommentsUseCase.executeSimple(
+        house_id
+      );
+      if (comment) {
+        res.json({ comment });
+      } else {
+        res.json(null);
+      }
+    }
+  });
+
+  /**
+   * GET /api-v1/nearby/comments?house=HOUSE_NUMBER
+   * Get house comments by house number (query param)
+   */
+  getHouseCommentsByNumber = asyncHandler(async (req, res) => {
+    const { house } = req.query;
+
+    console.log(`getHouseCommentsByNumber called with house: "${house}"`);
+
+    if (!house) {
+      return res.status(400).json({ error: "House number is required" });
+    }
+
+    try {
+      const comments = await this.getHouseCommentsUseCase.execute(house);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error in getHouseCommentsByNumber:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  /**
+   * GET /api-v1/nearby/comment?house=HOUSE_NUMBER
+   * Get simplified house comment by house number (query param)
+   */
+  getHouseCommentByNumber = asyncHandler(async (req, res) => {
+    const { house } = req.query;
+
+    console.log(`Getting comment for house: "${house}"`);
+
+    if (!house) {
+      return res.status(400).json({ error: "House number is required" });
+    }
+
+    try {
+      // Используем упрощенный метод для получения только текста комментария
+      const comment = await this.getHouseCommentsUseCase.executeSimple(house);
+
+      console.log(`Comment found: ${comment ? `"${comment}"` : "null"}`);
+
+      if (comment) {
+        res.json({ comment });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error in getHouseCommentByNumber:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -352,17 +433,34 @@ export class HouseController {
     );
 
     try {
-      const comment = await this.getEntranceCommentsUseCase.execute(
-        parseInt(house_id),
-        parseInt(entrance)
-      );
+      // Если house_id это число, используем обычный метод
+      if (!isNaN(house_id)) {
+        const comment = await this.getEntranceCommentsUseCase.execute(
+          parseInt(house_id),
+          parseInt(entrance)
+        );
 
-      console.log(`getEntranceCommentSimple result:`, comment);
+        console.log(`getEntranceCommentSimple result:`, comment);
 
-      if (comment && comment.comment) {
-        res.json({ comment: comment.comment });
+        if (comment && comment.comment) {
+          res.json({ comment: comment.comment });
+        } else {
+          res.json(null);
+        }
       } else {
-        res.json(null);
+        // Если это строка (номер дома), используем упрощенный метод
+        const comment = await this.getEntranceCommentsUseCase.executeSimple(
+          house_id,
+          parseInt(entrance)
+        );
+
+        console.log(`getEntranceCommentSimple result:`, comment);
+
+        if (comment) {
+          res.json({ comment });
+        } else {
+          res.json(null);
+        }
       }
     } catch (error) {
       console.error("Error in getEntranceCommentSimple:", error);

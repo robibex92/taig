@@ -41,4 +41,36 @@ export class GetEntranceCommentUseCase {
       throw error;
     }
   }
+
+  async executeSimple(house_number, entrance) {
+    try {
+      console.log(
+        `GetEntranceCommentUseCase.executeSimple called with house_number=${house_number}, entrance=${entrance}`
+      );
+
+      if (!house_number || !entrance) {
+        throw new ValidationError("House number and entrance are required");
+      }
+
+      const comment =
+        await this.entranceCommentRepository.findSimpleCommentByHouseNumberAndEntrance(
+          house_number,
+          entrance
+        );
+
+      console.log(
+        `GetEntranceCommentUseCase.executeSimple result:`,
+        comment ? `"${comment}"` : "null"
+      );
+      return comment; // Может быть null если комментарий не найден
+    } catch (error) {
+      console.error("Error getting simple entrance comment:", error);
+      // Если это ошибка "таблица не найдена", возвращаем null
+      if (error.code === "P2021" || error.message.includes("does not exist")) {
+        console.log("Table does not exist yet, returning null");
+        return null;
+      }
+      throw error;
+    }
+  }
 }

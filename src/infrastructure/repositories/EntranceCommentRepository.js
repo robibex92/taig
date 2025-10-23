@@ -28,20 +28,12 @@ export class EntranceCommentRepository {
           comment: commentData.comment,
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -67,20 +59,12 @@ export class EntranceCommentRepository {
       const comment = await prisma.entranceComment.findUnique({
         where: { id: BigInt(id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -116,20 +100,12 @@ export class EntranceCommentRepository {
           entrance: entrance,
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 
@@ -146,6 +122,59 @@ export class EntranceCommentRepository {
   }
 
   /**
+   * Get simple entrance comment by house number and entrance (no author details)
+   */
+  async findSimpleCommentByHouseNumberAndEntrance(houseNumber, entrance) {
+    try {
+      // Проверяем, существует ли модель в Prisma клиенте
+      if (!prisma.entranceComment) {
+        console.error(
+          "Prisma model 'entranceComment' not found. Please run 'npx prisma generate'"
+        );
+        throw new Error(
+          "Prisma model not found. Please regenerate Prisma client."
+        );
+      }
+
+      console.log(
+        `Looking for simple entrance comment: house=${houseNumber}, entrance=${entrance}`
+      );
+
+      // Сначала получаем все комментарии без include author
+      const comments = await prisma.entranceComment.findMany({
+        where: {
+          house: {
+            house: houseNumber,
+          },
+          entrance: parseInt(entrance),
+        },
+        select: {
+          comment: true,
+          author_id: true,
+        },
+        orderBy: { created_at: "desc" },
+      });
+
+      // Фильтруем комментарии с валидными авторами и возвращаем первый
+      const validComment = comments.find(
+        (comment) => comment.author_id !== null
+      );
+
+      console.log(
+        `Found simple entrance comment:`,
+        validComment ? "yes" : "no"
+      );
+      return validComment ? validComment.comment : null;
+    } catch (error) {
+      logger.error(
+        "Error finding simple entrance comment by house number and entrance:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get all comments for a house
    */
   async findByHouseId(house_id) {
@@ -153,20 +182,12 @@ export class EntranceCommentRepository {
       const comments = await prisma.entranceComment.findMany({
         where: { house_id: BigInt(house_id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
         orderBy: { entrance: "asc" },
       });
@@ -190,20 +211,12 @@ export class EntranceCommentRepository {
           updated_at: new Date(),
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
+          // house: {
+          //   select: {
+          //     id: true,
+          //     house: true,
+          //   },
+          // },
         },
       });
 

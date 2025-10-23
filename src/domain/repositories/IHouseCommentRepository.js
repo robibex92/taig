@@ -61,4 +61,13 @@ export class IHouseCommentRepository {
   async canUserManage(commentId, userId) {
     throw new Error("Method 'canUserManage()' must be implemented");
   }
+
+  /**
+   * Get simple comment text for a house by house number (no author details)
+   * @param {string} houseNumber - House number (e.g., "39/1")
+   * @returns {Promise<string|null>} Comment text or null
+   */
+  async findSimpleCommentByHouseNumber(houseNumber) {
+    throw new Error("Method 'findSimpleCommentByHouseNumber()' must be implemented");
+  }
 }

@@ -46,6 +46,9 @@ import bookingRoutes from "./presentation/routes/bookingRoutes.js";
 import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
 import adminRoutes from "./presentation/routes/admin.routes.js";
 import imageProxyRoutes from "./presentation/routes/imageProxy.routes.js";
+import eventsRoutes from "./presentation/routes/events.routes.js";
+import bannersRoutes from "./presentation/routes/banners.routes.js";
+import parkingRoutes from "./presentation/routes/parking.routes.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
@@ -132,9 +135,9 @@ app.use(
   })
 );
 
-// Также раздаем через /api-v1/uploads для консистентности с API
+// Также раздаем через /api/uploads для консистентности с API
 app.use(
-  "/api-v1/uploads",
+  "/api/uploads",
   express.static(uploadRoot, {
     immutable: false,
     maxAge: "1d",
@@ -154,7 +157,7 @@ app.use(
 
 logger.info("Static files serving", {
   path: uploadRoot,
-  routes: ["/uploads", "/api-v1/uploads"],
+  routes: ["/uploads", "/api/uploads"],
   resolvedPath: path.resolve(uploadRoot),
 });
 
@@ -166,8 +169,8 @@ if (process.env.TELEGRAM_WEBHOOK_URL) {
   logger.info("Telegram webhook middleware registered");
 }
 
-// ================== Clean Architecture Routes (v1) ==================
-// Prefix /api is applied here (Nginx rewrites /api-v1/ → /api/)
+// ================== Clean Architecture Routes ==================
+// All routes use /api prefix
 app.use("/api", adsRoutes);
 app.use("/api", authRoutes);
 app.use("/api", postRoutes);
@@ -186,6 +189,9 @@ app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
+app.use("/api", eventsRoutes);
+app.use("/api", bannersRoutes);
+app.use("/api", parkingRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅
