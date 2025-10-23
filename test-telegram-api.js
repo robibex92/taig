@@ -4,9 +4,7 @@ async function testTelegramAPI() {
   try {
     console.log("🧪 Тестирование API Telegram чатов...");
 
-    const response = await fetch(
-      "http://localhost:4000/api-v1/api/telegram-chats"
-    );
+    const response = await fetch("http://localhost:4000/api/telegram-chats");
     console.log("Status:", response.status);
     console.log("Headers:", Object.fromEntries(response.headers.entries()));
 
