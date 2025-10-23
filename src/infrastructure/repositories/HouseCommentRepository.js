@@ -208,12 +208,24 @@ export class HouseCommentRepository {
    */
   async findSimpleCommentByHouseNumber(houseNumber) {
     try {
-      // Сначала получаем все комментарии для дома
+      // Сначала находим house_id по номеру дома
+      const house = await prisma.house.findFirst({
+        where: {
+          house: houseNumber,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!house) {
+        return null;
+      }
+
+      // Затем получаем комментарии для этого дома
       const comments = await prisma.houseComment.findMany({
         where: {
-          house: {
-            house: houseNumber,
-          },
+          house_id: house.id,
         },
         select: {
           comment: true,

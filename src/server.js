@@ -171,26 +171,26 @@ if (process.env.TELEGRAM_WEBHOOK_URL) {
 
 // ================== Clean Architecture Routes (v1) ==================
 // Prefix /api is applied here (Nginx rewrites /api-v1/ → /api/)
-app.use("/api", adsRoutes);
-app.use("/api", authRoutes);
-app.use("/api", postRoutes);
-app.use("/api", telegramRoutes);
-app.use("/api", categoryRoutes);
-app.use("/api", faqRoutes);
-app.use("/api", floorRuleRoutes);
-app.use("/api", carRoutes);
-app.use("/api", adImageRoutes);
-app.use("/api", uploadRoutes);
-app.use("/api", nearbyRoutes);
-app.use("/api", publicUserRoutes);
-app.use("/api", userRoutes);
-app.use("/api", messageRoutes);
-app.use("/api", bookingRoutes);
+app.use("/api-v1", adsRoutes);
+app.use("/api-v1", authRoutes);
+app.use("/api-v1", postRoutes);
+app.use("/api-v1", telegramRoutes);
+app.use("/api-v1", categoryRoutes);
+app.use("/api-v1", faqRoutes);
+app.use("/api-v1", floorRuleRoutes);
+app.use("/api-v1", carRoutes);
+app.use("/api-v1", adImageRoutes);
+app.use("/api-v1", uploadRoutes);
+app.use("/api-v1", nearbyRoutes);
+app.use("/api-v1", publicUserRoutes);
+app.use("/api-v1", userRoutes);
+app.use("/api-v1", messageRoutes);
+app.use("/api-v1", bookingRoutes);
 app.use("/api-v1/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api", imageProxyRoutes);
-app.use("/api", eventsRoutes);
-app.use("/api", bannersRoutes);
+app.use("/api-v1", imageProxyRoutes);
+app.use("/api-v1", eventsRoutes);
+app.use("/api-v1", bannersRoutes);
 app.use("/api-v1", parkingRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
