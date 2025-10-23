@@ -58,17 +58,7 @@ const BASE_ROUTE = "/events";
  *       500:
  *         description: Internal Server Error
  */
-router.get(BASE_ROUTE, (req, res, next) => {
-  console.log(
-    "Events route hit, eventController:",
-    typeof eventController.getEvents
-  );
-  if (typeof eventController.getEvents === "function") {
-    eventController.getEvents(req, res, next);
-  } else {
-    res.status(500).json({ error: "EventController method not found" });
-  }
-});
+router.get(BASE_ROUTE, eventController.getEvents);
 
 /**
  * @swagger

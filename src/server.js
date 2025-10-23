@@ -77,14 +77,14 @@ app.use(helmetMiddleware);
 // CORS
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
     credentials: true,
   })
 );
 app.options(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
     credentials: true,
   })
 );
@@ -184,8 +184,8 @@ app.use("/api", uploadRoutes);
 app.use("/api", nearbyRoutes);
 app.use("/api", publicUserRoutes);
 app.use("/api", userRoutes);
-app.use("/api", messageRoutes);
-app.use("/api", bookingRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/bookings", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
@@ -227,6 +227,15 @@ app.get("/api/health", (req, res) => {
     message: "Server is healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+  });
+});
+
+// Test route - NO AUTH
+app.get("/api/test-no-auth", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "This route works WITHOUT authentication!",
+    timestamp: new Date().toISOString(),
   });
 });
 

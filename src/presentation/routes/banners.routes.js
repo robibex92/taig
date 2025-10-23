@@ -62,7 +62,11 @@ const BASE_ROUTE = "/banners";
  *       500:
  *         description: Internal Server Error
  */
-router.get(BASE_ROUTE, bannerController.getBanners);
+// Публичный маршрут - БЕЗ авторизации
+router.get(BASE_ROUTE, (req, res, next) => {
+  console.log("🎯 Banners GET route hit - NO AUTH REQUIRED");
+  bannerController.getBanners(req, res, next);
+});
 
 /**
  * @swagger
