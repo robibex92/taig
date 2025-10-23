@@ -35,6 +35,16 @@ export class AuthenticateUserUseCase {
       .update(checkString)
       .digest("hex");
 
+    // Детальное логирование для отладки
+    logger.info("🔍 Hash verification details", {
+      received_hash: hash,
+      calculated_hash: hmac,
+      check_string: checkString,
+      data_keys: Object.keys(data),
+      token_prefix: process.env.TELEGRAM_BOT_TOKEN?.substring(0, 20),
+      hashes_match: hmac === hash,
+    });
+
     return hmac === hash;
   }
 
@@ -48,11 +58,24 @@ export class AuthenticateUserUseCase {
   }
 
   async execute(telegramAuthData, deviceInfo = {}, rememberMe = false) {
+    // Детальное логирование для отладки
+    logger.info("🔍 Telegram auth attempt", {
+      telegram_id: telegramAuthData.id,
+      auth_date: telegramAuthData.auth_date,
+      hash_length: telegramAuthData.hash?.length,
+      data_keys: Object.keys(telegramAuthData),
+      ip: deviceInfo.ip,
+    });
+
     // Verify Telegram authentication
-    if (!this.verifyTelegramAuth(telegramAuthData)) {
+    const isValidAuth = this.verifyTelegramAuth(telegramAuthData);
+    logger.info("🔐 Auth verification result", { isValidAuth });
+
+    if (!isValidAuth) {
       logger.warn("Invalid Telegram authentication attempt", {
         telegram_id: telegramAuthData.id,
         ip: deviceInfo.ip,
+        received_data: telegramAuthData,
       });
       throw new AuthenticationError("Invalid Telegram authentication");
     }
@@ -128,6 +151,17 @@ export class AuthenticateUserUseCase {
       // Optionally: revoke oldest session or throw error
       // For now, we'll allow it but log the warning
     }
+
+    // Clear all existing refresh tokens for this user (force re-login)
+    await this.refreshTokenRepository.revokeAllForUser(user.user_id);
+
+    // Also clear any old refresh token from user table (legacy cleanup)
+    await this.userRepository.clearRefreshToken(user.user_id);
+
+    logger.info("Cleared existing refresh tokens for user", {
+      user_id: user.user_id,
+      ip: deviceInfo.ip,
+    });
 
     // Generate tokens with device fingerprinting
     const { accessToken, refreshToken } = this.tokenService.generateTokenPair(
