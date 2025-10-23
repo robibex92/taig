@@ -27,19 +27,6 @@ class ParkingUseCases {
   async getAllParkingSpots() {
     try {
       const spots = await prisma.parkingSpot.findMany({
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-        },
         orderBy: { spot_number: "asc" },
       });
 
@@ -57,22 +44,7 @@ class ParkingUseCases {
           isActive: spot.is_active,
           createdAt: spot.created_at,
           updatedAt: spot.updated_at,
-          owner: spot.owner
-            ? {
-                id: spot.owner.user_id,
-                username: spot.owner.username,
-                firstName: spot.owner.first_name,
-                lastName: spot.owner.last_name,
-                telegramFirstName: spot.owner.telegram_first_name,
-                telegramLastName: spot.owner.telegram_last_name,
-                avatar: spot.owner.avatar,
-                displayName:
-                  spot.owner.telegram_first_name ||
-                  spot.owner.first_name ||
-                  spot.owner.username ||
-                  "Неизвестно",
-              }
-            : null,
+          owner: spot.owner_id ? { id: spot.owner_id } : null,
         })),
       };
     } catch (error) {
@@ -133,22 +105,7 @@ class ParkingUseCases {
           isActive: spot.is_active,
           createdAt: spot.created_at,
           updatedAt: spot.updated_at,
-          owner: spot.owner
-            ? {
-                id: spot.owner.user_id,
-                username: spot.owner.username,
-                firstName: spot.owner.first_name,
-                lastName: spot.owner.last_name,
-                telegramFirstName: spot.owner.telegram_first_name,
-                telegramLastName: spot.owner.telegram_last_name,
-                avatar: spot.owner.avatar,
-                displayName:
-                  spot.owner.telegram_first_name ||
-                  spot.owner.first_name ||
-                  spot.owner.username ||
-                  "Неизвестно",
-              }
-            : null,
+          owner: spot.owner_id ? { id: spot.owner_id } : null,
           history: spot.history.map((h) => ({
             id: h.id,
             fieldName: h.field_name,
@@ -205,19 +162,6 @@ class ParkingUseCases {
           contact_info: updateData.contactInfo,
           updated_at: new Date(),
         },
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-        },
       });
 
       // Записываем историю изменений
@@ -270,22 +214,7 @@ class ParkingUseCases {
           isActive: updatedSpot.is_active,
           createdAt: updatedSpot.created_at,
           updatedAt: updatedSpot.updated_at,
-          owner: updatedSpot.owner
-            ? {
-                id: updatedSpot.owner.user_id,
-                username: updatedSpot.owner.username,
-                firstName: updatedSpot.owner.first_name,
-                lastName: updatedSpot.owner.last_name,
-                telegramFirstName: updatedSpot.owner.telegram_first_name,
-                telegramLastName: updatedSpot.owner.telegram_last_name,
-                avatar: updatedSpot.owner.avatar,
-                displayName:
-                  updatedSpot.owner.telegram_first_name ||
-                  updatedSpot.owner.first_name ||
-                  updatedSpot.owner.username ||
-                  "Неизвестно",
-              }
-            : null,
+          owner: updatedSpot.owner_id ? { id: updatedSpot.owner_id } : null,
         },
       };
     } catch (error) {
@@ -299,15 +228,6 @@ class ParkingUseCases {
     try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-            },
-          },
-        },
       });
 
       if (!spot) {
@@ -316,10 +236,7 @@ class ParkingUseCases {
 
       // Проверяем, не занято ли место уже другим пользователем
       if (spot.owner_id && Number(spot.owner_id) !== Number(ownerId)) {
-        const ownerName =
-          spot.owner?.username ||
-          spot.owner?.first_name ||
-          `ID: ${spot.owner_id}`;
+        const ownerName = `ID: ${spot.owner_id}`;
         return {
           success: false,
           error: `Парковочное место №${spot.spot_number} уже принадлежит пользователю ${ownerName}. Сначала освободите место.`,
@@ -332,19 +249,6 @@ class ParkingUseCases {
         data: {
           owner_id: ownerId,
           updated_at: new Date(),
-        },
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
         },
       });
 
@@ -364,22 +268,7 @@ class ParkingUseCases {
         data: {
           id: updatedSpot.id,
           spotNumber: updatedSpot.spot_number,
-          owner: updatedSpot.owner
-            ? {
-                id: updatedSpot.owner.user_id,
-                username: updatedSpot.owner.username,
-                firstName: updatedSpot.owner.first_name,
-                lastName: updatedSpot.owner.last_name,
-                telegramFirstName: updatedSpot.owner.telegram_first_name,
-                telegramLastName: updatedSpot.owner.telegram_last_name,
-                avatar: updatedSpot.owner.avatar,
-                displayName:
-                  updatedSpot.owner.telegram_first_name ||
-                  updatedSpot.owner.first_name ||
-                  updatedSpot.owner.username ||
-                  "Неизвестно",
-              }
-            : null,
+          owner: updatedSpot.owner_id ? { id: updatedSpot.owner_id } : null,
         },
       };
     } catch (error) {
@@ -393,19 +282,6 @@ class ParkingUseCases {
     try {
       const spots = await prisma.parkingSpot.findMany({
         where: { owner_id: userId },
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-        },
         orderBy: { spot_number: "asc" },
       });
 
@@ -436,7 +312,6 @@ class ParkingUseCases {
     try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
-        include: { owner: true },
       });
 
       if (!spot) {
