@@ -21,11 +21,7 @@ router.post(
 
 // Refresh token - no rate limit (handled by general limiter)
 // We skip strict auth limiter to allow legitimate refresh attempts
-router.post(
-  "/auth/refresh",
-  validateRequest(refreshTokenSchema, "body"),
-  authController.refreshToken
-);
+router.post("/auth/refresh", authController.refreshToken);
 
 // Protected routes
 router.get("/auth/session", authenticateJWT, authController.getSession);

@@ -33,7 +33,8 @@ export class AuthController {
    * Refresh access token
    */
   refreshToken = asyncHandler(async (req, res) => {
-    const { refreshToken } = req.body;
+    const authHeader = req.headers.authorization;
+    const refreshToken = authHeader?.split(" ")[1];
 
     if (!refreshToken) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
