@@ -65,14 +65,6 @@ export class HouseCommentRepository {
     try {
       const comment = await prisma.houseComment.findUnique({
         where: { id: BigInt(id) },
-        include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
-        },
       });
 
       return comment;
@@ -89,14 +81,6 @@ export class HouseCommentRepository {
     try {
       const comments = await prisma.houseComment.findMany({
         where: { house_id: BigInt(house_id) },
-        include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
-        },
         orderBy: { created_at: "desc" },
       });
 
@@ -262,14 +246,6 @@ export class HouseCommentRepository {
         data: {
           comment: updateData.comment,
           updated_at: new Date(),
-        },
-        include: {
-          house: {
-            select: {
-              id: true,
-              house: true,
-            },
-          },
         },
       });
 
