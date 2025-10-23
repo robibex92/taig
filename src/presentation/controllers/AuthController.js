@@ -33,8 +33,19 @@ export class AuthController {
    * Refresh access token
    */
   refreshToken = asyncHandler(async (req, res) => {
-    const authHeader = req.headers.authorization;
-    const refreshToken = authHeader?.split(" ")[1];
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: {
+          message: "Refresh token is required",
+          code: "VALIDATION_ERROR",
+          statusCode: HTTP_STATUS.BAD_REQUEST,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
 
     const tokens = await this.refreshTokenUseCase.execute(refreshToken);
 

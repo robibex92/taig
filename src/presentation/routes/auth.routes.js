@@ -2,7 +2,10 @@ import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
-import { telegramAuthSchema } from "../../core/validation/schemas/user.schema.js";
+import {
+  telegramAuthSchema,
+  refreshTokenSchema,
+} from "../../core/validation/schemas/auth.schema.js";
 import { authLimiter } from "../middlewares/securityMiddleware.js";
 
 const router = express.Router();
@@ -18,7 +21,11 @@ router.post(
 
 // Refresh token - no rate limit (handled by general limiter)
 // We skip strict auth limiter to allow legitimate refresh attempts
-router.post("/auth/refresh", authController.refreshToken);
+router.post(
+  "/auth/refresh",
+  validateRequest(refreshTokenSchema, "body"),
+  authController.refreshToken
+);
 
 // Protected routes
 router.get("/auth/session", authenticateJWT, authController.getSession);
