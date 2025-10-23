@@ -185,7 +185,7 @@ app.use("/api", nearbyRoutes);
 app.use("/api", publicUserRoutes);
 app.use("/api", userRoutes);
 app.use("/api/messages", messageRoutes);
-app.use("/api/bookings", bookingRoutes);
+app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);

@@ -58,33 +58,6 @@ class ParkingUseCases {
     try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
-        include: {
-          owner: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-          history: {
-            include: {
-              changed_by: {
-                select: {
-                  user_id: true,
-                  username: true,
-                  first_name: true,
-                  last_name: true,
-                },
-              },
-            },
-            orderBy: { changed_at: "desc" },
-            take: 10,
-          },
-        },
       });
 
       if (!spot) {
@@ -106,25 +79,7 @@ class ParkingUseCases {
           createdAt: spot.created_at,
           updatedAt: spot.updated_at,
           owner: spot.owner_id ? { id: spot.owner_id } : null,
-          history: spot.history.map((h) => ({
-            id: h.id,
-            fieldName: h.field_name,
-            oldValue: h.old_value,
-            newValue: h.new_value,
-            changedAt: h.changed_at,
-            changedBy: h.changed_by
-              ? {
-                  id: h.changed_by.user_id,
-                  username: h.changed_by.username,
-                  firstName: h.changed_by.first_name,
-                  lastName: h.changed_by.last_name,
-                  displayName:
-                    h.changed_by.first_name ||
-                    h.changed_by.username ||
-                    "Система",
-                }
-              : null,
-          })),
+          history: [],
         },
       };
     } catch (error) {
