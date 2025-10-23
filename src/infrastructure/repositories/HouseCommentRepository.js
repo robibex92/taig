@@ -31,7 +31,9 @@ export class HouseCommentRepository {
       });
 
       if (!house) {
-        throw new Error(`House with number "${commentData.house_id}" not found`);
+        throw new Error(
+          `House with number "${commentData.house_id}" not found`
+        );
       }
 
       const comment = await prisma.houseComment.create({
@@ -39,16 +41,6 @@ export class HouseCommentRepository {
           house_id: house.id, // Используем найденный house_id
           author_id: commentData.author_id,
           comment: commentData.comment,
-        },
-        include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
         },
       });
 
@@ -74,14 +66,6 @@ export class HouseCommentRepository {
       const comment = await prisma.houseComment.findUnique({
         where: { id: BigInt(id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -106,14 +90,6 @@ export class HouseCommentRepository {
       const comments = await prisma.houseComment.findMany({
         where: { house_id: BigInt(house_id) },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
@@ -288,14 +264,6 @@ export class HouseCommentRepository {
           updated_at: new Date(),
         },
         include: {
-          author: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-            },
-          },
           house: {
             select: {
               id: true,
