@@ -243,11 +243,28 @@ export class ParkingController {
    * Legacy methods for backward compatibility
    */
   createParkingSpot = asyncHandler(async (req, res) => {
-    res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-      success: false,
-      error:
-        "Creating parking spots is not implemented. Use assignOwner instead.",
-    });
+    const userId = req.user?.user_id;
+
+    if (!userId) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        error: "User not authenticated",
+      });
+    }
+
+    const result = await this.parkingUseCases.createParkingSpot(
+      req.body,
+      userId
+    );
+
+    if (!result.success) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: result.error,
+      });
+    }
+
+    res.status(HTTP_STATUS.CREATED).json(result);
   });
 
   deleteParkingSpot = asyncHandler(async (req, res) => {

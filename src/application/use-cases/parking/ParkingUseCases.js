@@ -411,6 +411,73 @@ class ParkingUseCases {
       return { success: false, error: error.message };
     }
   }
+
+  // Создать новое парковочное место
+  async createParkingSpot(spotData, userId) {
+    try {
+      // Валидация входных данных
+      if (!spotData.spotNumber) {
+        throw new Error("Номер парковочного места обязателен");
+      }
+
+      if (!spotData.floor) {
+        throw new Error("Этаж обязателен");
+      }
+
+      if (!spotData.section) {
+        throw new Error("Секция обязательна");
+      }
+
+      // Проверяем, не существует ли уже такое место
+      const existingSpot = await prisma.parkingSpot.findFirst({
+        where: {
+          spot_number: spotData.spotNumber,
+          floor: spotData.floor,
+          section: spotData.section,
+        },
+      });
+
+      if (existingSpot) {
+        throw new Error("Парковочное место с таким номером уже существует");
+      }
+
+      // Создаем новое парковочное место
+      const newSpot = await prisma.parkingSpot.create({
+        data: {
+          spot_number: spotData.spotNumber,
+          floor: spotData.floor,
+          section: spotData.section,
+          status: spotData.status || PARKING_STATUSES.UNDEFINED,
+          price: spotData.price || null,
+          description: spotData.description || null,
+          contact_info: spotData.contactInfo || null,
+          owner_id: userId,
+          is_active: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          id: newSpot.id,
+          spotNumber: newSpot.spot_number,
+          floor: newSpot.floor,
+          section: newSpot.section,
+          status: newSpot.status,
+          price: newSpot.price,
+          description: newSpot.description,
+          contactInfo: newSpot.contact_info,
+          isActive: newSpot.is_active,
+          createdAt: newSpot.created_at,
+          updatedAt: newSpot.updated_at,
+          owner: userId ? { id: userId } : null,
+        },
+      };
+    } catch (error) {
+      console.error("Error creating parking spot:", error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export { ParkingUseCases, PARKING_STATUSES, PARKING_COLORS };
