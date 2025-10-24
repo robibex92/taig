@@ -33,18 +33,20 @@ model User {
 }
 
 model Ad {
-  id          BigInt    @id @default(autoincrement())
-  user_id     BigInt?
-  title       String?
-  content     String?
-  status      String?
-  created_at  DateTime? @db.Timestamptz(6)
-  subcategory Int?
-  updated_at  DateTime? @updatedAt @db.Timestamptz(6)
-  category    Int?
-  price       String?
-  view_count  Int?
-  bookings    Booking[]
+  id           BigInt       @id @default(autoincrement())
+  user_id      BigInt?
+  title        String?
+  content      String?
+  status       String?
+  created_at   DateTime?    @db.Timestamptz(6)
+  subcategory  BigInt?
+  updated_at   DateTime?    @updatedAt @db.Timestamptz(6)
+  category     BigInt?
+  price        String?
+  view_count   Int?
+  bookings     Booking[]
+  category_rel Category?    @relation(fields: [category], references: [id], onDelete: Cascade)
+  subcategory_rel Subcategory? @relation(fields: [subcategory], references: [id], onDelete: Cascade)
 
   @@map("ads")
 }
@@ -178,17 +180,21 @@ model Faq {
 }
 
 model Category {
-  id    BigInt  @id
-  name  String?
-  image String?
+  id            BigInt  @id
+  name          String?
+  image         String?
+  ads           Ad[]
+  subcategories Subcategory[]
 
   @@map("categories")
 }
 
 model Subcategory {
-  id          BigInt  @id
+  id          BigInt    @id
   category_id BigInt?
   name        String?
+  category    Category? @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  ads         Ad[]
 
   @@map("subcategories")
 }

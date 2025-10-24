@@ -90,56 +90,64 @@ export class CategoryRepository extends ICategoryRepository {
    * Get categories with ad counts
    */
   async getCategoriesWithAdCounts() {
-    const categoriesWithCounts = await prisma.category.findMany({
-      include: {
-        _count: {
-          select: {
-            ads: {
-              where: {
-                status: "active",
-              },
-            },
-          },
-        },
-      },
+    // Получаем все категории
+    const categories = await prisma.category.findMany({
       orderBy: { id: "asc" },
     });
 
-    return categoriesWithCounts.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      image: cat.image,
-      adCount: cat._count.ads,
-    }));
+    // Для каждой категории подсчитываем активные объявления
+    const categoriesWithCounts = await Promise.all(
+      categories.map(async (category) => {
+        const adCount = await prisma.ad.count({
+          where: {
+            category: Number(category.id),
+            status: "active",
+          },
+        });
+
+        return {
+          id: category.id,
+          name: category.name,
+          image: category.image,
+          adCount: adCount,
+        };
+      })
+    );
+
+    return categoriesWithCounts;
   }
 
   /**
    * Get subcategories with ad counts for a category
    */
   async getSubcategoriesWithAdCounts(categoryId) {
-    const subcategoriesWithCounts = await prisma.subcategory.findMany({
+    // Получаем все подкатегории для данной категории
+    const subcategories = await prisma.subcategory.findMany({
       where: {
         category_id: Number(categoryId),
-      },
-      include: {
-        _count: {
-          select: {
-            ads: {
-              where: {
-                status: "active",
-              },
-            },
-          },
-        },
       },
       orderBy: { name: "asc" },
     });
 
-    return subcategoriesWithCounts.map((sub) => ({
-      id: sub.id,
-      name: sub.name,
-      category_id: sub.category_id,
-      adCount: sub._count.ads,
-    }));
+    // Для каждой подкатегории подсчитываем активные объявления
+    const subcategoriesWithCounts = await Promise.all(
+      subcategories.map(async (subcategory) => {
+        const adCount = await prisma.ad.count({
+          where: {
+            subcategory: Number(subcategory.id),
+            status: "active",
+          },
+        });
+
+        return {
+          id: subcategory.id,
+          name: subcategory.name,
+          category_id: subcategory.category_id,
+          adCount: adCount,
+        };
+      })
+    );
+
+    return subcategoriesWithCounts;
   }
 }

@@ -21,11 +21,18 @@ export const createAdSchema = Joi.object({
     "any.required": "Content is required",
   }),
 
-  category: Joi.string().trim().required().messages({
+  category: Joi.number().integer().positive().required().messages({
+    "number.base": "Category must be a number",
+    "number.integer": "Category must be an integer",
+    "number.positive": "Category must be positive",
     "any.required": "Category is required",
   }),
 
-  subcategory: Joi.string().trim().allow("", null),
+  subcategory: Joi.number().integer().positive().allow(null).messages({
+    "number.base": "Subcategory must be a number",
+    "number.integer": "Subcategory must be an integer",
+    "number.positive": "Subcategory must be positive",
+  }),
 
   price: Joi.alternatives()
     .try(Joi.number().positive(), Joi.string().trim())
@@ -62,8 +69,8 @@ export const createAdSchema = Joi.object({
 export const updateAdSchema = Joi.object({
   title: Joi.string().min(3).max(200).trim(),
   content: Joi.string().min(10).max(5000).trim(),
-  category: Joi.string().trim(),
-  subcategory: Joi.string().trim().allow("", null),
+  category: Joi.number().integer().positive(),
+  subcategory: Joi.number().integer().positive().allow(null),
   price: Joi.alternatives()
     .try(Joi.number().positive(), Joi.string().trim())
     .allow("", null),
@@ -94,8 +101,8 @@ export const getAdsQuerySchema = Joi.object({
   status: Joi.string()
     .valid(...Object.values(AD_STATUS))
     .default(AD_STATUS.ACTIVE),
-  category: Joi.string().trim(),
-  subcategory: Joi.string().trim(),
+  category: Joi.number().integer().positive(),
+  subcategory: Joi.number().integer().positive(),
   sort: Joi.string()
     .valid("created_at", "price", "updated_at")
     .default("created_at"),
