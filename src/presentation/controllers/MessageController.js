@@ -57,6 +57,14 @@ export class MessageController {
     const currentUserId = req.user.user_id;
     const { ad_id, limit = 50, offset = 0, mark_as_read = "false" } = req.query;
 
+    console.log('MessageController.getMessages called with:', {
+      userId,
+      currentUserId,
+      query: req.query,
+      ad_id,
+      mark_as_read
+    });
+
     const result = await this.getMessagesUseCase.execute({
       currentUserId,
       otherUserId: userId,
