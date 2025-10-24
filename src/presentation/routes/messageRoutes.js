@@ -40,6 +40,13 @@ router.get(`${BASE_PATH}/unread/count`, MessageController.getUnreadCount);
 router.get(`${BASE_PATH}/thread/:threadId`, MessageController.getThread);
 
 /**
+ * @route   GET /api/messages/:userId
+ * @desc    Get messages between current user and another user
+ * @access  Private
+ */
+router.get(`${BASE_PATH}/:userId`, MessageController.getMessages);
+
+/**
  * @route   PATCH /api/messages/:messageId/read
  * @desc    Mark message as read
  * @access  Private
@@ -52,12 +59,5 @@ router.patch(`${BASE_PATH}/:messageId/read`, MessageController.markAsRead);
  * @access  Private
  */
 router.delete(`${BASE_PATH}/:messageId`, MessageController.deleteMessage);
-
-/**
- * @route   GET /api/messages/:userId
- * @desc    Get messages between current user and another user
- * @access  Private
- */
-router.get(`${BASE_PATH}/:userId`, MessageController.getMessages);
 
 export default router;
