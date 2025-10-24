@@ -5,6 +5,26 @@ import adRepository from "../../infrastructure/repositories/AdRepository.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 import messageRepository from "../../infrastructure/repositories/MessageRepository.js";
 
+// Утилита для форматирования имени отправителя
+function formatSenderName(sender) {
+  if (!sender) return "Пользователь";
+
+  // Приоритет: username (с @), затем telegram_first_name, затем first_name
+  if (sender.username) {
+    return `@${sender.username}`;
+  }
+
+  if (sender.telegram_first_name) {
+    return sender.telegram_first_name;
+  }
+
+  if (sender.first_name) {
+    return sender.first_name;
+  }
+
+  return "Пользователь";
+}
+
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 /**
@@ -90,9 +110,11 @@ export class TelegramBot {
         try {
           let notificationText = `📩 <b>Новый вопрос по вашему объявлению</b>\n\n`;
           notificationText += `📢 Объявление: <b>${ad.title}</b>\n\n`;
-          notificationText += `👤 От: ${
-            replierUsername ? `@${replierUsername}` : replierName
-          }\n`;
+          notificationText += `👤 От: ${formatSenderName({
+            username: ctx.from.username,
+            first_name: ctx.from.first_name,
+            telegram_first_name: ctx.from.first_name,
+          })}\n`;
           notificationText += `💬 Сообщение:\n<i>"${replyText}"</i>\n\n`;
           notificationText += `🔗 Просмотреть объявление: https://taiginsky.md/ads/${adId}`;
 

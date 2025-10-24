@@ -24,7 +24,6 @@ export const houseIdParamSchema = Joi.object({
 
 export const linkUserToApartmentSchema = Joi.object({
   house: Joi.string().required(),
-  entrance: Joi.number().integer().required(),
   number: Joi.number().integer().required(),
   id_telegram: Joi.number().integer().positive().required(),
 });

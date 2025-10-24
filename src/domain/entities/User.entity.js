@@ -1,4 +1,4 @@
-import { USER_STATUS } from "../../core/constants/index.js";
+import { USER_STATUS, USER_ROLES } from "../../core/constants/index.js";
 
 /**
  * User Entity - represents a user in the system
@@ -13,17 +13,31 @@ export class UserEntity {
     this.telegram_first_name = data.telegram_first_name || null;
     this.telegram_last_name = data.telegram_last_name || null;
     this.is_manually_updated = data.is_manually_updated || false;
-    this.status = data.status || USER_STATUS.ACTIVE;
+    this.status = data.status || USER_ROLES.ACTIVE;
     this.refresh_token = data.refresh_token || null;
-    this.created_at = data.created_at || new Date();
-    this.updated_at = data.updated_at || new Date();
+    // Используем реальные даты из базы данных, не перезаписываем их
+    this.joined_at = data.joined_at;
+    this.created_at = data.joined_at; // Для совместимости
+    this.updated_at = data.updated_at;
+
+    // Временное логирование для отладки
+    if (data.user_id === "245946670") {
+      console.log("UserEntity constructor debug:", {
+        user_id: data.user_id,
+        joined_at_from_db: data.joined_at,
+        updated_at_from_db: data.updated_at,
+        joined_at_final: this.joined_at,
+        created_at_final: this.created_at,
+        updated_at_final: this.updated_at,
+      });
+    }
   }
 
   /**
    * Check if user is active
    */
   isActive() {
-    return this.status === USER_STATUS.ACTIVE;
+    return this.status === USER_ROLES.ACTIVE;
   }
 
   /**
@@ -99,6 +113,7 @@ export class UserEntity {
       telegram_last_name: this.telegram_last_name,
       is_manually_updated: this.is_manually_updated,
       status: this.status,
+      joined_at: this.joined_at,
       created_at: this.created_at,
       updated_at: this.updated_at,
     };

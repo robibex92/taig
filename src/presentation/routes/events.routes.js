@@ -95,6 +95,8 @@ router.get(BASE_ROUTE, eventController.getEvents);
  *                 format: date-time
  *               max_participants:
  *                 type: integer
+ *               image_url:
+ *                 type: string
  *     responses:
  *       201:
  *         description: Event created successfully
@@ -172,6 +174,8 @@ router.get(`${BASE_ROUTE}/:id`, eventController.getEventById);
  *                 format: date-time
  *               max_participants:
  *                 type: integer
+ *               image_url:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Event updated successfully

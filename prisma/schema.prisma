@@ -19,12 +19,15 @@ model User {
   is_manually_updated String?
   telegram_first_name String?
   telegram_last_name  String?
-  status              String?
+  status              String? @default("active")
   refresh_token       String?             @db.VarChar(500)
   bookings            Booking[]
   event_registrations EventRegistration[] @relation("EventRegistrations")
   event_waitlist      EventWaitlist[]     @relation("EventWaitlist")
   events_created      Event[]             @relation("EventCreator")
+  parking_spots       ParkingSpot[]       @relation("ParkingSpotOwner")
+  parking_messages_sent     ParkingMessage[] @relation("ParkingMessageSender")
+  parking_messages_received  ParkingMessage[] @relation("ParkingMessageReceiver")
 
   @@map("users")
 }
@@ -281,7 +284,7 @@ model CarAdminNote {
 model ParkingSpot {
   id           BigInt   @id @default(autoincrement())
   spot_number  String   @unique @db.VarChar(10)
-  floor        Int      @default(1)
+  floor        Int?     @default(1)
   section      String?  @db.VarChar(50)
   status       String   @default("undefined") @db.VarChar(50)
   price        String?  @db.VarChar(100)
@@ -291,6 +294,9 @@ model ParkingSpot {
   owner_id     BigInt?
   created_at   DateTime @default(now()) @db.Timestamptz(6)
   updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  // Связь с владельцем
+  owner        User?    @relation("ParkingSpotOwner", fields: [owner_id], references: [user_id])
 
   @@index([is_active], map: "idx_parking_spots_is_active")
   @@index([owner_id], map: "idx_parking_spots_owner_id")
@@ -407,6 +413,10 @@ model ParkingMessage {
   content         String
   is_read         Boolean  @default(false)
   created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  sender          User     @relation("ParkingMessageSender", fields: [sender_id], references: [user_id])
+  receiver        User     @relation("ParkingMessageReceiver", fields: [receiver_id], references: [user_id])
 
   @@index([parking_spot_id], map: "idx_parking_messages_parking_spot_id")
   @@map("parking_messages")

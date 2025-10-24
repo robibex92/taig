@@ -1,5 +1,6 @@
 import BookingRepository from "../../../infrastructure/repositories/BookingRepository.js";
 import AdRepository from "../../../infrastructure/repositories/AdRepository.js";
+import UserRepository from "../../../infrastructure/repositories/UserRepository.js";
 import {
   ValidationError,
   NotFoundError,
@@ -12,10 +13,12 @@ import logger from "../../../infrastructure/logger/index.js";
 export class GetBookingsUseCase {
   constructor(
     bookingRepository = BookingRepository,
-    adRepository = AdRepository
+    adRepository = AdRepository,
+    userRepository = UserRepository
   ) {
     this.bookingRepository = bookingRepository;
     this.adRepository = adRepository;
+    this.userRepository = userRepository;
   }
 
   /**
@@ -68,6 +71,9 @@ export class GetBookingsUseCase {
         throw new ValidationError("User ID is required");
       }
 
+      // Get user info to check status
+      const user = await this.userRepository.findById(userId);
+
       // Get user's bookings
       const bookings = await this.bookingRepository.findUserBookings(
         userId,
@@ -76,7 +82,8 @@ export class GetBookingsUseCase {
 
       logger.info("User bookings retrieved successfully", {
         userId,
-        status,
+        userStatus: user?.status || null,
+        bookingStatus: status,
         count: bookings.length,
       });
 

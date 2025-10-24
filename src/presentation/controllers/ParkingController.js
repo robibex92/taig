@@ -80,7 +80,16 @@ export class ParkingController {
     const updateData = req.body;
     const userId = req.user?.user_id;
 
+    console.log("Update parking spot request:", {
+      id,
+      updateData,
+      userId,
+      user: req.user,
+      headers: req.headers,
+    });
+
     if (!userId) {
+      console.log("User not authenticated for parking spot update");
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         error: "User not authenticated",
@@ -268,10 +277,26 @@ export class ParkingController {
   });
 
   deleteParkingSpot = asyncHandler(async (req, res) => {
-    res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-      success: false,
-      error: "Deleting parking spots is not implemented.",
-    });
+    const { id } = req.params;
+    const userId = req.user?.user_id;
+
+    if (!userId) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
+
+    const result = await this.parkingUseCases.deleteParkingSpot(
+      parseInt(id),
+      userId
+    );
+
+    if (result.success) {
+      res.status(HTTP_STATUS.OK).json(result);
+    } else {
+      res.status(HTTP_STATUS.BAD_REQUEST).json(result);
+    }
   });
 
   assignCarToSpot = asyncHandler(async (req, res) => {

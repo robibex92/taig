@@ -162,10 +162,9 @@ export class HouseController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const { house, entrance, number, id_telegram } = req.body;
+    const { house, number, id_telegram } = req.body;
     const result = await this.linkUserToApartmentUseCase.execute(
       house,
-      entrance,
       number,
       id_telegram
     );

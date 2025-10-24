@@ -10,11 +10,14 @@ export class LinkUserToApartmentUseCase {
     this.houseRepository = houseRepository;
   }
 
-  async execute(house, entrance, number, telegramId) {
+  async execute(house, number, telegramId) {
+    // Convert number to integer
+    const apartmentNumber = parseInt(number);
+
     // Find base record (position=1) by house and number
     const baseRecord = await this.houseRepository.findBasePosition(
       house,
-      number
+      apartmentNumber
     );
 
     if (!baseRecord) {
@@ -30,7 +33,7 @@ export class LinkUserToApartmentUseCase {
 
       logger.info("Updated existing position 1", {
         house,
-        number,
+        number: apartmentNumber,
         telegram_id: telegramId,
       });
 
@@ -44,7 +47,7 @@ export class LinkUserToApartmentUseCase {
     // First, verify there's only one position=1 record
     const position1Count = await this.houseRepository.countPosition1Records(
       house,
-      number
+      apartmentNumber
     );
 
     if (position1Count > 1) {
@@ -57,7 +60,7 @@ export class LinkUserToApartmentUseCase {
     // Get max position and create new record
     const maxPosition = await this.houseRepository.getMaxPosition(
       house,
-      number
+      apartmentNumber
     );
     const newPosition = maxPosition + 1;
 
@@ -66,7 +69,7 @@ export class LinkUserToApartmentUseCase {
       house,
       entrance: baseRecord.entrance,
       floor: baseRecord.floor,
-      number,
+      number: apartmentNumber,
       position: newPosition,
       facade_color: baseRecord.facade_color,
       info: "",
@@ -76,7 +79,7 @@ export class LinkUserToApartmentUseCase {
 
     logger.info("Created new position", {
       house,
-      number,
+      number: apartmentNumber,
       position: newPosition,
       telegram_id: telegramId,
     });
