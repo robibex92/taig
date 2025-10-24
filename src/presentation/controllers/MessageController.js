@@ -54,15 +54,15 @@ export class MessageController {
    */
   getMessages = asyncHandler(async (req, res) => {
     const { userId } = req.params;
-    const currentUserId = req.user.user_id;
+    const currentUserId = req.user?.user_id || null; // Allow null for unauthenticated users
     const { ad_id, limit = 50, offset = 0, mark_as_read = "false" } = req.query;
 
-    console.log('MessageController.getMessages called with:', {
+    console.log("MessageController.getMessages called with:", {
       userId,
       currentUserId,
       query: req.query,
       ad_id,
-      mark_as_read
+      mark_as_read,
     });
 
     const result = await this.getMessagesUseCase.execute({
