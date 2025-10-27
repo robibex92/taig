@@ -30,7 +30,7 @@ export class CreateAdUseCase {
     }
 
     // Verify authenticated user matches ad creator
-    if (adData.user_id !== authenticatedUserId) {
+    if (String(adData.user_id) !== String(authenticatedUserId)) {
       throw new AuthorizationError("Cannot create ad for another user");
     }
 

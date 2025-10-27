@@ -226,7 +226,7 @@ export class AdRepository extends IAdRepository {
             content,
             category: category ? parseInt(category) : null,
             subcategory: subcategory ? parseInt(subcategory) : null,
-            price,
+            price: price ? String(price) : null,
             status: status || "active",
             created_at: new Date(),
           },
@@ -289,6 +289,8 @@ export class AdRepository extends IAdRepository {
           if (data[field] !== undefined) {
             if (field === "category" || field === "subcategory") {
               updateData[field] = data[field] ? parseInt(data[field]) : null;
+            } else if (field === "price") {
+              updateData[field] = data[field] ? String(data[field]) : null;
             } else {
               updateData[field] = data[field];
             }
