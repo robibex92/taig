@@ -102,27 +102,21 @@ export class UpdateAdUseCase {
             // Remove telegram message records from database
             await this.adRepository.deleteTelegramMessagesByAdId(adId);
           } else if (newStatus === "deleted") {
-            // For deleted ads, update messages with deletion notice
-            const statusEmoji = "🚫";
-            const statusText = "УДАЛЕНО - Объявление больше не доступно";
+            // For deleted ads, delete messages from Telegram (same as archive)
+            logger.info(
+              `Deleting ${telegramMessages.length} Telegram messages for deleted ad ${adId}`
+            );
 
-            const updatePromises = telegramMessages.map(async (msg) => {
+            const deletePromises = telegramMessages.map(async (msg) => {
               try {
-                const originalCaption =
-                  msg.caption ||
-                  `${updatedAd.title}\n\n${updatedAd.content}\n\nЦена: ${updatedAd.price}`;
-                const updatedCaption = `${statusEmoji} <b>${statusText}</b>\n\n<s>${originalCaption}</s>`;
-
-                return await this.telegramService.editMessageCaption({
+                return await this.telegramService.deleteMessage({
                   chatId: msg.chat_id,
                   messageId: msg.message_id,
-                  caption: updatedCaption,
                   threadId: msg.thread_id || undefined,
-                  parse_mode: "HTML",
                 });
               } catch (err) {
                 logger.error(
-                  `Failed to update Telegram message ${msg.message_id}`,
+                  `Failed to delete Telegram message ${msg.message_id}`,
                   {
                     error: err.message,
                     chat_id: msg.chat_id,
@@ -133,19 +127,22 @@ export class UpdateAdUseCase {
               }
             });
 
-            const results = await Promise.allSettled(updatePromises);
+            const results = await Promise.allSettled(deletePromises);
             const successCount = results.filter(
               (r) => r.status === "fulfilled" && r.value?.success
             ).length;
 
             logger.info(
-              `Updated ${successCount}/${telegramMessages.length} Telegram messages for deleted ad`,
+              `Deleted ${successCount}/${telegramMessages.length} Telegram messages for deleted ad`,
               {
                 ad_id: adId,
                 success_count: successCount,
                 total_count: telegramMessages.length,
               }
             );
+
+            // Remove telegram message records from database
+            await this.adRepository.deleteTelegramMessagesByAdId(adId);
           }
         }
       } catch (err) {
@@ -158,24 +155,218 @@ export class UpdateAdUseCase {
       }
     }
 
-    // Update in Telegram if requested (for other updates like price, title, etc.)
-    if (telegramUpdateType && ad.telegram_message_id && ad.telegram_chat_id) {
+    // Handle Telegram updates for active ads
+    if (telegramUpdateType) {
       try {
-        await this.telegramService.updateAdStatus(
-          updatedAd,
-          ad.telegram_chat_id,
-          ad.telegram_message_id,
-          ad.telegram_thread_id
-        );
-        logger.info("Ad status updated in Telegram", {
-          ad_id: adId,
-          telegram_chat_id: ad.telegram_chat_id,
-          telegram_message_id: ad.telegram_message_id,
-        });
+        const telegramMessages =
+          await this.adRepository.getTelegramMessagesByAdId(adId);
+
+        if (!telegramMessages || telegramMessages.length === 0) {
+          logger.info("No Telegram messages found for ad", { ad_id: adId });
+          return updatedAd;
+        }
+
+        if (telegramUpdateType === "repost") {
+          // Delete old messages and repost with new images
+          logger.info(
+            `Reposting ad ${adId} - deleting old messages and sending new ones`
+          );
+
+          // Delete old messages sequentially with delay for reliability
+          for (const msg of telegramMessages) {
+            try {
+              await this.telegramService.deleteMessage({
+                chatId: String(msg.chat_id),
+                messageId: String(msg.message_id),
+                threadId: msg.thread_id ? String(msg.thread_id) : undefined,
+              });
+              // Small delay between deletions to avoid rate limiting
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            } catch (err) {
+              logger.error(
+                `Failed to delete Telegram message ${msg.message_id}`,
+                {
+                  error: err.message,
+                  chat_id: msg.chat_id,
+                  message_id: msg.message_id,
+                }
+              );
+            }
+          }
+
+          // Delete old records from database
+          await this.adRepository.deleteTelegramMessagesByAdId(adId);
+
+          // Load refreshed ad with all images from database
+          const refreshedAd = await this.adRepository.findById(adId);
+          if (!refreshedAd) {
+            throw new Error("Failed to load refreshed ad");
+          }
+
+          if (!refreshedAd.images || refreshedAd.images.length === 0) {
+            logger.warn("No images found for repost", { ad_id: adId });
+          }
+
+          // Group messages by chat_id and thread_id
+          const chatGroups = new Map();
+          telegramMessages.forEach((msg) => {
+            const key = `${msg.chat_id}_${msg.thread_id || "no_thread"}`;
+            if (!chatGroups.has(key)) {
+              chatGroups.set(key, {
+                chat_id: msg.chat_id,
+                thread_id: msg.thread_id,
+              });
+            }
+          });
+
+          // Publish to each chat/thread sequentially with delay
+          for (const chatInfo of chatGroups.values()) {
+            try {
+              await this.telegramService.publishAd(
+                refreshedAd,
+                chatInfo.chat_id,
+                chatInfo.thread_id
+              );
+              logger.info(`Ad reposted in Telegram chat`, {
+                ad_id: adId,
+                chat_id: chatInfo.chat_id,
+                thread_id: chatInfo.thread_id,
+              });
+              // Delay between publications to avoid rate limiting
+              await new Promise((resolve) => setTimeout(resolve, 300));
+            } catch (err) {
+              logger.error(`Failed to repost ad in Telegram chat`, {
+                ad_id: adId,
+                chat_id: chatInfo.chat_id,
+                error: err.message,
+              });
+            }
+          }
+        } else if (telegramUpdateType === "update_text") {
+          // Update existing messages (only for text changes)
+          logger.info(
+            `Updating text for ${telegramMessages.length} Telegram messages`
+          );
+
+          // Check message age and fallback to repost if needed
+          let useRepost = false;
+          const now = new Date();
+          const failedUpdates = [];
+
+          for (const msg of telegramMessages) {
+            try {
+              const messageAge = now - new Date(msg.created_at);
+              const hoursOld = messageAge / (1000 * 60 * 60);
+
+              // Telegram doesn't allow editing messages older than 48 hours
+              if (hoursOld > 48) {
+                logger.info(
+                  `Message ${msg.message_id} is ${hoursOld.toFixed(
+                    1
+                  )} hours old, will repost instead of edit`
+                );
+                useRepost = true;
+                break;
+              }
+
+              const result = await this.telegramService.updateAdStatus(
+                updatedAd,
+                String(msg.chat_id),
+                String(msg.message_id),
+                msg.thread_id ? String(msg.thread_id) : null
+              );
+
+              if (!result || !result.success) {
+                failedUpdates.push(msg);
+              }
+
+              // Small delay between updates
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            } catch (err) {
+              logger.error(
+                `Failed to update Telegram message ${msg.message_id}`,
+                {
+                  error: err.message,
+                  chat_id: msg.chat_id,
+                  message_id: msg.message_id,
+                }
+              );
+              failedUpdates.push(msg);
+            }
+          }
+
+          // If update failed or messages too old, fallback to repost
+          if (useRepost || failedUpdates.length > 0) {
+            logger.info(
+              `Fallback to repost due to age or failed updates. Failed: ${failedUpdates.length}`
+            );
+
+            // Delete all old messages
+            for (const msg of telegramMessages) {
+              try {
+                await this.telegramService.deleteMessage({
+                  chatId: String(msg.chat_id),
+                  messageId: String(msg.message_id),
+                  threadId: msg.thread_id ? String(msg.thread_id) : undefined,
+                });
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              } catch (err) {
+                logger.error(
+                  `Failed to delete message during fallback repost`,
+                  { error: err.message }
+                );
+              }
+            }
+
+            // Delete old records
+            await this.adRepository.deleteTelegramMessagesByAdId(adId);
+
+            // Load refreshed ad
+            const refreshedAd = await this.adRepository.findById(adId);
+            if (!refreshedAd) {
+              throw new Error("Failed to load refreshed ad");
+            }
+
+            // Group messages by chat
+            const chatGroups = new Map();
+            telegramMessages.forEach((msg) => {
+              const key = `${msg.chat_id}_${msg.thread_id || "no_thread"}`;
+              if (!chatGroups.has(key)) {
+                chatGroups.set(key, {
+                  chat_id: msg.chat_id,
+                  thread_id: msg.thread_id,
+                });
+              }
+            });
+
+            // Repost to each chat
+            for (const chatInfo of chatGroups.values()) {
+              try {
+                await this.telegramService.publishAd(
+                  refreshedAd,
+                  chatInfo.chat_id,
+                  chatInfo.thread_id
+                );
+                await new Promise((resolve) => setTimeout(resolve, 300));
+              } catch (err) {
+                logger.error(`Failed to repost ad`, {
+                  error: err.message,
+                });
+              }
+            }
+          } else {
+            logger.info(
+              `Updated ${telegramMessages.length - failedUpdates.length}/${
+                telegramMessages.length
+              } Telegram messages successfully`
+            );
+          }
+        }
       } catch (err) {
-        logger.error("Failed to update ad status in Telegram", {
+        logger.error("Failed to handle Telegram updates", {
           ad_id: adId,
           error: err.message,
+          stack: err.stack,
         });
         // Don't throw - ad update should succeed even if Telegram fails
       }

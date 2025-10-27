@@ -37,7 +37,12 @@ export class UserEntity {
    * Check if user is active
    */
   isActive() {
-    return this.status === USER_ROLES.ACTIVE;
+    // User is active if status is "active", null, or any role except "blocked"
+    return (
+      this.status !== USER_ROLES.BLOCKED &&
+      this.status !== USER_STATUS.BANNED &&
+      this.status !== USER_STATUS.BLOCKING
+    );
   }
 
   /**

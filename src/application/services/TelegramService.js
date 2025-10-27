@@ -585,6 +585,167 @@ export class TelegramService {
   }
 
   /**
+   * Publish ad to Telegram chat
+   * @param {Object} ad - Ad entity
+   * @param {string} chatId - Telegram chat ID
+   * @param {string|null} threadId - Telegram thread ID (for topics)
+   */
+  async publishAd(ad, chatId, threadId) {
+    try {
+      if (!this.adRepository) {
+        logger.error("AdRepository not initialized in TelegramService");
+        throw new Error("Repository not available");
+      }
+
+      // Get username - ad.user may not be loaded
+      let username = null;
+      if (ad.user && ad.user.username) {
+        username = ad.user.username;
+      } else {
+        // Try to get username from telegram first name if available
+        // For now, just use user_id in the link
+        username = null;
+      }
+
+      // Build message text
+      const message = this.buildAdMessageText({
+        title: ad.title,
+        content: ad.content,
+        price: ad.price,
+        username: username,
+        user_id: ad.user_id,
+        ad_id: ad.id,
+      });
+
+      // Prepare media
+      const images = ad.images || [];
+      const photos = images.map((img) => img.image_url || img.url);
+
+      // Send message to Telegram
+      const result = await this.sendMessage({
+        message,
+        chatIds: [chatId],
+        threadIds: [threadId || undefined],
+        photos,
+      });
+
+      // Save message IDs to database
+      if (result.results && result.results.length > 0) {
+        const res = result.results[0];
+        if (res.success && res.result) {
+          // Handle array of messages (e.g., media group or single)
+          const messages = Array.isArray(res.result)
+            ? res.result
+            : [res.result];
+
+          for (const msg of messages) {
+            if (msg && msg.message_id) {
+              await this.adRepository.createTelegramMessage({
+                ad_id: Number(ad.id),
+                chat_id: String(chatId),
+                message_id: String(msg.message_id),
+                thread_id: threadId ? String(threadId) : null,
+                message_text: message,
+                is_media: photos.length > 0,
+                media_group_id: msg.media_group_id
+                  ? String(msg.media_group_id)
+                  : null,
+              });
+
+              logger.debug("Telegram message saved for ad", {
+                ad_id: ad.id,
+                message_id: msg.message_id,
+              });
+            }
+          }
+        }
+      }
+
+      logger.info("Ad published to Telegram", {
+        ad_id: ad.id,
+        chat_id: chatId,
+        thread_id: threadId,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error("Error publishing ad to Telegram", {
+        ad_id: ad.id,
+        chat_id: chatId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update ad status in Telegram (edits existing messages)
+   * @param {Object} updatedAd - Updated ad entity
+   * @param {string} chatId - Telegram chat ID
+   * @param {string} messageId - Telegram message ID
+   * @param {string|null} threadId - Telegram thread ID
+   */
+  async updateAdStatus(updatedAd, chatId, messageId, threadId) {
+    try {
+      if (!this.adRepository) {
+        logger.error("AdRepository not initialized in TelegramService");
+        throw new Error("Repository not available");
+      }
+
+      // Get telegram message record - convert to strings to match DB types
+      const telegramMsg = await this.adRepository.getTelegramMessageByMessageId(
+        String(messageId),
+        String(chatId)
+      );
+
+      if (!telegramMsg) {
+        logger.warn("Telegram message not found in database", {
+          chat_id: chatId,
+          message_id: messageId,
+          ad_id: updatedAd.id,
+        });
+        return { success: false, error: "Message not found" };
+      }
+
+      // Build updated message text
+      const username = updatedAd.user?.username || null;
+      const message = this.buildAdMessageText({
+        title: updatedAd.title,
+        content: updatedAd.content,
+        price: updatedAd.price,
+        username: username,
+        user_id: updatedAd.user_id,
+        ad_id: updatedAd.id,
+      });
+
+      // Update message in Telegram
+      if (telegramMsg.is_media) {
+        return await this.editMessageCaption({
+          chatId,
+          messageId,
+          caption: message,
+          threadId: threadId || undefined,
+        });
+      } else {
+        return await this.editMessageText({
+          chatId,
+          messageId,
+          text: message,
+          threadId: threadId || undefined,
+        });
+      }
+    } catch (error) {
+      logger.error("Error updating ad status in Telegram", {
+        ad_id: updatedAd.id,
+        chat_id: chatId,
+        message_id: messageId,
+        error: error.message,
+      });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Queue a Telegram task (non-blocking)
    */
   queueTask(task) {
