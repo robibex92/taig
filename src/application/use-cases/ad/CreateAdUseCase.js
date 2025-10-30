@@ -44,6 +44,12 @@ export class CreateAdUseCase {
     });
 
     // Publish to Telegram chats if selected
+    logger.info("Telegram publication check", {
+      selectedChatIds,
+      hasSelectedChats: selectedChatIds && selectedChatIds.length > 0,
+      ad_id: ad.id,
+    });
+
     if (selectedChatIds && selectedChatIds.length > 0) {
       try {
         // Get all active ads chats from DB
