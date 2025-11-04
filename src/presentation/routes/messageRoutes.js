@@ -9,14 +9,14 @@ const router = express.Router();
  */
 router.use(authenticate);
 
-const BASE_PATH = "/messages";
+const BASE_PATH = "";
 
 /**
  * @route   POST /api/messages
  * @desc    Send a message
  * @access  Private
  */
-router.post(BASE_PATH, MessageController.sendMessage);
+router.post("/", MessageController.sendMessage);
 
 /**
  * @route   GET /api/messages/conversations

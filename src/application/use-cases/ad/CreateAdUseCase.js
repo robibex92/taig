@@ -17,7 +17,8 @@ export class CreateAdUseCase {
     this.telegramService = telegramService;
   }
 
-  async execute(adData, authenticatedUserId, selectedChatIds = []) {
+  async execute(adData, authenticatedUserId, selectedChats = []) {
+    console.log("[CreateAdUseCase] selectedChats входящие:", selectedChats); // log
     // Verify user exists and is active
     const user = await this.userRepository.findById(adData.user_id);
 
@@ -45,12 +46,13 @@ export class CreateAdUseCase {
 
     // Publish to Telegram chats if selected
     logger.info("Telegram publication check", {
-      selectedChatIds,
-      hasSelectedChats: selectedChatIds && selectedChatIds.length > 0,
+      selectedChats,
+      hasSelectedChats: selectedChats && selectedChats.length > 0,
       ad_id: ad.id,
     });
 
-    if (selectedChatIds && selectedChatIds.length > 0) {
+    if (selectedChats && selectedChats.length > 0) {
+      console.log("[CreateAdUseCase] публикация будет, чаты:", selectedChats); // log
       try {
         // Get all active ads chats from DB
         // Note: We don't filter by visible_to_all here because user already selected specific chats
@@ -60,15 +62,22 @@ export class CreateAdUseCase {
         );
 
         // Filter to only selected chats
-        const selectedChats = allAdsChats.filter(
-          (chat) =>
-            selectedChatIds.includes(String(chat.id)) ||
-            selectedChatIds.includes(chat.id)
+        const selectedChatsAsString = selectedChats.map(String);
+        const filteredChats = allAdsChats.filter((chat) =>
+          selectedChatsAsString.includes(String(chat.id))
         );
-
+        if (!filteredChats.length) {
+          logger.warn("[CreateAdUseCase] Нет совпадающих чатов для публикации!", {
+            selectedChats,
+            allAdsChats: allAdsChats.map(c => ({id: c.id, chat_id: c.chat_id, name: c.name})),
+          });
+        } else {
+          logger.info("[CreateAdUseCase] Чаты для публикации:", filteredChats.map(c => ({id: c.id, chat_id: c.chat_id, name: c.name})));
+        }
         // Publish to each selected chat
-        for (const chat of selectedChats) {
+        for (const chat of filteredChats) {
           try {
+            logger.info("[CreateAdUseCase] Публикую в Telegram:", {adId: ad.id, chat_id: chat.chat_id, thread_id: chat.thread_id});
             await this.telegramService.publishAd(
               ad,
               chat.chat_id,
@@ -81,11 +90,12 @@ export class CreateAdUseCase {
             });
           } catch (err) {
             logger.error(
-              `Failed to publish ad to Telegram chat: ${chat.name}`,
+              `[CreateAdUseCase] Ошибка публикации в Telegram: ${chat.name}`,
               {
                 ad_id: ad.id,
                 chat_id: chat.chat_id,
-                error: err.message,
+                thread_id: chat.thread_id,
+                error: err.stack || err.message,
               }
             );
           }

@@ -78,6 +78,10 @@ export const validate = (schema) => {
  * Format Joi error messages
  */
 function formatJoiError(error) {
+  console.error(
+    "Validation Error Details:",
+    JSON.stringify(error.details, null, 2)
+  );
   return error.details.map((detail) => detail.message).join(", ");
 }
 
@@ -107,6 +111,7 @@ export const adSchemas = {
       status: Joi.string()
         .valid("active", "archive", "deleted")
         .default("active"),
+      // Синхронизация с фронтом
       selectedChatIds: Joi.array()
         .items(Joi.alternatives().try(Joi.number(), Joi.string()))
         .optional(),

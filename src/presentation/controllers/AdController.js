@@ -101,15 +101,15 @@ export class AdController {
    * Create new ad
    */
   createAd = asyncHandler(async (req, res) => {
-    const { selectedChatIds, ...adData } = req.body;
+    console.log("RAW BODY (createAd)", JSON.stringify(req.body)); // log
+    const { selectedChats, ...adData } = req.body;
+    console.log("Используемые selectedChats:", selectedChats); // log
     const authenticatedUserId = req.user.user_id;
-
     const ad = await this.createAdUseCase.execute(
       adData,
       authenticatedUserId,
-      selectedChatIds
+      selectedChats || []
     );
-
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       data: ad.toJSON(),
@@ -122,14 +122,15 @@ export class AdController {
    */
   updateAd = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { telegramUpdateType, ...updateData } = req.body;
+    const { telegramUpdateType, selectedChats, ...updateData } = req.body;
     const authenticatedUserId = req.user.user_id;
 
     const ad = await this.updateAdUseCase.execute(
       Number(id),
       updateData,
       authenticatedUserId,
-      telegramUpdateType
+      telegramUpdateType,
+      selectedChats
     );
 
     res.status(HTTP_STATUS.OK).json({

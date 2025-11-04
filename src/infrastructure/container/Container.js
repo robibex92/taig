@@ -285,13 +285,18 @@ export class Container {
       (container) =>
         new UpdateAdUseCase(
           container.resolve("adRepository"),
-          container.resolve("telegramService")
+          container.resolve("telegramService"),
+          container.resolve("telegramChatRepository")
         )
     );
 
     this.register(
       "deleteAdUseCase",
-      (container) => new DeleteAdUseCase(container.resolve("adRepository"))
+      (container) =>
+        new DeleteAdUseCase(
+          container.resolve("adRepository"),
+          container.resolve("telegramService")
+        )
     );
 
     // Use Cases - User

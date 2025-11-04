@@ -297,9 +297,6 @@ export class AdRepository extends IAdRepository {
           }
         });
 
-        if (Object.keys(updateData).length === 0 && data.images === undefined) {
-          throw new Error("No valid fields to update");
-        }
 
         updateData.updated_at = new Date();
 
@@ -400,14 +397,6 @@ export class AdRepository extends IAdRepository {
   /**
    * Get Telegram messages for an ad
    */
-  async getTelegramMessagesByAdId(adId) {
-    return await prisma.telegramMessage.findMany({
-      where: {
-        ad_id: BigInt(adId),
-      },
-      orderBy: { created_at: "asc" },
-    });
-  }
 
   /**
    * Create Telegram message record
@@ -438,6 +427,7 @@ export class AdRepository extends IAdRepository {
    */
   async getTelegramMessagesByAdId(adId) {
     try {
+      // Step 1: Fetch messages
       const messages = await prisma.telegramMessage.findMany({
         where: {
           ad_id: BigInt(adId),
@@ -447,13 +437,48 @@ export class AdRepository extends IAdRepository {
         },
       });
 
+      if (!messages || messages.length === 0) {
+        logger.info("No Telegram messages found for ad", { ad_id: adId });
+        return [];
+      }
+
+      // Step 2: Fetch the ad to get the author's user_id
+      const ad = await prisma.ad.findUnique({
+        where: { id: BigInt(adId) },
+        select: { user_id: true },
+      });
+
+      let author = null;
+      // Step 3: Fetch the author if user_id exists
+      if (ad && ad.user_id) {
+        const user = await prisma.user.findUnique({
+          where: { user_id: ad.user_id },
+          select: {
+            user_id: true,
+            username: true,
+            first_name: true,
+            last_name: true,
+          },
+        });
+        if (user) {
+          author = user;
+        }
+      }
+
       logger.info("Retrieved Telegram messages for ad", {
         ad_id: adId,
         message_count: messages.length,
         chats: [...new Set(messages.map((m) => m.chat_id))].length,
+        author_found: !!author,
       });
 
-      return messages;
+      // Step 4: Attach author to each message
+      const messagesWithAuthor = messages.map((message) => ({
+        ...message,
+        author,
+      }));
+
+      return messagesWithAuthor;
     } catch (error) {
       logger.error("Error getting telegram messages by ad ID", {
         error: error.message,

@@ -43,7 +43,7 @@ export class TelegramService {
         try {
           let response;
 
-          // Send media group
+          // Отправка медиагруппы, если она есть и не пуста
           if (
             mediaGroup &&
             Array.isArray(mediaGroup) &&
@@ -53,13 +53,13 @@ export class TelegramService {
               message_thread_id: threadId,
             });
 
-            // Format response
+            // Форматирование ответа
             response = response.map((msg) => ({
               message_id: msg.message_id,
               media_group_id: msg.media_group_id || null,
             }));
           }
-          // Send single photo
+          // Отправка одного фото (устаревший вариант, но оставляем для обратной совместимости)
           else if (photos && Array.isArray(photos) && photos.length > 0) {
             response = await bot.telegram.sendPhoto(chatId, photos[0], {
               caption: message,
@@ -74,7 +74,7 @@ export class TelegramService {
               },
             ];
           }
-          // Send text only
+          // Отправка только текста, если нет ни медиагруппы, ни фото
           else {
             response = await bot.telegram.sendMessage(chatId, message, {
               parse_mode,
@@ -95,7 +95,7 @@ export class TelegramService {
             messageCount: response.length,
           });
 
-          // Delay before next request
+          // Задержка перед следующим запросом
           await this._delay();
 
           return { chatId, threadId, result: response, success: true };
@@ -103,6 +103,7 @@ export class TelegramService {
           logger.error("Error sending Telegram message", {
             chatId,
             error: error.message,
+            stack: error.stack,
           });
           return { chatId, threadId, error: error.message, success: false };
         }
@@ -396,7 +397,8 @@ export class TelegramService {
       text += `👤 Автор: <a href="tg://user?id=${user_id}">ID ${user_id}</a>\n`;
     }
 
-    text += `\n🔗 Просмотреть: https://taiginsky.md/ads/${ad_id}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
+    text += `\n🔗 Просмотреть: ${frontendUrl}/ads/${ad_id}`;
 
     return text;
   }
@@ -410,7 +412,8 @@ export class TelegramService {
     text += `${this._escapeHtml(content)}`;
 
     if (post_id) {
-      text += `\n\n🔗 Подробнее: https://taiginsky.md/posts/${post_id}`;
+      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
+      text += `\n\n🔗 Подробнее: ${frontendUrl}/posts/${post_id}`;
     }
 
     return text;
@@ -503,8 +506,9 @@ export class TelegramService {
       }
 
       message += `📊 Забронировал: <b>${orderText}</b>\n\n`;
-      message += `Всего бронирований: <b>${bookingOrder}</b>\n\n`;
-      message += `🔗 Просмотреть: https://taiginsky.md/ads/${adId}`;
+      message += `Всего бронирований: <b>${bookingOrder}\n\n`;
+      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
+      message += `🔗 Просмотреть: ${frontendUrl}/ads/${adId}`;
 
       const result = await this.sendMessage({
         message,
@@ -559,7 +563,8 @@ export class TelegramService {
       message += `📦 Объявление: <b>${this._escapeHtml(adTitle)}</b>\n`;
       message += `📊 Был: <b>${orderText}</b>\n\n`;
       message += `Пользователь передумал.\n\n`;
-      message += `🔗 Просмотреть: https://taiginsky.md/ads/${adId}`;
+      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
+      message += `🔗 Просмотреть: ${frontendUrl}/ads/${adId}`;
 
       const result = await this.sendMessage({
         message,
@@ -591,6 +596,12 @@ export class TelegramService {
    * @param {string|null} threadId - Telegram thread ID (for topics)
    */
   async publishAd(ad, chatId, threadId) {
+    logger.info("Starting to publish ad to Telegram", {
+      ad_id: ad.id,
+      chat_id: chatId,
+      thread_id: threadId,
+    });
+    
     try {
       if (!this.adRepository) {
         logger.error("AdRepository not initialized in TelegramService");
@@ -619,14 +630,28 @@ export class TelegramService {
 
       // Prepare media
       const images = ad.images || [];
-      const photos = images.map((img) => img.image_url || img.url);
+      let mediaGroup = null;
+
+      if (images.length > 0) {
+        mediaGroup = images.map((img, index) => {
+          const media = {
+            type: "photo",
+            media: img.image_url || img.url,
+          };
+          if (index === 0) {
+            media.caption = message;
+            media.parse_mode = "HTML";
+          }
+          return media;
+        });
+      }
 
       // Send message to Telegram
       const result = await this.sendMessage({
         message,
         chatIds: [chatId],
         threadIds: [threadId || undefined],
-        photos,
+        mediaGroup,
       });
 
       // Save message IDs to database
@@ -646,7 +671,7 @@ export class TelegramService {
                 message_id: String(msg.message_id),
                 thread_id: threadId ? String(threadId) : null,
                 message_text: message,
-                is_media: photos.length > 0,
+                is_media: mediaGroup && mediaGroup.length > 0,
                 media_group_id: msg.media_group_id
                   ? String(msg.media_group_id)
                   : null,
@@ -661,7 +686,7 @@ export class TelegramService {
         }
       }
 
-      logger.info("Ad published to Telegram", {
+      logger.info("Ad successfully published to Telegram", {
         ad_id: ad.id,
         chat_id: chatId,
         thread_id: threadId,
@@ -672,7 +697,9 @@ export class TelegramService {
       logger.error("Error publishing ad to Telegram", {
         ad_id: ad.id,
         chat_id: chatId,
+        thread_id: threadId,
         error: error.message,
+        stack: error.stack,
       });
       throw error;
     }
