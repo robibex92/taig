@@ -86,7 +86,7 @@ export class PostRepository extends IPostRepository {
   /**
    * Soft delete post (set status to 'deleted')
    */
-  async softDelete(id) {
+  async delete(id) {
     const post = await prisma.post.update({
       where: { id: BigInt(id) },
       data: {
