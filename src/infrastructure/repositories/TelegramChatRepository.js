@@ -36,6 +36,23 @@ export class TelegramChatRepository extends ITelegramChatRepository {
     });
   }
 
+  async findByIds(ids) {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+    const intIds = ids.map((id) => parseInt(id)).filter(id => !isNaN(id));
+    if (intIds.length === 0) {
+        return [];
+    }
+    return await prisma.telegramChat.findMany({
+      where: {
+        id: {
+          in: intIds,
+        },
+      },
+    });
+  }
+
   async create(chatData) {
     return await prisma.telegramChat.create({
       data: {

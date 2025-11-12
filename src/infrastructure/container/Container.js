@@ -375,7 +375,8 @@ export class Container {
       (container) =>
         new CreatePostUseCase(
           container.resolve("postRepository"),
-          container.resolve("telegramService")
+          container.resolve("telegramService"),
+          container.resolve("telegramChatRepository")
         )
     );
 

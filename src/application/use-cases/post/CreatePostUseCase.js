@@ -5,9 +5,10 @@ import { ForbiddenError } from "../../../domain/errors/index.js";
  * Use case for creating a new post
  */
 export class CreatePostUseCase {
-  constructor(postRepository, telegramService) {
+  constructor(postRepository, telegramService, telegramChatRepository) {
     this.postRepository = postRepository;
     this.telegramService = telegramService;
+    this.telegramChatRepository = telegramChatRepository;
   }
 
   async execute(postData, isImportant, selectedChats, photos, user) {
@@ -50,12 +51,54 @@ export class CreatePostUseCase {
       // Queue Telegram sending task
       this.telegramService.queueTask(async () => {
         try {
-          const chatIds = selectedChats.map((c) =>
+          const internalChatIds = selectedChats.map((c) =>
             typeof c === "object" ? c.chatId : c
           );
-          const threadIds = selectedChats.map((c) =>
-            typeof c === "object" ? c.threadId : null
+
+          // Fetch the actual chat details from the database
+          const chatDetails = await this.telegramChatRepository.findByIds(
+            internalChatIds
           );
+
+          if (!chatDetails || chatDetails.length === 0) {
+            logger.warn("No valid Telegram chats found for the selected IDs", {
+              selected: internalChatIds,
+            });
+            return;
+          }
+
+          // Map internal IDs to actual Telegram chat_id and thread_id
+          const chatMap = new Map(
+            chatDetails.map((chat) => [chat.id.toString(), chat])
+          );
+
+          const chatIds = [];
+          const threadIds = [];
+
+          for (const selected of selectedChats) {
+            const internalId =
+              typeof selected === "object" ? selected.chatId : selected;
+            const chat = chatMap.get(internalId.toString());
+
+            if (chat && chat.chat_id) {
+              chatIds.push(chat.chat_id);
+              // Use the threadId from the original selection if it exists, otherwise from the DB
+              threadIds.push(
+                selected.threadId !== undefined
+                  ? selected.threadId
+                  : chat.thread_id || null
+              );
+            } else {
+              logger.warn(`Chat with internal ID ${internalId} not found or is missing a Telegram chat_id`);
+            }
+          }
+
+          if (chatIds.length === 0) {
+            logger.warn("No chats to send to after filtering.", {
+              selected: internalChatIds,
+            });
+            return;
+          }
 
           const result = await this.telegramService.sendMessage({
             message: `🚨 ${title} 🚨\n🔸🔸🔸🔸🔸🔸🔸🔸🔸🔸\n${content}`,
