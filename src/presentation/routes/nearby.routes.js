@@ -174,7 +174,7 @@ router.get(
  * @access  Public
  */
 router.get(
-  "/nearby/:house_id/entrances/:entrance/comment",
+  "/nearby/:house_id/:house_number/entrances/:entrance/comment",
   houseController.getEntranceCommentSimple
 );
 
