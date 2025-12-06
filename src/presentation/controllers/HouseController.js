@@ -1,5 +1,6 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
+import { prisma } from "../../infrastructure/database/prisma.js";
 import {
   getEntrancesSchema,
   getHousesFilterSchema,
@@ -389,36 +390,124 @@ export class HouseController {
    * POST /api-v1/nearby/:house_id/entrances/:entrance/comments
    * Create entrance comment (admin only)
    */
-  createEntranceComment = asyncHandler(async (req, res) => {
-    const { house_id, entrance } = req.params;
-    const { comment } = req.body;
-    const user = req.user;
+  createEntranceComment = async (req, res) => {
+    try {
+      let { house_id, entrance } = req.params;
+      const { comment } = req.body;
+      const author_id = req.user?.user_id ?? null;
 
-    const newComment = await this.createEntranceCommentUseCase.execute({
-      house_id: house_id,
-      entrance: parseInt(entrance),
-      author_id: user.user_id,
-      comment,
-    });
+      entrance = parseInt(entrance);
 
-    res.status(201).json(newComment);
-  });
+      if (!comment || comment.trim().length === 0) {
+        return res.status(400).json({ error: "Comment text is required" });
+      }
+
+      if (!entrance || isNaN(entrance)) {
+        return res.status(400).json({ error: "Invalid entrance number" });
+      }
+
+      // Определяем дом
+      let house;
+
+      if (/^\d+$/.test(house_id)) {
+        // Числовой ID
+        house = await prisma.house.findUnique({
+          where: { id: BigInt(house_id) },
+          select: { id: true, house: true }
+        });
+      } else {
+        // Строка "37" или "37/1"
+        house = await prisma.house.findFirst({
+          where: { house: house_id },
+          select: { id: true, house: true }
+        });
+      }
+
+      if (!house) {
+        return res.status(404).json({ error: "House not found" });
+      }
+
+      // Создаём запись
+      const newComment = await prisma.entranceComment.create({
+        data: {
+          house_id: house.id,
+          entrance,
+          author_id: author_id ? BigInt(author_id) : null,
+          comment
+        }
+      });
+
+      return res.status(201).json({
+        message: "Entrance comment created",
+        house: house.house,
+        entrance,
+        comment: newComment.comment,
+        id: newComment.id
+      });
+
+    } catch (error) {
+      console.error("createEntranceComment error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  };
 
   /**
    * GET /api-v1/nearby/:house_id/entrances/:entrance/comments
    * Get entrance comment
    */
-  getEntranceComment = asyncHandler(async (req, res) => {
-    const { house_id, entrance } = req.params;
-
-    const comment = await this.getEntranceCommentsUseCase.execute(
-      house_id,
-      parseInt(entrance)
-    );
-
-    // Если комментарий не найден, возвращаем null
-    res.json(comment);
-  });
+  getEntranceComment = async (req, res) => {
+    try {
+      let { house_id, entrance } = req.params;
+  
+      entrance = parseInt(entrance);
+  
+      if (!entrance || isNaN(entrance)) {
+        return res.status(400).json({ error: "Invalid entrance number" });
+      }
+  
+      // 🟢 Определяем, что за house_id:
+      // - число → это ID из БД
+      // - строка с "/" → дом вида "37/1"
+      // - строка без "/" → дом "37"
+      let house;
+  
+      if (/^\d+$/.test(house_id)) {
+        // house_id = ID → ищем по ID
+        house = await prisma.house.findUnique({
+          where: { id: BigInt(house_id) },
+          select: { id: true, house: true }
+        });
+      } else {
+        // house_id = строка вида "37" или "37/1"
+        house = await prisma.house.findFirst({
+          where: { house: house_id },
+          select: { id: true, house: true }
+        });
+      }
+  
+      if (!house) {
+        return res.status(404).json({ error: "House not found" });
+      }
+  
+      const comment = await prisma.entranceComment.findFirst({
+        where: {
+          house_id: house.id,
+          entrance
+        },
+        orderBy: { created_at: "desc" }
+      });
+  
+      return res.json({
+        house: house.house,
+        entrance,
+        comment: comment ? comment.comment : null
+      });
+  
+    } catch (error) {
+      console.error("getEntranceComment error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  };
 
   /**
    * GET /api-v1/nearby/:house_id/entrances/:entrance/comment

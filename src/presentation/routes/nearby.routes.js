@@ -158,53 +158,60 @@ router.delete(
 
 // ================== ENTRANCE COMMENTS ==================
 
-/**
- * @route   GET /nearby/:house_id/entrances/:entrance/comments
- * @desc    Get comment for a specific house entrance
- * @access  Public
- */
+// ----- SIMPLE FORM (GET) -----
+// e.g., /nearby/37/entrances/1/comment
 router.get(
-  "/nearby/:house_id(.+)/entrances/:entrance/comments",
+  "/nearby/:house/entrances/:entrance/comment",
+  (req, res, next) => {
+    req.params.house_id = req.params.house; // Normalize for the controller
+    next();
+  },
   houseController.getEntranceComment
 );
 
-/**
- * @route   GET /nearby/:house_id/entrances/:entrance/comment
- * @desc    Get comments for a specific house entrance (alias for .../comments)
- * @access  Public
- */
+// ----- COMPLEX FORM (GET) -----
+// e.g., /nearby/37/1/entrances/1/comment  -> house "37/1"
 router.get(
-  "/nearby/:house_id(.+)/entrances/:entrance/comment",
+  "/nearby/:house/:subhouse/entrances/:entrance/comment",
+  (req, res, next) => {
+    req.params.house_id = `${req.params.house}/${req.params.subhouse}`;
+    next();
+  },
   houseController.getEntranceComment
 );
 
-/**
- * @route   POST /nearby/:house_id/entrances/:entrance/comments
- * @desc    Create a comment for a house entrance (admin only)
- * @access  Private (Admin only)
- */
+// ====== CREATE COMMENT (POST) ======
+
+// ----- SIMPLE FORM (POST) -----
 router.post(
-  "/nearby/:house_id(.+)/entrances/:entrance/comments",
+  "/nearby/:house/entrances/:entrance/comments",
   authenticateJWT,
+  (req, res, next) => {
+    req.params.house_id = req.params.house;
+    next();
+  },
   houseController.createEntranceComment
 );
 
-/**
- * @route   PUT /nearby/entrance-comments/:comment_id
- * @desc    Update an entrance comment (admin only)
- * @access  Private (Admin only)
- */
+// ----- COMPLEX FORM (POST) -----
+router.post(
+  "/nearby/:house/:subhouse/entrances/:entrance/comments",
+  authenticateJWT,
+  (req, res, next) => {
+    req.params.house_id = `${req.params.house}/${req.params.subhouse}`;
+    next();
+  },
+  houseController.createEntranceComment
+);
+
+// ====== UPDATE / DELETE ======
+
 router.put(
   "/nearby/entrance-comments/:comment_id",
   authenticateJWT,
   houseController.updateEntranceComment
 );
 
-/**
- * @route   DELETE /nearby/entrance-comments/:comment_id
- * @desc    Delete an entrance comment (admin only)
- * @access  Private (Admin only)
- */
 router.delete(
   "/nearby/entrance-comments/:comment_id",
   authenticateJWT,
