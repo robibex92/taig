@@ -164,7 +164,7 @@ router.delete(
  * @access  Public
  */
 router.get(
-  "/nearby/:house_id/entrances/:entrance/comments",
+  "/nearby/:house_id(.+)/entrances/:entrance/comments",
   houseController.getEntranceComment
 );
 
@@ -174,18 +174,8 @@ router.get(
  * @access  Public
  */
 router.get(
-  "/nearby/:house_id/entrances/:entrance/comment",
+  "/nearby/:house_id(.+)/entrances/:entrance/comment",
   houseController.getEntranceComment
-);
-
-/**
- * @route   GET /nearby/:house_id/entrances/:entrance/comment
- * @desc    Get comment for a specific house entrance (simplified)
- * @access  Public
- */
-router.get(
-  "/nearby/:house_id/:house_number/entrances/:entrance/comment",
-  houseController.getEntranceCommentSimple
 );
 
 /**
@@ -194,7 +184,7 @@ router.get(
  * @access  Private (Admin only)
  */
 router.post(
-  "/nearby/:house_id/entrances/:entrance/comments",
+  "/nearby/:house_id(.+)/entrances/:entrance/comments",
   authenticateJWT,
   houseController.createEntranceComment
 );
