@@ -170,6 +170,16 @@ router.get(
 
 /**
  * @route   GET /nearby/:house_id/entrances/:entrance/comment
+ * @desc    Get comments for a specific house entrance (alias for .../comments)
+ * @access  Public
+ */
+router.get(
+  "/nearby/:house_id/entrances/:entrance/comment",
+  houseController.getEntranceComment
+);
+
+/**
+ * @route   GET /nearby/:house_id/entrances/:entrance/comment
  * @desc    Get comment for a specific house entrance (simplified)
  * @access  Public
  */
