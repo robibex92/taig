@@ -25,10 +25,11 @@ export class CreateEntranceCommentUseCase {
       }
 
       // Find house ID from house number
-      const house = await this.houseRepository.findByNumber(house_id);
-      if (!house) {
+      const houses = await this.houseRepository.findByFilters({ house: house_id });
+      if (!houses || houses.length === 0) {
         throw new ValidationError(`House with number ${house_id} not found`);
       }
+      const house = houses[0];
 
       // Create the comment
       const newComment = await this.entranceCommentRepository.create({

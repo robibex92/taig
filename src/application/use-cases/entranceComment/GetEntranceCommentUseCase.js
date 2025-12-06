@@ -21,10 +21,11 @@ export class GetEntranceCommentUseCase {
         throw new ValidationError("House ID and entrance are required");
       }
 
-      const house = await this.houseRepository.findByNumber(house_id);
-      if (!house) {
+      const houses = await this.houseRepository.findByFilters({ house: house_id });
+      if (!houses || houses.length === 0) {
         return null;
       }
+      const house = houses[0];
 
       const comment =
         await this.entranceCommentRepository.findByHouseAndEntrance(
