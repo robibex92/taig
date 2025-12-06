@@ -158,17 +158,9 @@ router.delete(
 
 // ================== ENTRANCE COMMENTS ==================
 
-// 1) MAIN — дом "37"
-router.get(
-  "/nearby/:house(\\d+)/entrances/:entrance/comment",
-  (req, res, next) => {
-    req.params.house_id = req.params.house;
-    next();
-  },
-  houseController.getEntranceComment
-);
+// ----- GET -----
 
-// 2) SUBHOUSE — дом "37/1"
+// 1) SUBHOUSE — дом "37/1"
 router.get(
   "/nearby/:house(\\d+)/:subhouse(\\d+)/entrances/:entrance/comment",
   (req, res, next) => {
@@ -178,25 +170,35 @@ router.get(
   houseController.getEntranceComment
 );
 
-// ====== CREATE COMMENT (POST) ======
-
-// 1) MAIN — дом "37"
-router.post(
-  "/nearby/:house(\\d+)/entrances/:entrance/comments",
-  authenticateJWT,
+// 2) MAIN — дом "37"
+router.get(
+  "/nearby/:house(\\d+)/entrances/:entrance/comment",
   (req, res, next) => {
     req.params.house_id = req.params.house;
     next();
   },
-  houseController.createEntranceComment
+  houseController.getEntranceComment
 );
 
-// 2) SUBHOUSE — дом "37/1"
+// ----- POST -----
+
+// 1) SUBHOUSE — дом "37/1"
 router.post(
   "/nearby/:house(\\d+)/:subhouse(\\d+)/entrances/:entrance/comments",
   authenticateJWT,
   (req, res, next) => {
     req.params.house_id = `${req.params.house}/${req.params.subhouse}`;
+    next();
+  },
+  houseController.createEntranceComment
+);
+
+// 2) MAIN — дом "37"
+router.post(
+  "/nearby/:house(\\d+)/entrances/:entrance/comments",
+  authenticateJWT,
+  (req, res, next) => {
+    req.params.house_id = req.params.house;
     next();
   },
   houseController.createEntranceComment
