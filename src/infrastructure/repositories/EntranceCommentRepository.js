@@ -20,9 +20,17 @@ export class EntranceCommentRepository {
         );
       }
 
+      const house = await prisma.house.findFirst({
+        where: { house: String(commentData.house_id) },
+      });
+
+      if (!house) {
+        throw new Error(`House with number ${commentData.house_id} not found.`);
+      }
+
       const comment = await prisma.entranceComment.create({
         data: {
-          house_id: commentData.house_id,
+          house_id: house.id,
           entrance: commentData.entrance,
           author_id: commentData.author_id,
           comment: commentData.comment,
@@ -94,9 +102,17 @@ export class EntranceCommentRepository {
         `Looking for entrance comment: house_id=${house_id}, entrance=${entrance}`
       );
 
+      const house = await prisma.house.findFirst({
+        where: { house: String(house_id) },
+      });
+
+      if (!house) {
+        return null; // Дом не найден, значит и комментария нет
+      }
+
       const comment = await prisma.entranceComment.findFirst({
         where: {
-          house_id: BigInt(house_id),
+          house_id: house.id,
           entrance: entrance,
         },
         include: {

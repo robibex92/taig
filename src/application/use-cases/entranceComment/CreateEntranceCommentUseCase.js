@@ -25,7 +25,7 @@ export class CreateEntranceCommentUseCase {
 
       // Create the comment
       const newComment = await this.entranceCommentRepository.create({
-        house_id: BigInt(house_id),
+        house_id: house_id,
         entrance: parseInt(entrance),
         author_id: BigInt(author_id),
         comment: comment.trim(),

@@ -395,7 +395,7 @@ export class HouseController {
     const user = req.user;
 
     const newComment = await this.createEntranceCommentUseCase.execute({
-      house_id: parseInt(house_id),
+      house_id: house_id,
       entrance: parseInt(entrance),
       author_id: user.user_id,
       comment,
@@ -412,7 +412,7 @@ export class HouseController {
     const { house_id, entrance } = req.params;
 
     const comment = await this.getEntranceCommentsUseCase.execute(
-      parseInt(house_id),
+      house_id,
       parseInt(entrance)
     );
 
