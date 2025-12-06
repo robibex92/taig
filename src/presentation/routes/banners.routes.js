@@ -6,7 +6,7 @@ import { requireAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
 const bannerController = container.resolve("bannerController");
 
-const BASE_ROUTE = "/banners";
+const BASE_ROUTE = "/";
 
 /**
  * @swagger

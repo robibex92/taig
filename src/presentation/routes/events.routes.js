@@ -7,7 +7,7 @@ import { checkRole } from "../../core/middlewares/checkRole.js";
 const router = express.Router();
 const eventController = container.resolve("eventController");
 
-const BASE_ROUTE = "/events";
+const BASE_ROUTE = "/";
 
 /**
  * @swagger

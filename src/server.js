@@ -189,8 +189,8 @@ app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
-app.use("/api", eventsRoutes);
-app.use("/api", bannersRoutes);
+app.use("/api/events", eventsRoutes);
+app.use("/api/banners", bannersRoutes);
 app.use("/api", parkingRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
