@@ -169,7 +169,7 @@ model Car {
 }
 
 model Faq {
-  id         BigInt    @id
+  id         BigInt    @id @default(autoincrement())
   question   String?
   answer     String?
   status     String?

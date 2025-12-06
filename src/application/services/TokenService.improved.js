@@ -205,6 +205,14 @@ export class TokenService {
   }
 
   /**
+   * Verify token (for backward compatibility)
+   * This method verifies access tokens specifically
+   */
+  verifyToken(token, deviceInfo = {}) {
+    return this.verifyAccessToken(token, deviceInfo);
+  }
+
+  /**
    * Add token to blacklist (for logout)
    */
   revokeToken(token) {

@@ -1,9 +1,17 @@
-import { TokenService } from "../../application/services/TokenService.js";
 import { AuthenticationError } from "../../core/errors/AppError.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 
-const tokenService = new TokenService();
+// TokenService will be injected via DI container
+let tokenService = null;
+
+// Function to set token service (will be called by DI container)
+export const setTokenService = (service) => {
+  tokenService = service;
+};
+
+// Export for DI initialization
+export { tokenService };
 
 /**
  * Middleware to authenticate JWT tokens
@@ -21,7 +29,10 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     throw new AuthenticationError("Invalid token format");
   }
 
-  const decoded = tokenService.verifyToken(token);
+  const decoded = tokenService.verifyToken(token, {
+    userAgent: req.headers["user-agent"] || "",
+    ip: req.ip || "",
+  });
 
   if (!decoded || !decoded.id) {
     throw new AuthenticationError("Invalid token");
@@ -63,7 +74,10 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    const decoded = tokenService.verifyToken(token);
+    const decoded = tokenService.verifyToken(token, {
+      userAgent: req.headers["user-agent"] || "",
+      ip: req.ip || "",
+    });
 
     if (decoded && decoded.id) {
       // Load full user data from database
