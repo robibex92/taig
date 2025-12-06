@@ -96,7 +96,7 @@ export class EntranceCommentRepository {
 
       const comment = await prisma.entranceComment.findFirst({
         where: {
-          house_id: BigInt(house_id),
+          house_id: house_id,
           entrance: entrance,
         },
         include: {
