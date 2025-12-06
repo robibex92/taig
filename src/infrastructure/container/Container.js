@@ -236,19 +236,7 @@ export class Container {
     );
 
     // Services
-    this.register("tokenService", (container) => {
-      const tokenService = new TokenService();
-      // Set token service in auth middleware for backward compatibility
-      try {
-        const { setTokenService } = require("../../presentation/middlewares/authMiddleware.js");
-        if (typeof setTokenService === 'function') {
-          setTokenService(tokenService);
-        }
-      } catch (error) {
-        console.warn("Could not set token service in auth middleware:", error.message);
-      }
-      return tokenService;
-    });
+    this.register("tokenService", () => new TokenService());
     this.register(
       "telegramService",
       (container) =>

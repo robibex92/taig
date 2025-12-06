@@ -1,22 +1,13 @@
 import { AuthenticationError } from "../../core/errors/AppError.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
-
-// TokenService will be injected via DI container
-let tokenService = null;
-
-// Function to set token service (will be called by DI container)
-export const setTokenService = (service) => {
-  tokenService = service;
-};
-
-// Export for DI initialization
-export { tokenService };
+import { container } from "../../infrastructure/container/Container.js";
 
 /**
  * Middleware to authenticate JWT tokens
  */
 export const authenticateJWT = asyncHandler(async (req, res, next) => {
+  const tokenService = container.resolve("tokenService");
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -59,6 +50,7 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
  * Middleware for optional authentication
  */
 export const authenticateOptional = asyncHandler(async (req, res, next) => {
+  const tokenService = container.resolve("tokenService");
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
