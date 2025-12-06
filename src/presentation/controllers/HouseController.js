@@ -407,21 +407,11 @@ export class HouseController {
       }
 
       // Определяем дом
-      let house;
-
-      if (/^\d+$/.test(house_id)) {
-        // Числовой ID
-        house = await prisma.house.findUnique({
-          where: { id: BigInt(house_id) },
-          select: { id: true, house: true }
-        });
-      } else {
-        // Строка "37" или "37/1"
-        house = await prisma.house.findFirst({
-          where: { house: house_id },
-          select: { id: true, house: true }
-        });
-      }
+      // house_id из URL - это всегда строковый номер дома, ищем по нему.
+      let house = await prisma.house.findFirst({
+        where: { house: house_id },
+        select: { id: true, house: true }
+      });
 
       if (!house) {
         return res.status(404).json({ error: "House not found" });
@@ -469,21 +459,11 @@ export class HouseController {
       // - число → это ID из БД
       // - строка с "/" → дом вида "37/1"
       // - строка без "/" → дом "37"
-      let house;
-  
-      if (/^\d+$/.test(house_id)) {
-        // house_id = ID → ищем по ID
-        house = await prisma.house.findUnique({
-          where: { id: BigInt(house_id) },
-          select: { id: true, house: true }
-        });
-      } else {
-        // house_id = строка вида "37" или "37/1"
-        house = await prisma.house.findFirst({
-          where: { house: house_id },
-          select: { id: true, house: true }
-        });
-      }
+      // house_id из URL - это всегда строковый номер дома, ищем по нему.
+      let house = await prisma.house.findFirst({
+        where: { house: house_id },
+        select: { id: true, house: true }
+      });
   
       if (!house) {
         return res.status(404).json({ error: "House not found" });
