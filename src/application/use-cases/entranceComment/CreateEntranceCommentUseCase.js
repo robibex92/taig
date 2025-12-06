@@ -6,8 +6,9 @@ import { ValidationError, ForbiddenError } from "../../../core/errors/AppError.j
  * Creates a new comment for a house entrance (admin only)
  */
 export class CreateEntranceCommentUseCase {
-  constructor(entranceCommentRepository) {
+  constructor(entranceCommentRepository, houseRepository) {
     this.entranceCommentRepository = entranceCommentRepository;
+    this.houseRepository = houseRepository;
   }
 
   async execute({ house_id, entrance, author_id, comment }) {
@@ -23,9 +24,15 @@ export class CreateEntranceCommentUseCase {
         throw new ValidationError("Comment cannot exceed 1000 characters");
       }
 
+      // Find house ID from house number
+      const house = await this.houseRepository.findByNumber(house_id);
+      if (!house) {
+        throw new ValidationError(`House with number ${house_id} not found`);
+      }
+
       // Create the comment
       const newComment = await this.entranceCommentRepository.create({
-        house_id: house_id,
+        house_id: house.id,
         entrance: parseInt(entrance),
         author_id: BigInt(author_id),
         comment: comment.trim(),

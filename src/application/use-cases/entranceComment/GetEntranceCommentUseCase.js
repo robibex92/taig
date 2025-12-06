@@ -6,8 +6,9 @@ import { ValidationError } from "../../../core/errors/AppError.js";
  * Gets comment for a specific house entrance
  */
 export class GetEntranceCommentUseCase {
-  constructor(entranceCommentRepository) {
+  constructor(entranceCommentRepository, houseRepository) {
     this.entranceCommentRepository = entranceCommentRepository;
+    this.houseRepository = houseRepository;
   }
 
   async execute(house_id, entrance) {
@@ -20,9 +21,14 @@ export class GetEntranceCommentUseCase {
         throw new ValidationError("House ID and entrance are required");
       }
 
+      const house = await this.houseRepository.findByNumber(house_id);
+      if (!house) {
+        return null;
+      }
+
       const comment =
         await this.entranceCommentRepository.findByHouseAndEntrance(
-          house_id,
+          house.id,
           entrance
         );
 

@@ -533,7 +533,8 @@ export class Container {
       "createEntranceCommentUseCase",
       (container) =>
         new CreateEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository")
+          container.resolve("entranceCommentRepository"),
+          container.resolve("houseRepository")
         )
     );
 
@@ -541,7 +542,8 @@ export class Container {
       "getEntranceCommentUseCase",
       (container) =>
         new GetEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository")
+          container.resolve("entranceCommentRepository"),
+          container.resolve("houseRepository")
         )
     );
 
