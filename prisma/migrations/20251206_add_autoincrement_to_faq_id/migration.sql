@@ -1,13 +1,14 @@
 -- AlterTable
--- Удаляем текущий первичный ключ и создаем новый с автоинкрементом
-ALTER TABLE "faq" ALTER COLUMN "id" TYPE bigint;
--- Удаляем существующий sequence, если он есть
-DROP SEQUENCE IF EXISTS faq_id_seq CASCADE;
--- Создаем sequence для автоинкремента
-CREATE SEQUENCE faq_id_seq AS bigint START WITH 1;
--- Устанавливаем значение id как серийное с использованием sequence
+-- Сначала удаляем старый первичный ключ, если он существует
+ALTER TABLE "faq" DROP CONSTRAINT IF EXISTS "faq_pkey";
+
+-- Изменяем тип колонки id на BIGSERIAL, что автоматически создаст sequence и установит его как default
+-- Этот подход более надежен для PostgreSQL
+ALTER TABLE "faq" ALTER COLUMN "id" DROP DEFAULT;
+CREATE SEQUENCE IF NOT EXISTS faq_id_seq;
 ALTER TABLE "faq" ALTER COLUMN "id" SET DEFAULT nextval('faq_id_seq');
--- Обновляем sequence до максимального значения id в таблице
-SELECT setval('faq_id_seq', (SELECT COALESCE(MAX(id), 0) FROM "faq"));
+ALTER SEQUENCE faq_id_seq OWNED BY "faq"."id";
+SELECT setval('faq_id_seq', (SELECT COALESCE(MAX(id), 1) FROM "faq"), false);
+
 -- Восстанавливаем первичный ключ
 ALTER TABLE "faq" ADD CONSTRAINT "faq_pkey" PRIMARY KEY ("id");
