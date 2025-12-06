@@ -459,23 +459,34 @@ export class HouseController {
       // - число → это ID из БД
       // - строка с "/" → дом вида "37/1"
       // - строка без "/" → дом "37"
-      // house_id из URL - это всегда строковый номер дома, ищем по нему.
-      let house = await prisma.house.findFirst({
+      const house = await prisma.house.findFirst({
         where: { house: house_id },
-        select: { id: true, house: true }
+        select: { id: true, house: true },
       });
-  
+
       if (!house) {
         return res.status(404).json({ error: "House not found" });
       }
-  
-      const comment = await prisma.entranceComment.findFirst({
+
+      // 1. Ищем комментарий по КОРРЕКТНОМУ ID дома (для новых данных)
+      let comment = await prisma.entranceComment.findFirst({
         where: {
           house_id: house.id,
-          entrance
+          entrance,
         },
-        orderBy: { created_at: "desc" }
+        orderBy: { created_at: "desc" },
       });
+
+      // 2. Если не нашли, ищем по НЕПРАВИЛЬНОМУ ID (для старых данных, где в house_id записан номер дома)
+      if (!comment && /^\d+$/.test(house_id)) {
+        comment = await prisma.entranceComment.findFirst({
+          where: {
+            house_id: BigInt(house_id), // Используем номер дома как ID
+            entrance,
+          },
+          orderBy: { created_at: "desc" },
+        });
+      }
   
       return res.json({
         house: house.house,
