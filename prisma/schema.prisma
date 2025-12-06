@@ -138,7 +138,6 @@ model EntranceComment {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  @@unique([house_id, entrance], name: "house_id_entrance")
   @@index([author_id])
   @@index([created_at])
   @@map("entrance_comments")
