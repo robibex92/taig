@@ -49,14 +49,27 @@ export const maxAuthSchema = Joi.object({
   }),
   remember_me: Joi.boolean().default(false),
   platform: Joi.string().trim().allow("", null),
+  requestId: Joi.string()
+    .pattern(/^[A-Za-z0-9_-]{8,64}$/)
+    .messages({
+      "string.pattern.base": "requestId must be 8-64 alphanumeric chars",
+    }),
 });
 
 export const maxClaimCodeSchema = Joi.object({
-  code: Joi.string().trim().min(8).max(128).required().messages({
-    "any.required": "MAX login code is required",
-    "string.empty": "MAX login code cannot be empty",
-  }),
+  code: Joi.string().trim().min(8).max(128)
+    .messages({
+      "any.required": "MAX login code is required",
+      "string.empty": "MAX login code cannot be empty",
+    }),
+  requestId: Joi.string()
+    .pattern(/^[A-Za-z0-9_-]{8,64}$/)
+    .messages({
+      "string.pattern.base": "requestId must be 8-64 alphanumeric chars",
+    }),
   remember_me: Joi.boolean().default(false),
+}).xor("code", "requestId").messages({
+  "object.xor": "Provide either code or requestId",
 });
 
 /**

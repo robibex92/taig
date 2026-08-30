@@ -13,6 +13,8 @@ export class AuthenticateMaxUserUseCase {
     this.refreshTokenRepository = refreshTokenRepository;
     this._loginCodes = new Map();
     this.LOGIN_CODE_TTL_MS = 5 * 60 * 1000;
+    this._pendingRequests = new Map();
+    this.REQUEST_TTL_MS = 5 * 60 * 1000;
   }
 
   _sweepLoginCodes() {
@@ -20,6 +22,15 @@ export class AuthenticateMaxUserUseCase {
     for (const [code, entry] of this._loginCodes) {
       if (entry.expiresAt < now) {
         this._loginCodes.delete(code);
+      }
+    }
+  }
+
+  _sweepPendingRequests() {
+    const now = Date.now();
+    for (const [requestId, entry] of this._pendingRequests) {
+      if (entry.expiresAt < now) {
+        this._pendingRequests.delete(requestId);
       }
     }
   }
@@ -32,6 +43,42 @@ export class AuthenticateMaxUserUseCase {
       expiresAt: Date.now() + this.LOGIN_CODE_TTL_MS,
     });
     return code;
+  }
+
+  createLoginRequest(requestId, userId) {
+    if (typeof requestId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)) {
+      return;
+    }
+    this._sweepPendingRequests();
+    this._pendingRequests.set(requestId, {
+      userId,
+      expiresAt: Date.now() + this.REQUEST_TTL_MS,
+    });
+  }
+
+  async claimLoginRequest(requestId, deviceInfo = {}, rememberMe = false) {
+    if (typeof requestId !== "string" || requestId.length < 8) {
+      throw new AuthenticationError("Invalid MAX login request");
+    }
+
+    const entry = this._pendingRequests.get(requestId);
+    this._pendingRequests.delete(requestId);
+
+    if (!entry) {
+      throw new AuthenticationError("Login request not found or expired");
+    }
+    if (entry.expiresAt < Date.now()) {
+      throw new AuthenticationError("Login request has expired");
+    }
+
+    const user = await this.userRepository.findById(entry.userId);
+    if (!user) {
+      throw new AuthenticationError("User not found");
+    }
+
+    logger.info("MAX login request claimed", { user_id: user.user_id, requestId });
+
+    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
   async claimLoginCode(code, deviceInfo = {}, rememberMe = false) {
@@ -202,7 +249,7 @@ export class AuthenticateMaxUserUseCase {
     return user;
   }
 
-  async execute(initData, deviceInfo = {}, rememberMe = false) {
+  async execute(initData, deviceInfo = {}, rememberMe = false, requestId = null) {
     if (!initData) {
       throw new AuthenticationError("MAX initData is required");
     }
@@ -220,6 +267,10 @@ export class AuthenticateMaxUserUseCase {
 
     const user = await this.findOrCreateMaxUser(maxUser);
     const session = await this.issueSession(user, deviceInfo, rememberMe);
+
+    if (requestId) {
+      this.createLoginRequest(requestId, user.user_id);
+    }
 
     return {
       ...session,

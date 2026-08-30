@@ -50,7 +50,8 @@ export class AuthController {
     const result = await this.authenticateMaxUserUseCase.execute(
       initData,
       deviceInfo,
-      rememberMe
+      rememberMe,
+      req.body?.requestId || null
     );
 
     const responseData = {
@@ -68,23 +69,31 @@ export class AuthController {
   });
 
   /**
-   * Exchange a one-time MAX login code for a fresh session (issued for the site)
+   * Exchange a one-time MAX login code / request for a fresh session (issued for the site)
    * POST /api/auth/max/claim
    */
   claimMax = asyncHandler(async (req, res) => {
     const code = req.body?.code;
-    if (!code) {
-      throw new ValidationError("MAX login code is required");
+    const requestId = req.body?.requestId;
+
+    if (!code && !requestId) {
+      throw new ValidationError("MAX login code or request is required");
     }
 
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
     const rememberMe = Boolean(req.body?.remember_me);
 
-    const result = await this.authenticateMaxUserUseCase.claimLoginCode(
-      code,
-      deviceInfo,
-      rememberMe
-    );
+    const result = requestId
+      ? await this.authenticateMaxUserUseCase.claimLoginRequest(
+          requestId,
+          deviceInfo,
+          rememberMe
+        )
+      : await this.authenticateMaxUserUseCase.claimLoginCode(
+          code,
+          deviceInfo,
+          rememberMe
+        );
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

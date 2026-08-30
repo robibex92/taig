@@ -28,9 +28,10 @@ router.post(
   authController.authenticateMax
 );
 
+// Без authLimiter: сайт опрашивает этот эндпоинт пару минут (поллинг входа),
+// а коды/requestId одноразовые и высокоэнтропийные.
 router.post(
   "/auth/max/claim",
-  authLimiter,
   validateRequest(maxClaimCodeSchema, "body"),
   authController.claimMax
 );
