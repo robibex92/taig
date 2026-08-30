@@ -47,11 +47,17 @@ export class AuthController {
     const deviceInfo = this.tokenService.extractDeviceInfo(req);
     const rememberMe = Boolean(req.body?.remember_me);
 
+    const requestId =
+      typeof req.body?.requestId === "string" &&
+      /^[A-Za-z0-9_-]{8,64}$/.test(req.body.requestId)
+        ? req.body.requestId
+        : null;
+
     const result = await this.authenticateMaxUserUseCase.execute(
       initData,
       deviceInfo,
       rememberMe,
-      req.body?.requestId || null
+      requestId
     );
 
     const responseData = {
@@ -134,9 +140,14 @@ export class AuthController {
    * POST /api/auth/link/telegram
    */
   linkTelegram = asyncHandler(async (req, res) => {
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const rememberMe = Boolean(req.body?.remember_me);
+
     const result = await this.linkPlatformUseCase.linkTelegram(
       req.user.user_id,
-      req.body
+      req.body,
+      deviceInfo,
+      rememberMe
     );
 
     res.status(HTTP_STATUS.OK).json({
@@ -144,6 +155,8 @@ export class AuthController {
       data: {
         user: result.user.toJSON(),
         switchedToUserId: result.switchedToUserId,
+        accessToken: result.accessToken !== null ? result.accessToken : undefined,
+        refreshToken: result.refreshToken !== null ? result.refreshToken : undefined,
       },
     });
   });

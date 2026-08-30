@@ -140,7 +140,7 @@ export class LinkPlatformUseCase {
     });
   }
 
-  async linkTelegram(currentUserId, telegramAuthData) {
+  async linkTelegram(currentUserId, telegramAuthData, deviceInfo = {}, rememberMe = false) {
     const isValid = this.authenticateUserUseCase.verifyTelegramAuth(telegramAuthData);
     if (!isValid) {
       throw new AuthenticationError("Invalid Telegram authentication");
@@ -171,9 +171,25 @@ export class LinkPlatformUseCase {
         telegram_last_name: telegramAuthData.last_name || null,
         avatar: telegramAuthData.photo_url || merged.avatar,
       });
+
+      const user = await this.userRepository.findById(merged.user_id);
+
+      /**
+       * MAX-аккаунт (current) удалён при слиянии,
+       * поэтому старый access token больше не валиден.
+       * Выдаём свежую сессию для объединённого аккаунта.
+       */
+      const session = await this.authenticateMaxUserUseCase.issueSession(
+        user,
+        deviceInfo,
+        rememberMe
+      );
+
       return {
-        user: await this.userRepository.findById(merged.user_id),
+        user: session.user,
         switchedToUserId: merged.user_id,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
       };
     }
 
@@ -190,6 +206,11 @@ export class LinkPlatformUseCase {
       avatar: telegramAuthData.photo_url || current.avatar,
     });
 
-    return { user, switchedToUserId: null };
+    return {
+      user,
+      switchedToUserId: null,
+      accessToken: null,
+      refreshToken: null,
+    };
   }
 }

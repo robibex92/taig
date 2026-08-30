@@ -43,14 +43,17 @@ export const telegramAuthSchema = Joi.object({
 });
 
 export const maxAuthSchema = Joi.object({
-  initData: Joi.string().trim().required().messages({
+  // trim ломает HMAC, если в конце initData есть пробел/перевод строки
+  initData: Joi.string().required().messages({
     "any.required": "MAX initData is required",
     "string.empty": "MAX initData cannot be empty",
   }),
   remember_me: Joi.boolean().default(false),
-  platform: Joi.string().trim().allow("", null),
+  platform: Joi.string().allow("", null),
   requestId: Joi.string()
     .pattern(/^[A-Za-z0-9_-]{8,64}$/)
+    .optional()
+    .allow("", null)
     .messages({
       "string.pattern.base": "requestId must be 8-64 alphanumeric chars",
     }),

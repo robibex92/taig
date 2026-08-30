@@ -181,20 +181,122 @@ export class AuthenticateMaxUserUseCase {
     );
   }
 
+  _emptyVerify(reason) {
+    return {
+      valid: false,
+      user: null,
+      authDate: null,
+      reason,
+    };
+  }
+
+  _safeDecode(value) {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    try {
+      return decodeURIComponent(value.replace(/\+/g, " "));
+    } catch {
+      return value;
+    }
+  }
+
+  _parseInitDataPairs(initData) {
+    const params = [];
+    const seenKeys = new Set();
+
+    for (const pair of initData.split("&")) {
+      if (!pair) {
+        continue;
+      }
+
+      const separator = pair.indexOf("=");
+
+      if (separator <= 0) {
+        return { error: "malformed_pair" };
+      }
+
+      const key = pair.slice(0, separator);
+      const value = pair.slice(separator + 1);
+
+      if (seenKeys.has(key)) {
+        return { error: "duplicate_key" };
+      }
+
+      seenKeys.add(key);
+      params.push([key, value]);
+    }
+
+    return { params };
+  }
+
+  _verifyParsedPairs(params, botToken) {
+    const hashEntries = params.filter(([key]) => key === "hash");
+
+    if (hashEntries.length !== 1) {
+      return this._emptyVerify("missing_hash");
+    }
+
+    const originalHash = this._safeDecode(hashEntries[0][1]).trim();
+
+    if (!/^[a-f0-9]{64}$/i.test(originalHash)) {
+      return this._emptyVerify("invalid_hash_format");
+    }
+
+    const decoded = params.map(([key, value]) => [key, this._safeDecode(value)]);
+
+    const launchParams = decoded
+      .filter(([key]) => key !== "hash")
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n");
+
+    const secretKey = crypto
+      .createHmac("sha256", "WebAppData")
+      .update(botToken)
+      .digest();
+
+    const calculatedHash = crypto
+      .createHmac("sha256", secretKey)
+      .update(launchParams)
+      .digest("hex");
+
+    const valid = crypto.timingSafeEqual(
+      Buffer.from(calculatedHash, "hex"),
+      Buffer.from(originalHash.toLowerCase(), "hex")
+    );
+
+    const userRaw = decoded.find(([key]) => key === "user")?.[1];
+    const authDateRaw = decoded.find(([key]) => key === "auth_date")?.[1];
+
+    let user = null;
+
+    try {
+      user = userRaw ? JSON.parse(userRaw) : null;
+    } catch {
+      user = null;
+    }
+
+    const authDate = authDateRaw ? Number(authDateRaw) : null;
+
+    return {
+      valid,
+      user,
+      authDate: Number.isFinite(authDate) ? authDate : null,
+      reason: valid ? "ok" : "hash_mismatch",
+    };
+  }
+
   /**
    * Проверка MAX WebAppData.
+   * https://dev.max.ru/docs/webapps/validation
    *
-   * MAX:
-   *
-   * secret_key =
-   * HMAC-SHA256("WebAppData", BOT_TOKEN)
-   *
-   * hash =
-   * HMAC-SHA256(secret_key, launch_params)
+   * secret_key = HMAC-SHA256("WebAppData", BOT_TOKEN)
+   * hash = hex(HMAC-SHA256(secret_key, launch_params))
    */
   verifyInitData(initData) {
-    const botToken =
-      process.env.MAX_BOT_TOKEN;
+    const botToken = process.env.MAX_BOT_TOKEN;
 
     if (!botToken) {
       throw new AuthenticationError(
@@ -202,191 +304,40 @@ export class AuthenticateMaxUserUseCase {
       );
     }
 
-    if (
-      typeof initData !== "string" ||
-      !initData.trim()
-    ) {
-      return {
-        valid: false,
-        user: null,
-        authDate: null,
-      };
+    if (typeof initData !== "string" || !initData.trim()) {
+      return this._emptyVerify("empty");
     }
 
-    const rawPairs = initData.split("&");
+    const candidates = [initData.trim()];
+    const onceDecoded = this._safeDecode(initData.trim());
 
-    const params = [];
+    if (onceDecoded && onceDecoded !== candidates[0]) {
+      candidates.push(onceDecoded);
+    }
 
-    for (const pair of rawPairs) {
-      const separator = pair.indexOf("=");
+    let last = this._emptyVerify("parse_failed");
 
-      if (separator <= 0) {
-        return {
-          valid: false,
-          user: null,
-          authDate: null,
-        };
+    for (const candidate of candidates) {
+      const parsed = this._parseInitDataPairs(candidate);
+
+      if (parsed.error) {
+        last = this._emptyVerify(parsed.error);
+        continue;
       }
 
-      const key = pair.slice(0, separator);
-      const value = pair.slice(separator + 1);
+      last = this._verifyParsedPairs(parsed.params, botToken);
 
-      params.push([key, value]);
-    }
-
-    /**
-     * Каждый параметр должен встречаться только один раз.
-     */
-    const seenKeys = new Set();
-
-    for (const [key] of params) {
-      if (seenKeys.has(key)) {
-        return {
-          valid: false,
-          user: null,
-          authDate: null,
-        };
+      if (last.valid) {
+        return last;
       }
-
-      seenKeys.add(key);
     }
 
-    const hashEntries =
-      params.filter(([key]) => key === "hash");
-
-    if (hashEntries.length !== 1) {
-      return {
-        valid: false,
-        user: null,
-        authDate: null,
-      };
-    }
-
-    const originalHashRaw =
-      hashEntries[0][1];
-
-    let originalHash;
-
-    try {
-      originalHash =
-        decodeURIComponent(
-          originalHashRaw
-        );
-    } catch {
-      return {
-        valid: false,
-        user: null,
-        authDate: null,
-      };
-    }
-
-    /**
-     * hash должен быть SHA-256 hex:
-     * 64 hex-символа.
-     */
-    if (!/^[a-f0-9]{64}$/i.test(originalHash)) {
-      return {
-        valid: false,
-        user: null,
-        authDate: null,
-      };
-    }
-
-    const decoded = [];
-
-    try {
-      for (const [key, value] of params) {
-        decoded.push([
-          key,
-          decodeURIComponent(value),
-        ]);
-      }
-    } catch {
-      return {
-        valid: false,
-        user: null,
-        authDate: null,
-      };
-    }
-
-    const launchParams = decoded
-      .filter(([key]) => key !== "hash")
-      .sort(([a], [b]) =>
-        a.localeCompare(b)
-      )
-      .map(([key, value]) =>
-        `${key}=${value}`
-      )
-      .join("\n");
-
-    const secretKey = crypto
-      .createHmac(
-        "sha256",
-        "WebAppData"
-      )
-      .update(botToken)
-      .digest();
-
-    const calculatedHash =
-      crypto
-        .createHmac(
-          "sha256",
-          secretKey
-        )
-        .update(launchParams)
-        .digest("hex");
-
-    const valid =
-      crypto.timingSafeEqual(
-        Buffer.from(
-          calculatedHash,
-          "hex"
-        ),
-        Buffer.from(
-          originalHash,
-          "hex"
-        )
-      );
-
-    const userRaw =
-      decoded.find(
-        ([key]) => key === "user"
-      )?.[1];
-
-    const authDateRaw =
-      decoded.find(
-        ([key]) => key === "auth_date"
-      )?.[1];
-
-    let user = null;
-
-    try {
-      user = userRaw
-        ? JSON.parse(userRaw)
-        : null;
-    } catch {
-      user = null;
-    }
-
-    const authDate =
-      authDateRaw
-        ? Number(authDateRaw)
-        : null;
-
-    return {
-      valid,
-      user,
-      authDate:
-        Number.isFinite(authDate)
-          ? authDate
-          : null,
-    };
+    return last;
   }
 
   /**
-   * MAX рекомендует ограничивать срок initData.
-   *
-   * 1 час.
+   * MAX рекомендует ограничивать срок initData (1 час).
+   * Допускаем небольшое расхождение часов клиента/сервера.
    */
   isAuthDateValid(
     authDate,
@@ -399,16 +350,11 @@ export class AuthenticateMaxUserUseCase {
       return false;
     }
 
-    const currentTime =
-      Math.floor(Date.now() / 1000);
+    const currentTime = Math.floor(Date.now() / 1000);
+    const age = currentTime - authDate;
+    const clockSkewSeconds = 5 * 60;
 
-    const age =
-      currentTime - authDate;
-
-    /**
-     * Будущая дата также подозрительна.
-     */
-    if (age < 0) {
+    if (age < -clockSkewSeconds) {
       return false;
     }
 
@@ -614,33 +560,42 @@ export class AuthenticateMaxUserUseCase {
       valid,
       user: maxUser,
       authDate,
+      reason,
     } =
       this.verifyInitData(
         initData
       );
 
-    if (
-      !valid ||
-      !maxUser ||
-      maxUser.id == null
-    ) {
-      logger.warn(
-        "Invalid MAX authentication attempt",
-        {
-          ip: deviceInfo.ip,
-        }
-      );
+    if (!valid) {
+      logger.warn("Invalid MAX authentication attempt", {
+        ip: deviceInfo.ip,
+        reason,
+        initDataLength: typeof initData === "string" ? initData.length : 0,
+        hasHash: typeof initData === "string" && initData.includes("hash="),
+      });
 
       throw new AuthenticationError(
         "Invalid MAX authentication"
       );
     }
 
-    if (
-      !this.isAuthDateValid(
-        authDate
-      )
-    ) {
+    if (!maxUser || maxUser.id == null) {
+      logger.warn("MAX initData verified but user is missing", {
+        ip: deviceInfo.ip,
+        reason,
+      });
+
+      throw new AuthenticationError(
+        "MAX user is missing in initData"
+      );
+    }
+
+    if (!this.isAuthDateValid(authDate)) {
+      logger.warn("MAX initData expired", {
+        ip: deviceInfo.ip,
+        authDate,
+      });
+
       throw new AuthenticationError(
         "Authentication data expired"
       );

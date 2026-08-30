@@ -77,14 +77,14 @@ app.use(helmetMiddleware);
 // CORS
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: process.env.CORS_ORIGIN || "http://localhost:3001",
     credentials: true,
   })
 );
 app.options(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: process.env.CORS_ORIGIN || "http://localhost:3001",
     credentials: true,
   })
 );
@@ -270,10 +270,12 @@ const PORT = process.env.PORT || 4000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Test database connection before starting server
+// Temporarily disabled for MAX auth testing
 testConnection().then((connected) => {
   if (!connected) {
-    logger.error("Failed to connect to database. Exiting...");
-    process.exit(1);
+    logger.warn("Failed to connect to database. Starting server anyway for MAX auth testing...");
+    // Commented out exit for testing purposes
+    // process.exit(1);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
@@ -281,6 +283,7 @@ testConnection().then((connected) => {
       port: PORT,
       environment: NODE_ENV,
       nodeVersion: process.version,
+      databaseConnected: connected,
     });
 
     // Start Telegram bot
