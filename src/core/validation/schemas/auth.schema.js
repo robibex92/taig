@@ -42,6 +42,15 @@ export const telegramAuthSchema = Joi.object({
   }),
 });
 
+export const maxAuthSchema = Joi.object({
+  initData: Joi.string().trim().required().messages({
+    "any.required": "MAX initData is required",
+    "string.empty": "MAX initData cannot be empty",
+  }),
+  remember_me: Joi.boolean().default(false),
+  platform: Joi.string().trim().allow("", null),
+});
+
 /**
  * Refresh token schema
  */

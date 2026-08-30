@@ -1,7 +1,6 @@
 import { HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
-import { logger } from "../../core/utils/logger.js";
 
 /**
  * Improved Auth Controller with enhanced security
@@ -19,7 +18,9 @@ export class AuthController {
     revokeSessionUseCase,
     revokeAllSessionsUseCase,
     userRepository,
-    tokenService
+    tokenService,
+    authenticateMaxUserUseCase,
+    linkPlatformUseCase
   ) {
     this.authenticateUserUseCase = authenticateUserUseCase;
     this.refreshTokenUseCase = refreshTokenUseCase;
@@ -29,7 +30,83 @@ export class AuthController {
     this.revokeAllSessionsUseCase = revokeAllSessionsUseCase;
     this.userRepository = userRepository;
     this.tokenService = tokenService;
+    this.authenticateMaxUserUseCase = authenticateMaxUserUseCase;
+    this.linkPlatformUseCase = linkPlatformUseCase;
   }
+
+  /**
+   * Authenticate user via MAX Mini App initData
+   * POST /api/auth/max
+   */
+  authenticateMax = asyncHandler(async (req, res) => {
+    const initData = req.body?.initData;
+    if (!initData) {
+      throw new ValidationError("MAX initData is required");
+    }
+
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const rememberMe = Boolean(req.body?.remember_me);
+
+    const result = await this.authenticateMaxUserUseCase.execute(
+      initData,
+      deviceInfo,
+      rememberMe
+    );
+
+    const responseData = {
+      success: true,
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: this.tokenService.getAccessTokenExpiration(),
+      },
+    };
+
+    res.status(HTTP_STATUS.OK).json(responseData);
+  });
+
+  /**
+   * Link MAX identity to the current (authenticated) user
+   * POST /api/auth/link/max
+   */
+  linkMax = asyncHandler(async (req, res) => {
+    const initData = req.body?.initData;
+    if (!initData) {
+      throw new ValidationError("MAX initData is required");
+    }
+
+    const user = await this.linkPlatformUseCase.linkMax(
+      req.user.user_id,
+      initData
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        user: user.toJSON(),
+      },
+    });
+  });
+
+  /**
+   * Link Telegram identity to the current (authenticated) user
+   * POST /api/auth/link/telegram
+   */
+  linkTelegram = asyncHandler(async (req, res) => {
+    const result = await this.linkPlatformUseCase.linkTelegram(
+      req.user.user_id,
+      req.body
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        user: result.user.toJSON(),
+        switchedToUserId: result.switchedToUserId,
+      },
+    });
+  });
 
   /**
    * Authenticate user via Telegram
@@ -141,7 +218,9 @@ export class AuthController {
    */
   getSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
-    const currentRefreshToken = req.cookies?.refreshToken;
+    const currentRefreshTokenStack = [req.body?.refreshToken, req.cookies?.refreshToken];
+    const currentRefreshToken =
+      currentRefreshTokenStack.find((t) => typeof t === 'string' && t.length > 0) ?? null;
 
     const sessions = await this.getUserSessionsUseCase.execute(
       userId,
@@ -176,7 +255,7 @@ export class AuthController {
    */
   revokeAllOtherSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
-    const currentRefreshToken = req.cookies?.refreshToken;
+    const currentRefreshToken = req.body?.refreshToken ?? req.cookies?.refreshToken ?? null;
 
     const result = await this.revokeAllSessionsUseCase.execute(
       userId,

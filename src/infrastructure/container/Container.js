@@ -35,6 +35,8 @@ import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTok
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
 import { UploadAvatarUseCase } from "../../application/use-cases/user/UploadAvatarUseCase.js";
 import { LogoutUseCase } from "../../application/use-cases/user/LogoutUseCase.js";
+import { AuthenticateMaxUserUseCase } from "../../application/use-cases/user/AuthenticateMaxUserUseCase.js";
+import { LinkPlatformUseCase } from "../../application/use-cases/user/LinkPlatformUseCase.js";
 
 // Use Cases - Session
 import { GetUserSessionsUseCase } from "../../application/use-cases/session/GetUserSessionsUseCase.js";
@@ -340,6 +342,27 @@ export class Container {
         )
     );
 
+    // Use Cases - MAX
+    this.register(
+      "authenticateMaxUserUseCase",
+      (container) =>
+        new AuthenticateMaxUserUseCase(
+          container.resolve("userRepository"),
+          container.resolve("tokenService"),
+          container.resolve("refreshTokenRepository")
+        )
+    );
+
+    this.register(
+      "linkPlatformUseCase",
+      (container) =>
+        new LinkPlatformUseCase(
+          container.resolve("userRepository"),
+          container.resolve("authenticateUserUseCase"),
+          container.resolve("authenticateMaxUserUseCase")
+        )
+    );
+
     // Use Cases - Session
     this.register(
       "getUserSessionsUseCase",
@@ -424,7 +447,9 @@ export class Container {
           container.resolve("revokeSessionUseCase"),
           container.resolve("revokeAllSessionsUseCase"),
           container.resolve("userRepository"),
-          container.resolve("tokenService")
+          container.resolve("tokenService"),
+          container.resolve("authenticateMaxUserUseCase"),
+          container.resolve("linkPlatformUseCase")
         )
     );
 

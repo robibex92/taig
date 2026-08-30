@@ -10,8 +10,14 @@ export class UserEntity {
     this.first_name = data.first_name;
     this.last_name = data.last_name || null;
     this.avatar = data.avatar || null;
+    this.telegram_id = data.telegram_id ?? null;
     this.telegram_first_name = data.telegram_first_name || null;
     this.telegram_last_name = data.telegram_last_name || null;
+    this.max_id = data.max_id ?? null;
+    this.max_username = data.max_username || null;
+    this.max_first_name = data.max_first_name || null;
+    this.max_last_name = data.max_last_name || null;
+    this.max_avatar = data.max_avatar || null;
     this.is_manually_updated = data.is_manually_updated || false;
     this.status = data.status || USER_ROLES.ACTIVE;
     this.refresh_token = data.refresh_token || null;
@@ -77,6 +83,12 @@ export class UserEntity {
       "avatar",
       "telegram_first_name",
       "telegram_last_name",
+      "telegram_id",
+      "max_id",
+      "max_username",
+      "max_first_name",
+      "max_last_name",
+      "max_avatar",
       "is_manually_updated",
       "status",
     ];
@@ -104,20 +116,37 @@ export class UserEntity {
     this.refresh_token = null;
   }
 
+  hasTelegram() {
+    return this.telegram_id != null;
+  }
+
+  hasMax() {
+    return this.max_id != null;
+  }
+
   /**
    * Convert to plain object (excluding sensitive data)
    */
   toJSON() {
+    const toNum = (v) => (v == null ? null : Number(v));
     return {
-      user_id: this.user_id,
+      user_id: toNum(this.user_id),
       username: this.username,
       first_name: this.first_name,
       last_name: this.last_name,
       avatar: this.avatar,
+      telegram_id: toNum(this.telegram_id),
       telegram_first_name: this.telegram_first_name,
       telegram_last_name: this.telegram_last_name,
+      max_id: toNum(this.max_id),
+      max_username: this.max_username,
+      max_first_name: this.max_first_name,
+      max_last_name: this.max_last_name,
+      max_avatar: this.max_avatar,
       is_manually_updated: this.is_manually_updated,
       status: this.status,
+      platforms_linked: this.hasTelegram() && this.hasMax(),
+      primary_platform: this.hasTelegram() ? "telegram" : this.hasMax() ? "max" : "telegram",
       joined_at: this.joined_at,
       created_at: this.created_at,
       updated_at: this.updated_at,

@@ -98,6 +98,7 @@ export class AuthenticateUserUseCase {
       // Create new user
       user = await this.userRepository.create({
         user_id: id,
+        telegram_id: id,
         username: username || null,
         first_name,
         last_name: last_name || null,

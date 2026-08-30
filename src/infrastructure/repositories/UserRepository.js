@@ -33,8 +33,11 @@ export class UserRepository extends IUserRepository {
    */
   async findByTelegramId(telegramId) {
     try {
-      const user = await prisma.user.findUnique({
-        where: { user_id: BigInt(telegramId) },
+      const id = BigInt(telegramId);
+      const user = await prisma.user.findFirst({
+        where: {
+          OR: [{ telegram_id: id }, { user_id: id, telegram_id: null, max_id: null }],
+        },
       });
 
       if (!user) {
@@ -79,20 +82,46 @@ export class UserRepository extends IUserRepository {
    */
   async create(userData) {
     try {
-      const { user_id, username, first_name, last_name, avatar } = userData;
+      const {
+        user_id,
+        username,
+        first_name,
+        last_name,
+        avatar,
+        telegram_id,
+        max_id,
+        max_username,
+        max_first_name,
+        max_last_name,
+        max_avatar,
+      } = userData;
 
-      const user = await prisma.user.create({
-        data: {
-          user_id: BigInt(user_id),
-          username: username || null,
-          first_name: first_name || null,
-          last_name: last_name || null,
-          avatar: avatar || null,
-          joined_at: new Date(),
-        },
-      });
+      const data = {
+        username: username || null,
+        first_name: first_name || null,
+        last_name: last_name || null,
+        avatar: avatar || null,
+        joined_at: new Date(),
+        telegram_id:
+          telegram_id != null
+            ? BigInt(telegram_id)
+            : user_id != null && max_id == null && telegram_id === undefined
+              ? BigInt(user_id)
+              : null,
+        max_id: max_id != null ? BigInt(max_id) : null,
+        max_username: max_username || null,
+        max_first_name: max_first_name || null,
+        max_last_name: max_last_name || null,
+        max_avatar: max_avatar || null,
+      };
 
-      logger.info("User created", { user_id: user.user_id });
+      if (user_id != null) {
+        data.user_id = BigInt(user_id);
+      }
+
+      const user = await prisma.user.create({ data });
+
+      logger.info("User created", { user_id: user.user_id, max_id: user.max_id });
       return new UserEntity(user);
     } catch (error) {
       logger.error("Error creating user", { error: error.message });
@@ -104,9 +133,8 @@ export class UserRepository extends IUserRepository {
    * Update a user
    */
   async update(id, data) {
+    let updateData = {};
     try {
-      const updateData = {};
-
       const allowedFields = [
         "username",
         "first_name",
@@ -114,6 +142,12 @@ export class UserRepository extends IUserRepository {
         "avatar",
         "telegram_first_name",
         "telegram_last_name",
+        "telegram_id",
+        "max_id",
+        "max_username",
+        "max_first_name",
+        "max_last_name",
+        "max_avatar",
         "is_manually_updated",
         "status",
       ];
@@ -123,6 +157,11 @@ export class UserRepository extends IUserRepository {
           // Trim string fields
           if (typeof data[field] === "string" && field !== "avatar") {
             updateData[field] = data[field].trim();
+          } else if (field === "is_manually_updated" && typeof data[field] === "boolean") {
+            // Prisma schema expects String for is_manually_updated
+            updateData[field] = data[field] ? "true" : "false";
+          } else if (field === "telegram_id" || field === "max_id") {
+            updateData[field] = data[field] == null ? null : BigInt(data[field]);
           } else {
             updateData[field] = data[field];
           }

@@ -19,6 +19,12 @@ model User {
   is_manually_updated String?
   telegram_first_name String?
   telegram_last_name  String?
+  telegram_id         BigInt?             @unique
+  max_id              BigInt?             @unique
+  max_username        String?
+  max_first_name      String?
+  max_last_name       String?
+  max_avatar          String?
   status              String? @default("active")
   refresh_token       String?             @db.VarChar(500)
   bookings            Booking[]

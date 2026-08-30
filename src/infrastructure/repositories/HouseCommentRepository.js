@@ -188,48 +188,33 @@ export class HouseCommentRepository {
 
   /**
    * Get simple comment text for a house by house number (no author details)
+   * Только точное совпадение: "39" — только для "39", "39/1" — только для "39/1"
    */
   async findSimpleCommentByHouseNumber(houseNumber) {
     try {
-      console.log(`Looking for comments with house_id: "${houseNumber}"`);
+      if (!houseNumber || typeof houseNumber !== "string") {
+        return null;
+      }
 
-      // Находим house_id по номеру дома
+      houseNumber = String(houseNumber).trim();
+
       const house = await prisma.house.findFirst({
-        where: {
-          house: houseNumber,
-        },
-        select: {
-          id: true,
-        },
+        where: { house: houseNumber },
+        select: { id: true },
       });
 
       if (!house) {
         return null;
       }
 
-      // Ищем комментарии по найденному house_id
       const comments = await prisma.houseComment.findMany({
-        where: {
-          house_id: house.id,
-        },
-        select: {
-          comment: true,
-          author_id: true,
-        },
+        where: { house_id: house.id },
+        select: { comment: true },
         orderBy: { created_at: "desc" },
+        take: 1,
       });
 
-      console.log(
-        `Found ${comments.length} comments for house ${houseNumber}:`,
-        comments
-      );
-
-      // Возвращаем первый комментарий (самый новый), если он есть
-      const latestComment = comments.length > 0 ? comments[0] : null;
-
-      console.log(`Latest comment found:`, latestComment);
-
-      return latestComment ? latestComment.comment : null;
+      return comments.length > 0 ? comments[0].comment : null;
     } catch (error) {
       logger.error("Error finding simple comment by house number:", error);
       throw error;

@@ -454,11 +454,9 @@ export class HouseController {
       if (!entrance || isNaN(entrance)) {
         return res.status(400).json({ error: "Invalid entrance number" });
       }
+
+      house_id = String(house_id).trim();
   
-      // 🟢 Определяем, что за house_id:
-      // - число → это ID из БД
-      // - строка с "/" → дом вида "37/1"
-      // - строка без "/" → дом "37"
       const house = await prisma.house.findFirst({
         where: { house: house_id },
         select: { id: true, house: true },
@@ -468,22 +466,15 @@ export class HouseController {
         return res.status(404).json({ error: "House not found" });
       }
 
-      // 1. Ищем комментарий по КОРРЕКТНОМУ ID дома (для новых данных)
       let comment = await prisma.entranceComment.findFirst({
-        where: {
-          house_id: house.id,
-          entrance,
-        },
+        where: { house_id: house.id, entrance },
         orderBy: { created_at: "desc" },
       });
 
-      // 2. Если не нашли, ищем по НЕПРАВИЛЬНОМУ ID (для старых данных, где в house_id записан номер дома)
+      // Fallback для старых данных (house_id как номер дома)
       if (!comment && /^\d+$/.test(house_id)) {
         comment = await prisma.entranceComment.findFirst({
-          where: {
-            house_id: BigInt(house_id), // Используем номер дома как ID
-            entrance,
-          },
+          where: { house_id: BigInt(house_id), entrance },
           orderBy: { created_at: "desc" },
         });
       }
