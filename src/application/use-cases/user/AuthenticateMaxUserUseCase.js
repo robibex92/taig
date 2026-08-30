@@ -11,6 +11,52 @@ export class AuthenticateMaxUserUseCase {
     this.userRepository = userRepository;
     this.tokenService = tokenService;
     this.refreshTokenRepository = refreshTokenRepository;
+    this._loginCodes = new Map();
+    this.LOGIN_CODE_TTL_MS = 5 * 60 * 1000;
+  }
+
+  _sweepLoginCodes() {
+    const now = Date.now();
+    for (const [code, entry] of this._loginCodes) {
+      if (entry.expiresAt < now) {
+        this._loginCodes.delete(code);
+      }
+    }
+  }
+
+  createLoginCode(userId) {
+    this._sweepLoginCodes();
+    const code = crypto.randomBytes(32).toString("hex");
+    this._loginCodes.set(code, {
+      userId,
+      expiresAt: Date.now() + this.LOGIN_CODE_TTL_MS,
+    });
+    return code;
+  }
+
+  async claimLoginCode(code, deviceInfo = {}, rememberMe = false) {
+    if (typeof code !== "string" || code.length < 8) {
+      throw new AuthenticationError("Invalid MAX login code");
+    }
+
+    const entry = this._loginCodes.get(code);
+    this._loginCodes.delete(code);
+
+    if (!entry) {
+      throw new AuthenticationError("Login code is invalid or has expired");
+    }
+    if (entry.expiresAt < Date.now()) {
+      throw new AuthenticationError("Login code has expired");
+    }
+
+    const user = await this.userRepository.findById(entry.userId);
+    if (!user) {
+      throw new AuthenticationError("User not found");
+    }
+
+    logger.info("MAX login code claimed", { user_id: user.user_id });
+
+    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
   verifyInitData(initData) {
@@ -173,6 +219,11 @@ export class AuthenticateMaxUserUseCase {
     }
 
     const user = await this.findOrCreateMaxUser(maxUser);
-    return this.issueSession(user, deviceInfo, rememberMe);
+    const session = await this.issueSession(user, deviceInfo, rememberMe);
+
+    return {
+      ...session,
+      loginCode: this.createLoginCode(user.user_id),
+    };
   }
 }

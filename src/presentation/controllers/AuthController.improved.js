@@ -59,11 +59,42 @@ export class AuthController {
         user: result.user,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
+        loginCode: result.loginCode || null,
         expiresIn: this.tokenService.getAccessTokenExpiration(),
       },
     };
 
     res.status(HTTP_STATUS.OK).json(responseData);
+  });
+
+  /**
+   * Exchange a one-time MAX login code for a fresh session (issued for the site)
+   * POST /api/auth/max/claim
+   */
+  claimMax = asyncHandler(async (req, res) => {
+    const code = req.body?.code;
+    if (!code) {
+      throw new ValidationError("MAX login code is required");
+    }
+
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const rememberMe = Boolean(req.body?.remember_me);
+
+    const result = await this.authenticateMaxUserUseCase.claimLoginCode(
+      code,
+      deviceInfo,
+      rememberMe
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: this.tokenService.getAccessTokenExpiration(),
+      },
+    });
   });
 
   /**

@@ -5,6 +5,7 @@ import { validateRequest } from "../../core/validation/validator.js";
 import {
   telegramAuthSchema,
   maxAuthSchema,
+  maxClaimCodeSchema,
   sessionIdSchema,
 } from "../../core/validation/schemas/auth.schema.js";
 import { authLimiter } from "../middlewares/securityMiddleware.js";
@@ -25,6 +26,13 @@ router.post(
   authLimiter,
   validateRequest(maxAuthSchema, "body"),
   authController.authenticateMax
+);
+
+router.post(
+  "/auth/max/claim",
+  authLimiter,
+  validateRequest(maxClaimCodeSchema, "body"),
+  authController.claimMax
 );
 
 // Refresh token - no rate limit (handled by general limiter)

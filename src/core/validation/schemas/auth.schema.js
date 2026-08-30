@@ -51,6 +51,14 @@ export const maxAuthSchema = Joi.object({
   platform: Joi.string().trim().allow("", null),
 });
 
+export const maxClaimCodeSchema = Joi.object({
+  code: Joi.string().trim().min(8).max(128).required().messages({
+    "any.required": "MAX login code is required",
+    "string.empty": "MAX login code cannot be empty",
+  }),
+  remember_me: Joi.boolean().default(false),
+});
+
 /**
  * Refresh token schema
  */
