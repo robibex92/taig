@@ -231,24 +231,35 @@ export class AuthController {
    */
   logout = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
-
-    // Get tokens
-    const accessToken = req.headers.authorization?.split(" ")[1];
-    const refreshToken = req.cookies?.refreshToken;
-
-    // Logout
-    await this.logoutUseCase.execute(userId, accessToken, refreshToken);
-
-    // Clear refresh token cookie
+  
+    const accessToken =
+      req.headers.authorization?.split(" ")[1] || null;
+  
+    const refreshToken =
+      req.body?.refreshToken ||
+      req.cookies?.refreshToken ||
+      null;
+  
+    await this.logoutUseCase.execute(
+      userId,
+      accessToken,
+      refreshToken
+    );
+  
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure:
+        process.env.NODE_ENV === "production",
+      sameSite:
+        process.env.NODE_ENV === "production"
+          ? "none"
+          : "lax",
     });
-
+  
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: "Logged out successfully",
+      message:
+        "Logged out successfully",
     });
   });
 
