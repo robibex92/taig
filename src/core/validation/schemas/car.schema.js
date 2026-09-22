@@ -7,7 +7,7 @@ import Joi from "joi";
 export const createCarSchema = Joi.object({
   user_id: Joi.number().integer().positive().allow(null).optional(),
   car_number: Joi.string().required(),
-  car_model: Joi.string().required(),
+  car_model: Joi.string().allow("").optional(),
   car_brand: Joi.string().required(),
   car_color: Joi.string().required(),
   info: Joi.any().optional(),

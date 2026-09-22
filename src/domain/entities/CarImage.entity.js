@@ -39,6 +39,8 @@ export class CarImage {
 
   /**
    * Convert to plain object
+   * Note: the whole gallery (including `comment`) is cars:admin-only content,
+   * so access is enforced at the route/use-case level, not per field.
    */
   toJSON() {
     return {
@@ -50,17 +52,5 @@ export class CarImage {
       created_at: this.created_at,
       updated_at: this.updated_at,
     };
-  }
-
-  /**
-   * Convert to JSON with admin-only fields hidden for non-admin users
-   */
-  toJSONForUser(isAdmin = false) {
-    const json = this.toJSON();
-    if (!isAdmin) {
-      // Hide comment from non-admin users
-      delete json.comment;
-    }
-    return json;
   }
 }

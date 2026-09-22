@@ -3,12 +3,13 @@ import {
   ForbiddenError,
   ValidationError,
 } from "../../../domain/errors/index.js";
+import { canManageHouse } from "../../../core/utils/roles.js";
 import logger from "../../../infrastructure/logger/index.js";
 
 /**
  * UpdateHouseInfoUseCase
  * Updates the info field for a specific apartment/house
- * Only admins can update house info
+ * Allowed for administrators and holders of the `house:<n>:manage` role
  */
 export class UpdateHouseInfoUseCase {
   constructor(houseRepository) {
@@ -23,17 +24,6 @@ export class UpdateHouseInfoUseCase {
    * @returns {Promise<object>} Updated house
    */
   async execute(houseId, info, user) {
-    // Validate user is admin
-    if (!user || user.status !== "admin") {
-      logger.warn("Non-admin user attempted to update house info", {
-        userId: user?.user_id,
-        houseId,
-      });
-      throw new ForbiddenError(
-        "Only administrators can update house information"
-      );
-    }
-
     // Validate info content
     if (info === undefined || info === null) {
       throw new ValidationError("Info field is required");
@@ -49,6 +39,18 @@ export class UpdateHouseInfoUseCase {
     const house = await this.houseRepository.findById(houseId);
     if (!house) {
       throw new NotFoundError("House not found");
+    }
+
+    // Check permission for this building
+    if (!canManageHouse(user, house.house)) {
+      logger.warn("Unauthorized attempt to update house info", {
+        userId: user?.user_id,
+        houseId,
+        house: house.house,
+      });
+      throw new ForbiddenError(
+        "Only administrators and building managers can update house information"
+      );
     }
 
     // Update house info

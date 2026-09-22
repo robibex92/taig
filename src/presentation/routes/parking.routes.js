@@ -1,7 +1,11 @@
 import express from "express";
 import { ParkingController } from "../controllers/ParkingController.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { requireAdmin } from "../middlewares/adminMiddleware.js";
+import {
+  authenticateJWT,
+  authenticateOptional,
+} from "../middlewares/authMiddleware.js";
+import { requireRoles } from "../../core/middlewares/checkRole.js";
+import { SERVICE_ROLES } from "../../core/utils/roles.js";
 
 const router = express.Router();
 const parkingController = new ParkingController();
@@ -19,7 +23,7 @@ const BASE_ROUTE = "/parking-spots";
  * @swagger
  * /api-v1/parking-spots:
  *   get:
- *     summary: Get all parking spots
+ *     summary: Get all parking spots (detailed data only for parking admins)
  *     tags: [Parking]
  *     responses:
  *       200:
@@ -27,7 +31,7 @@ const BASE_ROUTE = "/parking-spots";
  *       500:
  *         description: Internal Server Error
  */
-router.get(BASE_ROUTE, parkingController.getParkingSpots);
+router.get(BASE_ROUTE, authenticateOptional, parkingController.getParkingSpots);
 
 /**
  * @swagger
@@ -63,7 +67,11 @@ router.get("/parking/stats", parkingController.getParkingStats);
  *       500:
  *         description: Internal Server Error
  */
-router.get(`${BASE_ROUTE}/:id`, parkingController.getParkingSpotById);
+router.get(
+  `${BASE_ROUTE}/:id`,
+  authenticateOptional,
+  parkingController.getParkingSpotById
+);
 
 /**
  * @swagger
@@ -87,6 +95,8 @@ router.get(`${BASE_ROUTE}/:id`, parkingController.getParkingSpotById);
  */
 router.get(
   `${BASE_ROUTE}/:id/history`,
+  authenticateJWT,
+  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
   parkingController.getParkingSpotHistory
 );
 
@@ -202,7 +212,7 @@ router.put(
 router.post(
   "/parking/spots/:id/assign-owner",
   authenticateJWT,
-  requireAdmin,
+  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
   parkingController.assignOwner
 );
 
@@ -253,21 +263,21 @@ router.post(
  * @swagger
  * /api-v1/parking-spots:
  *   post:
- *     summary: Create parking spot (not implemented)
+ *     summary: Create parking spot (admins may set an owner)
  *     tags: [Parking]
  *     security:
  *       - bearerAuth: []
  *     responses:
- *       501:
- *         description: Not implemented
+ *       201:
+ *         description: Parking spot created
  */
-router.post(BASE_ROUTE, authenticateJWT, parkingController.createParkingSpot);
+router.post(BASE_ROUTE, authenticateJWT, requireRoles(SERVICE_ROLES.PARKING_ADMIN), parkingController.createParkingSpot);
 
 /**
  * @swagger
  * /api-v1/parking-spots/{id}:
  *   delete:
- *     summary: Delete parking spot (not implemented)
+ *     summary: Delete parking spot (owner or parking admin)
  *     tags: [Parking]
  *     security:
  *       - bearerAuth: []
@@ -278,8 +288,8 @@ router.post(BASE_ROUTE, authenticateJWT, parkingController.createParkingSpot);
  *         schema:
  *           type: integer
  *     responses:
- *       501:
- *         description: Not implemented
+ *       200:
+ *         description: Parking spot deleted
  */
 router.delete(
   `${BASE_ROUTE}/:id`,
@@ -289,9 +299,9 @@ router.delete(
 
 /**
  * @swagger
- * /api-v1/parking-spots/{id}/assign:
+ * /api-v1/parking-spots/{id}/unassign-owner:
  *   post:
- *     summary: Assign car to parking spot (not implemented)
+ *     summary: Free a parking spot from its owner (parking admin only)
  *     tags: [Parking]
  *     security:
  *       - bearerAuth: []
@@ -302,37 +312,16 @@ router.delete(
  *         schema:
  *           type: integer
  *     responses:
- *       501:
- *         description: Not implemented
+ *       200:
+ *         description: Owner removed
+ *       403:
+ *         description: Forbidden (not a parking admin)
  */
 router.post(
-  `${BASE_ROUTE}/:id/assign`,
+  "/parking/spots/:id/unassign-owner",
   authenticateJWT,
-  parkingController.assignCarToSpot
-);
-
-/**
- * @swagger
- * /api-v1/parking-spots/{id}/free:
- *   post:
- *     summary: Free parking spot (not implemented)
- *     tags: [Parking]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       501:
- *         description: Not implemented
- */
-router.post(
-  `${BASE_ROUTE}/:id/free`,
-  authenticateJWT,
-  parkingController.freeParkingSpot
+  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
+  parkingController.unassignOwner
 );
 
 export default router;

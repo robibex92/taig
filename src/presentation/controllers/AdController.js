@@ -1,6 +1,7 @@
 import { HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import { logger } from "../../core/utils/logger.js";
+import { isAdmin } from "../../core/utils/roles.js";
 
 /**
  * Ad Controller - handles HTTP requests for ads
@@ -167,7 +168,7 @@ export class AdController {
 
     if (
       String(ad.user_id) !== String(authenticatedUserId) &&
-      req.user.status !== "admin"
+      !isAdmin(req.user)
     ) {
       throw new Error("You can only permanently delete your own ads");
     }

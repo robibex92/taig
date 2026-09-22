@@ -5,10 +5,16 @@ import { asyncHandler } from "../../core/utils/asyncHandler.js";
  * Handles admin panel requests
  */
 export class AdminController {
-  constructor(getAllUsersUseCase, updateUserRoleUseCase, getStatisticsUseCase) {
+  constructor(
+    getAllUsersUseCase,
+    updateUserRolesUseCase,
+    getStatisticsUseCase,
+    getRoleCatalogUseCase
+  ) {
     this.getAllUsersUseCase = getAllUsersUseCase;
-    this.updateUserRoleUseCase = updateUserRoleUseCase;
+    this.updateUserRolesUseCase = updateUserRolesUseCase;
     this.getStatisticsUseCase = getStatisticsUseCase;
+    this.getRoleCatalogUseCase = getRoleCatalogUseCase;
   }
 
   /**
@@ -37,22 +43,23 @@ export class AdminController {
   });
 
   /**
-   * Update user role
-   * PATCH /api-v1/admin/users/:id/role
+   * Update user roles
+   * PATCH /api-v1/admin/users/:id/roles
    */
-  updateUserRole = asyncHandler(async (req, res) => {
+  updateUserRoles = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { role } = req.body;
+    const { roles } = req.body;
 
-    const user = await this.updateUserRoleUseCase.execute({
-      user_id: parseInt(id),
-      new_role: role,
+    const user = await this.updateUserRolesUseCase.execute({
+      actor_user_id: req.user.user_id,
+      target_user_id: parseInt(id),
+      roles,
     });
 
     res.json({
       success: true,
       data: user,
-      message: `User role updated to ${role}`,
+      message: "User roles updated",
     });
   });
 
@@ -66,6 +73,19 @@ export class AdminController {
     res.json({
       success: true,
       data: stats,
+    });
+  });
+
+  /**
+   * Get assignable roles catalog (global, services, per-house)
+   * GET /api-v1/admin/roles
+   */
+  getRoleCatalog = asyncHandler(async (req, res) => {
+    const catalog = await this.getRoleCatalogUseCase.execute();
+
+    res.json({
+      success: true,
+      data: catalog,
     });
   });
 }

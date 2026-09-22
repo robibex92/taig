@@ -5,6 +5,49 @@ import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
 
 /**
+ * Prisma where-clause for the admin user list (search + role filters).
+ * `role` matches one role, `excludeRoles` matches users holding none of them.
+ */
+function buildUserWhere({ search, role, excludeRoles } = {}) {
+  const AND = [];
+
+  if (search) {
+    const textSearch = {
+      OR: [
+        { username: { contains: search, mode: "insensitive" } },
+        { first_name: { contains: search, mode: "insensitive" } },
+        { last_name: { contains: search, mode: "insensitive" } },
+      ],
+    };
+
+    // Administrators search residents by Telegram / MAX / internal ID as often as by name
+    const numericId = /^\d+$/.test(search.trim()) ? BigInt(search.trim()) : null;
+    AND.push(
+      numericId === null
+        ? textSearch
+        : {
+            OR: [
+              ...textSearch.OR,
+              { user_id: numericId },
+              { telegram_id: numericId },
+              { max_id: numericId },
+            ],
+          }
+    );
+  }
+
+  if (role) {
+    AND.push({ roles: { has: role } });
+  }
+
+  if (Array.isArray(excludeRoles) && excludeRoles.length) {
+    AND.push({ NOT: { roles: { hasSome: excludeRoles } } });
+  }
+
+  return AND.length ? { AND } : {};
+}
+
+/**
  * Prisma implementation of User Repository
  */
 export class UserRepository extends IUserRepository {
@@ -149,13 +192,15 @@ export class UserRepository extends IUserRepository {
         "max_last_name",
         "max_avatar",
         "is_manually_updated",
-        "status",
+        "roles",
       ];
 
       allowedFields.forEach((field) => {
         if (data[field] !== undefined) {
           // Trim string fields
-          if (typeof data[field] === "string" && field !== "avatar") {
+          if (field === "roles") {
+            updateData[field] = Array.isArray(data.roles) ? data.roles : [];
+          } else if (typeof data[field] === "string" && field !== "avatar") {
             updateData[field] = data[field].trim();
           } else if (field === "is_manually_updated" && typeof data[field] === "boolean") {
             // Prisma schema expects String for is_manually_updated
@@ -261,29 +306,27 @@ export class UserRepository extends IUserRepository {
   }
 
   /**
-   * Update user role/status
+   * Replace the user's role list
    */
-  async updateRole(userId, newRole) {
+  async setRoles(userId, roles) {
     try {
       const user = await prisma.user.update({
         where: { user_id: BigInt(userId) },
-        data: {
-          status: newRole,
-        },
+        data: { roles },
       });
 
-      logger.info("User role updated", { user_id: userId, new_role: newRole });
+      logger.info("User roles updated", { user_id: userId, roles });
       return new UserEntity(user);
     } catch (error) {
       if (error.code === "P2025") {
         throw new NotFoundError("User");
       }
-      logger.error("Error updating user role", {
+      logger.error("Error updating user roles", {
         error: error.message,
         userId,
-        newRole,
+        roles,
       });
-      throw new DatabaseError("Failed to update user role", error);
+      throw new DatabaseError("Failed to update user roles", error);
     }
   }
 
@@ -292,29 +335,8 @@ export class UserRepository extends IUserRepository {
    */
   async findAll(options = {}) {
     try {
-      const { limit = 50, offset = 0, search, status } = options;
-
-      const where = {};
-
-      // Search filter
-      if (search) {
-        where.OR = [
-          { username: { contains: search, mode: "insensitive" } },
-          { first_name: { contains: search, mode: "insensitive" } },
-          { last_name: { contains: search, mode: "insensitive" } },
-        ];
-      }
-
-      // Status/role filter
-      if (status) {
-        // For "active" status (regular users), include both "active" and NULL
-        if (status === "active") {
-          where.OR = where.OR || [];
-          where.OR.push({ status: "active" }, { status: null });
-        } else {
-          where.status = status;
-        }
-      }
+      const { limit = 50, offset = 0 } = options;
+      const where = buildUserWhere(options);
 
       const users = await prisma.user.findMany({
         where,
@@ -338,29 +360,7 @@ export class UserRepository extends IUserRepository {
    */
   async count(filters = {}) {
     try {
-      const where = {};
-
-      // Search filter
-      if (filters.search) {
-        where.OR = [
-          { username: { contains: filters.search, mode: "insensitive" } },
-          { first_name: { contains: filters.search, mode: "insensitive" } },
-          { last_name: { contains: filters.search, mode: "insensitive" } },
-        ];
-      }
-
-      // Status/role filter
-      if (filters.status) {
-        // For "active" status (regular users), include both "active" and NULL
-        if (filters.status === "active") {
-          where.OR = where.OR || [];
-          where.OR.push({ status: "active" }, { status: null });
-        } else {
-          where.status = filters.status;
-        }
-      }
-
-      const count = await prisma.user.count({ where });
+      const count = await prisma.user.count({ where: buildUserWhere(filters) });
       return count;
     } catch (error) {
       logger.error("Error counting users", {

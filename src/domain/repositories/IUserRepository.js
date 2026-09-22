@@ -69,12 +69,12 @@ export class IUserRepository {
   }
 
   /**
-   * Update user role/status
+   * Replace the user's role list
    * @param {number} userId - User ID
-   * @param {string} newRole - New role (user/moderator/admin)
+   * @param {string[]} roles - Roles from the vocabulary in core/utils/roles.js
    * @returns {Promise<UserEntity>}
    */
-  async updateRole(userId, newRole) {
+  async setRoles(userId, roles) {
     throw new Error("Method not implemented");
   }
 

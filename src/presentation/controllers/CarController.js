@@ -126,10 +126,10 @@ export class CarController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const updateData = req.body;
     const updatedCar = await this.updateCarUseCase.execute(
       parseInt(req.params.id),
-      updateData
+      req.body,
+      req.user
     );
 
     if (!updatedCar) {
@@ -157,7 +157,7 @@ export class CarController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const car = await this.createCarUseCase.execute(req.body);
+    const car = await this.createCarUseCase.execute(req.body, req.user);
 
     res.status(201).json({
       success: true,
@@ -178,7 +178,7 @@ export class CarController {
       throw new ValidationError(error.details[0].message);
     }
 
-    await this.deleteCarUseCase.execute(parseInt(req.params.id));
+    await this.deleteCarUseCase.execute(parseInt(req.params.id), req.user);
 
     res.status(204).send();
   });
@@ -189,7 +189,9 @@ export class CarController {
 
   /**
    * GET /api-v1/cars/:id/images
-   * Get all images for a specific car
+   * Get all images for a specific car.
+   * The gallery is cars:admin territory; the use case additionally lets the
+   * owner of this car read it and answers 403 for everyone else.
    */
   getCarImages = asyncHandler(async (req, res) => {
     const { error } = carIdSchema.validate({
@@ -200,10 +202,9 @@ export class CarController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const isAdmin = req.user?.role === true;
     const images = await this.getCarImagesUseCase.execute(
       parseInt(req.params.id),
-      isAdmin
+      req.user
     );
 
     res.json({

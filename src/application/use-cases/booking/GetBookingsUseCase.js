@@ -71,7 +71,7 @@ export class GetBookingsUseCase {
         throw new ValidationError("User ID is required");
       }
 
-      // Get user info to check status
+      // Get user info for the log context
       const user = await this.userRepository.findById(userId);
 
       // Get user's bookings
@@ -82,7 +82,7 @@ export class GetBookingsUseCase {
 
       logger.info("User bookings retrieved successfully", {
         userId,
-        userStatus: user?.status || null,
+        userRoles: user?.roles ?? [],
         bookingStatus: status,
         count: bookings.length,
       });

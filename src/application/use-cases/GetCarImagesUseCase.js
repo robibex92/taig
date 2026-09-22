@@ -1,8 +1,10 @@
-import { AppError } from "../../core/errors/AppError.js";
+import { AppError, AuthorizationError } from "../../core/errors/AppError.js";
+import { isCarsAdmin } from "../../core/utils/roles.js";
 
 /**
  * Get Car Images Use Case
- * Retrieves all images for a specific car
+ * The gallery is editorial content: only car administrators may read it.
+ * Single exception — the owner of the car may see the photos of their own car.
  */
 export class GetCarImagesUseCase {
   constructor(carImageRepository, carRepository) {
@@ -10,17 +12,24 @@ export class GetCarImagesUseCase {
     this.carRepository = carRepository;
   }
 
-  async execute(carId, isAdmin = false) {
+  async execute(carId, viewer = null) {
     // Check if car exists
     const car = await this.carRepository.findById(carId);
     if (!car) {
       throw new AppError("Car not found", 404);
     }
 
-    // Get all images for the car
+    const isOwner =
+      viewer?.user_id != null && String(car.user_id) === String(viewer.user_id);
+
+    if (!isCarsAdmin(viewer) && !isOwner) {
+      throw new AuthorizationError(
+        "Галерея автомобиля доступна только администратору автомобилей"
+      );
+    }
+
     const images = await this.carImageRepository.getByCarId(carId);
 
-    // Return images with appropriate visibility based on user role
-    return images.map((image) => image.toJSONForUser(isAdmin));
+    return images.map((image) => image.toJSON());
   }
 }

@@ -1,5 +1,6 @@
-import { AuthenticationError } from "../../core/errors/AppError.js";
+import { AuthenticationError, AuthorizationError } from "../../core/errors/AppError.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
+import { hasAnyRole, isBlocked } from "../../core/utils/roles.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 import { container } from "../../infrastructure/container/Container.js";
 
@@ -38,7 +39,7 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
 
   req.user = {
     user_id: user.user_id,
-    status: user.status || "active",
+    roles: user.roles || [],
     username: user.username,
     first_name: user.first_name,
   };
@@ -78,7 +79,7 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
       if (user) {
         req.user = {
           user_id: user.user_id,
-          status: user.status || "active",
+          roles: user.roles || [],
           username: user.username,
           first_name: user.first_name,
         };
@@ -106,8 +107,8 @@ export const authenticateConditional = authenticateOptional;
 export const authenticate = authenticateJWT;
 
 /**
- * Middleware to authorize based on roles
- * @param {...string} allowedRoles - Array of allowed roles
+ * Middleware to authorize based on the user's role list.
+ * @param {...string} allowedRoles - Roles from core/utils/roles.js vocabulary
  */
 export const authorize = (...allowedRoles) => {
   return asyncHandler(async (req, res, next) => {
@@ -115,16 +116,13 @@ export const authorize = (...allowedRoles) => {
       throw new AuthenticationError("Authentication required");
     }
 
-    // If no roles specified, just check if user is authenticated
-    if (allowedRoles.length === 0) {
-      return next();
+    if (isBlocked(req.user)) {
+      throw new AuthorizationError("Account is blocked");
     }
 
-    // Check if user has required role (using status field)
-    const userRole = req.user.status || "user";
-    if (!allowedRoles.includes(userRole)) {
-      throw new AuthenticationError(
-        `Access denied. Required role: ${allowedRoles.join(" or ")}`
+    if (allowedRoles.length > 0 && !hasAnyRole(req.user, allowedRoles)) {
+      throw new AuthorizationError(
+        `Access denied. Required role(s): ${allowedRoles.join(", ")}`
       );
     }
 

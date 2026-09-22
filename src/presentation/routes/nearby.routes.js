@@ -1,6 +1,9 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import {
+  authenticateJWT,
+  authenticateOptional,
+} from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 const houseController = container.resolve("houseController");
@@ -36,9 +39,13 @@ router.get("/nearby/user/:id_telegram", houseController.getUserHouses);
 /**
  * @route   GET /nearby/:id/info
  * @desc    Get info for a specific house
- * @access  Public
+ * @access  Private (staff, or a user holding house:<n>:view for this building)
  */
-router.get("/nearby/:id/info", houseController.getHouseInfo);
+router.get(
+  "/nearby/:id/info",
+  authenticateOptional,
+  houseController.getHouseInfo
+);
 
 /**
  * @route   POST /nearby

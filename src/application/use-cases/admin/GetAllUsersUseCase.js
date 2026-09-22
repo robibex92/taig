@@ -17,11 +17,7 @@ export class GetAllUsersUseCase {
     }
 
     if (role) {
-      filters.status = role;
-      logger.info("[GetAllUsersUseCase] Filtering by role", {
-        role,
-        status: filters.status,
-      });
+      filters.role = role;
     }
 
     logger.info("[GetAllUsersUseCase] Executing with filters", {
@@ -32,18 +28,15 @@ export class GetAllUsersUseCase {
       filters,
     });
 
-    const users = await this.userRepository.findAll({
-      limit,
-      offset,
-      ...filters,
-    });
+    const [users, total] = await Promise.all([
+      this.userRepository.findAll({ limit, offset, ...filters }),
+      this.userRepository.count(filters),
+    ]);
 
     logger.info("[GetAllUsersUseCase] Users found", {
       count: users.length,
-      total: await this.userRepository.count(filters),
+      total,
     });
-
-    const total = await this.userRepository.count(filters);
 
     return {
       users,

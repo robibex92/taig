@@ -1,4 +1,4 @@
-import { USER_STATUS, USER_ROLES } from "../../core/constants/index.js";
+import { isBlocked } from "../../core/utils/roles.js";
 
 /**
  * User Entity - represents a user in the system
@@ -19,43 +19,26 @@ export class UserEntity {
     this.max_last_name = data.max_last_name || null;
     this.max_avatar = data.max_avatar || null;
     this.is_manually_updated = data.is_manually_updated || false;
-    this.status = data.status || USER_ROLES.ACTIVE;
+    this.roles = Array.isArray(data.roles) ? [...data.roles] : [];
     this.refresh_token = data.refresh_token || null;
     // Используем реальные даты из базы данных, не перезаписываем их
     this.joined_at = data.joined_at;
     this.created_at = data.joined_at; // Для совместимости
     this.updated_at = data.updated_at;
-
-    // Временное логирование для отладки
-    if (data.user_id === "245946670") {
-      console.log("UserEntity constructor debug:", {
-        user_id: data.user_id,
-        joined_at_from_db: data.joined_at,
-        updated_at_from_db: data.updated_at,
-        joined_at_final: this.joined_at,
-        created_at_final: this.created_at,
-        updated_at_final: this.updated_at,
-      });
-    }
   }
 
   /**
-   * Check if user is active
+   * Check if user account is usable (not blocked)
    */
   isActive() {
-    // User is active if status is "active", null, or any role except "blocked"
-    return (
-      this.status !== USER_ROLES.BLOCKED &&
-      this.status !== USER_STATUS.BANNED &&
-      this.status !== USER_STATUS.BLOCKING
-    );
+    return !isBlocked(this);
   }
 
   /**
    * Check if user is banned
    */
   isBanned() {
-    return this.status === USER_STATUS.BANNED;
+    return isBlocked(this);
   }
 
   /**
@@ -90,12 +73,12 @@ export class UserEntity {
       "max_last_name",
       "max_avatar",
       "is_manually_updated",
-      "status",
+      "roles",
     ];
 
     allowedFields.forEach((field) => {
       if (data[field] !== undefined) {
-        this[field] = data[field];
+        this[field] = field === "roles" ? [...data.roles] : data[field];
       }
     });
 
@@ -144,7 +127,7 @@ export class UserEntity {
       max_last_name: this.max_last_name,
       max_avatar: this.max_avatar,
       is_manually_updated: this.is_manually_updated,
-      status: this.status,
+      roles: this.roles,
       platforms_linked: this.hasTelegram() && this.hasMax(),
       primary_platform: this.hasTelegram() ? "telegram" : this.hasMax() ? "max" : "telegram",
       joined_at: this.joined_at,

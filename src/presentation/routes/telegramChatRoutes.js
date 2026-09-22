@@ -1,6 +1,7 @@
 import express from "express";
 import container from "../../infrastructure/container/Container.js";
 import { authenticate, authorize } from "../middlewares/authMiddleware.js";
+import { GLOBAL_ROLES } from "../../core/utils/roles.js";
 
 const router = express.Router();
 const telegramChatController = container.resolve("telegramChatController");
@@ -85,7 +86,7 @@ router.get("/", authenticate, telegramChatController.getChats);
 router.post(
   "/",
   authenticate,
-  authorize("admin"),
+  authorize(GLOBAL_ROLES.ADMIN),
   telegramChatController.createChat
 );
 
@@ -121,7 +122,7 @@ router.post(
 router.patch(
   "/:id",
   authenticate,
-  authorize("admin"),
+  authorize(GLOBAL_ROLES.ADMIN),
   telegramChatController.updateChat
 );
 
@@ -152,7 +153,7 @@ router.patch(
 router.delete(
   "/:id",
   authenticate,
-  authorize("admin"),
+  authorize(GLOBAL_ROLES.ADMIN),
   telegramChatController.deleteChat
 );
 
@@ -183,7 +184,7 @@ router.delete(
 router.patch(
   "/:id/toggle-active",
   authenticate,
-  authorize("admin"),
+  authorize(GLOBAL_ROLES.ADMIN),
   telegramChatController.toggleActive
 );
 

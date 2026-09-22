@@ -76,13 +76,13 @@ export class EventController {
     const { id } = req.params;
     const eventData = req.body;
     const userId = req.user.user_id;
-    const userStatus = req.user.status;
+    const userRoles = req.user.roles;
 
     const event = await this.updateEventUseCase.execute(
       Number(id),
       eventData,
       userId,
-      userStatus
+      userRoles
     );
 
     res.status(HTTP_STATUS.OK).json({
@@ -98,9 +98,9 @@ export class EventController {
   deleteEvent = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const userId = req.user.user_id;
-    const userStatus = req.user.status;
+    const userRoles = req.user.roles;
 
-    await this.deleteEventUseCase.execute(Number(id), userId, userStatus);
+    await this.deleteEventUseCase.execute(Number(id), userId, userRoles);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

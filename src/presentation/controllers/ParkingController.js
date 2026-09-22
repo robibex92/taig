@@ -12,9 +12,10 @@ export class ParkingController {
 
   /**
    * Get all parking spots
+   * Detailed data (price, contacts, owner) is included only for parking admins
    */
   getParkingSpots = asyncHandler(async (req, res) => {
-    const result = await this.parkingUseCases.getAllParkingSpots();
+    const result = await this.parkingUseCases.getAllParkingSpots(req.user);
 
     if (!result.success) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -34,7 +35,10 @@ export class ParkingController {
    */
   getParkingSpotById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const result = await this.parkingUseCases.getParkingSpotById(Number(id));
+    const result = await this.parkingUseCases.getParkingSpotById(
+      Number(id),
+      req.user
+    );
 
     if (!result.success) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({
@@ -50,11 +54,14 @@ export class ParkingController {
   });
 
   /**
-   * Get parking spot history
+   * Get parking spot history (parking admins only)
    */
   getParkingSpotHistory = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const result = await this.parkingUseCases.getParkingSpotById(Number(id));
+    const result = await this.parkingUseCases.getParkingSpotById(
+      Number(id),
+      req.user
+    );
 
     if (!result.success) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({
@@ -73,33 +80,14 @@ export class ParkingController {
   });
 
   /**
-   * Update parking spot (only owner can update)
+   * Update parking spot (owner or parking admin)
    */
   updateParkingSpot = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updateData = req.body;
-    const userId = req.user?.user_id;
-
-    console.log("Update parking spot request:", {
-      id,
-      updateData,
-      userId,
-      user: req.user,
-      headers: req.headers,
-    });
-
-    if (!userId) {
-      console.log("User not authenticated for parking spot update");
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        error: "User not authenticated",
-      });
-    }
-
     const result = await this.parkingUseCases.updateParkingSpot(
       Number(id),
-      updateData,
-      userId
+      req.body,
+      req.user
     );
 
     if (!result.success) {
@@ -117,32 +105,16 @@ export class ParkingController {
   });
 
   /**
-   * Assign owner to parking spot (admin only)
+   * Assign owner to parking spot (guarded by requireRoles in the route)
    */
   assignOwner = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { ownerId } = req.body;
-    const assignedByUserId = req.user?.user_id;
-
-    if (!assignedByUserId) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        error: "User not authenticated",
-      });
-    }
-
-    // TODO: Add admin check
-    // if (req.user.status !== 'admin') {
-    //   return res.status(HTTP_STATUS.FORBIDDEN).json({
-    //     success: false,
-    //     error: 'Only admins can assign parking spot owners'
-    //   });
-    // }
 
     const result = await this.parkingUseCases.assignOwner(
       Number(id),
       ownerId,
-      assignedByUserId
+      req.user.user_id
     );
 
     if (!result.success) {
@@ -252,19 +224,7 @@ export class ParkingController {
    * Legacy methods for backward compatibility
    */
   createParkingSpot = asyncHandler(async (req, res) => {
-    const userId = req.user?.user_id;
-
-    if (!userId) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        error: "User not authenticated",
-      });
-    }
-
-    const result = await this.parkingUseCases.createParkingSpot(
-      req.body,
-      userId
-    );
+    const result = await this.parkingUseCases.createParkingSpot(req.body);
 
     if (!result.success) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -273,23 +233,15 @@ export class ParkingController {
       });
     }
 
-    res.status(HTTP_STATUS.CREATED).json(result);
+    res.status(HTTP_STATUS.CREATED).json({ success: true, data: result.data });
   });
 
   deleteParkingSpot = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user?.user_id;
-
-    if (!userId) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        error: "Authentication required",
-      });
-    }
 
     const result = await this.parkingUseCases.deleteParkingSpot(
       parseInt(id),
-      userId
+      req.user
     );
 
     if (result.success) {
@@ -299,19 +251,28 @@ export class ParkingController {
     }
   });
 
-  assignCarToSpot = asyncHandler(async (req, res) => {
-    res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-      success: false,
-      error:
-        "Car assignment is not implemented. Use updateParkingSpot instead.",
-    });
-  });
+  /**
+   * Free a parking spot from its owner (parking admin only)
+   */
+  unassignOwner = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-  freeParkingSpot = asyncHandler(async (req, res) => {
-    res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-      success: false,
-      error:
-        "Freeing parking spots is not implemented. Use updateParkingSpot instead.",
+    const result = await this.parkingUseCases.unassignOwner(
+      Number(id),
+      req.user.user_id
+    );
+
+    if (!result.success) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: result.error,
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result.data,
+      message: "Место свободно",
     });
   });
 }

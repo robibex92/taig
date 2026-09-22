@@ -4,13 +4,14 @@ import {
   ForbiddenError,
 } from "../../../core/errors/AppError.js";
 import logger from "../../../infrastructure/logger/index.js";
+import { isAdmin as hasAdminRole } from "../../../core/utils/roles.js";
 
 /**
  * Delete Event Use Case
  * Deletes an event (only by creator or admin)
  */
 export class DeleteEventUseCase {
-  async execute(eventId, userId, userStatus) {
+  async execute(eventId, userId, userRoles) {
     try {
       // Find event
       const event = await prisma.event.findUnique({
@@ -28,7 +29,7 @@ export class DeleteEventUseCase {
 
       // Check permissions (only creator or admin can delete)
       const isCreator = Number(event.created_by) === Number(userId);
-      const isAdmin = userStatus === "admin";
+      const isAdmin = hasAdminRole({ roles: userRoles });
 
       if (!isCreator && !isAdmin) {
         throw new ForbiddenError("You can only delete your own events");

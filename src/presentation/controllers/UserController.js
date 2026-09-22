@@ -80,15 +80,15 @@ export class UserController {
   });
 
   /**
-   * Get current user status
+   * Get current user's role list
    */
-  getUserStatus = asyncHandler(async (req, res) => {
+  getUserRoles = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
     const user = await this.userRepository.findById(userId);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      data: { status: user.status },
+      data: { roles: user.roles || [] },
     });
   });
 

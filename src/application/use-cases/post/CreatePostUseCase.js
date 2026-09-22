@@ -1,4 +1,5 @@
 import { logger } from "../../../core/utils/logger.js";
+import { isModerator } from "../../../core/utils/roles.js";
 import { ForbiddenError } from "../../../domain/errors/index.js";
 
 /**
@@ -13,10 +14,10 @@ export class CreatePostUseCase {
 
   async execute(postData, isImportant, selectedChats, photos, user) {
     // Authorization: Only admins and moderators can create posts
-    if (!user || (user.status !== "admin" && user.status !== "moderator")) {
+    if (!isModerator(user)) {
       logger.warn("Unauthorized attempt to create post", {
         userId: user?.user_id,
-        status: user?.status,
+        roles: user?.roles,
       });
       throw new ForbiddenError(
         "Only administrators and moderators can create posts"

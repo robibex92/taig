@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { TelegramService } from "../../services/TelegramService.js";
+import { isParkingAdmin } from "../../../core/utils/roles.js";
 
 const prisma = new PrismaClient();
 
@@ -43,45 +44,72 @@ const PARKING_COLORS = {
   [PARKING_STATUSES.RESERVED]: "#9C27B0", // Фиолетовый
 };
 
+const OWNER_SELECT = {
+  user_id: true,
+  username: true,
+  first_name: true,
+  telegram_id: true,
+  max_id: true,
+};
+
+/**
+ * Single serializer for parking spots.
+ *
+ * The public grid exposes only the place number and its status: price,
+ * description, contacts and owner identity are resident data, included only
+ * for parking administrators (or the owner of that exact place).
+ */
+function mapSpot(spot, { detailed = false } = {}) {
+  const base = {
+    id: Number(spot.id),
+    spotNumber: spot.spot_number,
+    floor: spot.floor,
+    section: spot.section,
+    status: spot.status,
+    isActive: spot.is_active,
+    hasOwner: Boolean(spot.owner_id),
+    createdAt: spot.created_at,
+    updatedAt: spot.updated_at,
+  };
+
+  if (!detailed) return base;
+
+  return {
+    ...base,
+    price: spot.price,
+    description: spot.description,
+    contactInfo: spot.contact_info,
+    owner: spot.owner
+      ? {
+          id: Number(spot.owner.user_id),
+          name: spot.owner.first_name || spot.owner.username || "Сосед",
+          telegramId: spot.owner.telegram_id ? Number(spot.owner.telegram_id) : null,
+          maxId: spot.owner.max_id ? Number(spot.owner.max_id) : null,
+        }
+      : spot.owner_id
+        ? { id: Number(spot.owner_id) }
+        : null,
+  };
+}
+
+function isOwnerOf(spot, userId) {
+  return userId != null && spot.owner_id != null && Number(spot.owner_id) === Number(userId);
+}
+
 class ParkingUseCases {
   // Получить все парковочные места
-  async getAllParkingSpots() {
+  async getAllParkingSpots(viewer) {
     try {
-      console.log("ParkingUseCases.getAllParkingSpots called");
+      const detailed = isParkingAdmin(viewer);
+
       const spots = await prisma.parkingSpot.findMany({
         orderBy: { spot_number: "asc" },
-      });
-
-      // Проверяем только наличие владельца, без загрузки его личных данных
-      const spotsWithOwners = spots.map((spot) => ({
-        ...spot,
-        hasOwner: !!spot.owner_id,
-      }));
-
-      const mappedSpots = spotsWithOwners.map((spot) => ({
-        id: spot.id,
-        spotNumber: spot.spot_number,
-        floor: spot.floor,
-        section: spot.section,
-        status: spot.status,
-        price: spot.price,
-        description: spot.description,
-        contactInfo: spot.contact_info,
-        isActive: spot.is_active,
-        createdAt: spot.created_at,
-        updatedAt: spot.updated_at,
-        hasOwner: spot.hasOwner,
-      }));
-
-      console.log("ParkingUseCases.getAllParkingSpots result:", {
-        totalSpots: mappedSpots.length,
-        spotsWithOwners: mappedSpots.filter((s) => s.hasOwner).length,
-        sampleSpot: mappedSpots.find((s) => s.spotNumber === "27"),
+        include: detailed ? { owner: { select: OWNER_SELECT } } : undefined,
       });
 
       return {
         success: true,
-        data: mappedSpots,
+        data: spots.map((spot) => mapSpot(spot, { detailed })),
       };
     } catch (error) {
       console.error("Error getting parking spots:", error);
@@ -90,33 +118,22 @@ class ParkingUseCases {
   }
 
   // Получить парковочное место по ID
-  async getParkingSpotById(spotId) {
+  async getParkingSpotById(spotId, viewer) {
     try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
+        include: { owner: { select: OWNER_SELECT } },
       });
 
       if (!spot) {
         return { success: false, error: "Parking spot not found" };
       }
 
+      const detailed = isParkingAdmin(viewer) || isOwnerOf(spot, viewer?.user_id);
+
       return {
         success: true,
-        data: {
-          id: spot.id,
-          spotNumber: spot.spot_number,
-          floor: spot.floor,
-          section: spot.section,
-          status: spot.status,
-          price: spot.price,
-          description: spot.description,
-          contactInfo: spot.contact_info,
-          isActive: spot.is_active,
-          createdAt: spot.created_at,
-          updatedAt: spot.updated_at,
-          owner: spot.owner_id ? { id: spot.owner_id } : null,
-          history: [],
-        },
+        data: { ...mapSpot(spot, { detailed }), history: detailed ? await this.#historyOf(spotId) : [] },
       };
     } catch (error) {
       console.error("Error getting parking spot:", error);
@@ -124,90 +141,73 @@ class ParkingUseCases {
     }
   }
 
-  // Обновить парковочное место
-  async updateParkingSpot(spotId, updateData, userId) {
-    try {
-      console.log("ParkingUseCases.updateParkingSpot called with:", {
-        spotId,
-        updateData,
-        userId,
-      });
+  async #historyOf(spotId) {
+    const history = await prisma.parkingSpotHistory.findMany({
+      where: { parking_spot_id: spotId },
+      orderBy: { created_at: "desc" },
+    });
 
+    return history.map((entry) => ({
+      id: Number(entry.id),
+      changedAt: entry.created_at,
+      changedById: entry.changed_by_id ? Number(entry.changed_by_id) : null,
+      from: {
+        status: entry.old_status,
+        price: entry.old_price,
+        description: entry.old_description,
+      },
+      to: { status: entry.new_status, price: entry.new_price, description: entry.new_description },
+    }));
+  }
+
+  // Обновить парковочное место (владелец или администратор паркинга)
+  async updateParkingSpot(spotId, updateData, user) {
+    try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
       });
 
-      console.log("Found spot:", spot);
-
       if (!spot) {
-        console.log("Spot not found");
         return { success: false, error: "Parking spot not found" };
       }
 
-      // Проверяем права на изменение
-      if (spot.owner_id !== userId) {
-        console.log("User not authorized to update this spot");
+      if (!isParkingAdmin(user) && !isOwnerOf(spot, user?.user_id)) {
         return {
           success: false,
           error: "You can only update your own parking spots",
         };
       }
 
-      const oldData = { ...spot };
-
-      const updateDataForDB = {
-        spot_number: updateData.spotNumber,
-        status: updateData.status,
-        price: updateData.price ? String(updateData.price) : null,
-        description: updateData.description,
-        contact_info: updateData.contactInfo,
-        updated_at: new Date(),
-      };
-
-      console.log("Updating spot with data:", updateDataForDB);
-
       const updatedSpot = await prisma.parkingSpot.update({
         where: { id: spotId },
-        data: updateDataForDB,
+        data: {
+          status: updateData.status,
+          price: updateData.price != null ? String(updateData.price) : null,
+          description: updateData.description,
+          contact_info: updateData.contactInfo,
+          updated_at: new Date(),
+        },
+        include: { owner: { select: OWNER_SELECT } },
       });
 
-      console.log("Parking spot updated successfully:", updatedSpot);
-
-      // Записываем историю изменений
-      const historyData = {
-        parking_spot_id: spotId,
-        changed_by_id: userId,
-        old_status: oldData.status,
-        new_status: updateData.status,
-        old_price: oldData.price ? String(oldData.price) : null,
-        new_price: updateData.price ? String(updateData.price) : null,
-        old_description: oldData.description,
-        new_description: updateData.description,
-        old_contact_info: oldData.contact_info,
-        new_contact_info: updateData.contactInfo,
-      };
-
-      // Создаем запись истории изменений
       await prisma.parkingSpotHistory.create({
-        data: historyData,
+        data: {
+          parking_spot_id: spotId,
+          changed_by_id: user.user_id,
+          old_status: spot.status,
+          new_status: updatedSpot.status,
+          old_price: spot.price,
+          new_price: updatedSpot.price,
+          old_description: spot.description,
+          new_description: updatedSpot.description,
+          old_contact_info: spot.contact_info,
+          new_contact_info: updatedSpot.contact_info,
+        },
       });
 
       return {
         success: true,
-        data: {
-          id: updatedSpot.id,
-          spotNumber: updatedSpot.spot_number,
-          floor: updatedSpot.floor,
-          section: updatedSpot.section,
-          status: updatedSpot.status,
-          price: updatedSpot.price,
-          description: updatedSpot.description,
-          contactInfo: updatedSpot.contact_info,
-          isActive: updatedSpot.is_active,
-          createdAt: updatedSpot.created_at,
-          updatedAt: updatedSpot.updated_at,
-          owner: updatedSpot.owner_id ? { id: updatedSpot.owner_id } : null,
-        },
+        data: mapSpot(updatedSpot, { detailed: true }),
       };
     } catch (error) {
       console.error("Error updating parking spot:", error);
@@ -235,13 +235,13 @@ class ParkingUseCases {
         };
       }
 
-      const oldOwnerId = spot.owner_id;
       const updatedSpot = await prisma.parkingSpot.update({
         where: { id: spotId },
         data: {
           owner_id: ownerId,
           updated_at: new Date(),
         },
+        include: { owner: { select: OWNER_SELECT } },
       });
 
       // Записываем в историю
@@ -251,8 +251,8 @@ class ParkingUseCases {
           changed_by_id: assignedByUserId,
           old_status: spot.status,
           new_status: spot.status, // Статус не меняется при смене владельца
-          old_price: spot.price ? String(spot.price) : null,
-          new_price: spot.price ? String(spot.price) : null,
+          old_price: spot.price,
+          new_price: spot.price,
           old_description: spot.description,
           new_description: spot.description,
           old_contact_info: spot.contact_info,
@@ -262,14 +262,61 @@ class ParkingUseCases {
 
       return {
         success: true,
-        data: {
-          id: updatedSpot.id,
-          spotNumber: updatedSpot.spot_number,
-          owner: updatedSpot.owner_id ? { id: updatedSpot.owner_id } : null,
-        },
+        data: mapSpot(updatedSpot, { detailed: true }),
       };
     } catch (error) {
       console.error("Error assigning owner:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Освободить место от владельца (администратор паркинга)
+  async unassignOwner(spotId, changedById) {
+    try {
+      const spot = await prisma.parkingSpot.findUnique({
+        where: { id: spotId },
+        include: { owner: { select: OWNER_SELECT } },
+      });
+
+      if (!spot) {
+        return { success: false, error: "Parking spot not found" };
+      }
+
+      if (!spot.owner_id) {
+        return { success: false, error: "У места и так нет владельца" };
+      }
+
+      const updatedSpot = await prisma.parkingSpot.update({
+        where: { id: spotId },
+        data: {
+          owner_id: null,
+          status: PARKING_STATUSES.UNDEFINED,
+          updated_at: new Date(),
+        },
+      });
+
+      await prisma.parkingSpotHistory.create({
+        data: {
+          parking_spot_id: spotId,
+          changed_by_id: changedById,
+          old_status: spot.status,
+          new_status: PARKING_STATUSES.UNDEFINED,
+          old_price: spot.price,
+          new_price: spot.price,
+          old_description: spot.description,
+          new_description: spot.description,
+          old_contact_info: spot.contact_info,
+          new_contact_info: spot.contact_info,
+          change_reason: "Владелец снят с места",
+        },
+      });
+
+      return {
+        success: true,
+        data: mapSpot(updatedSpot, { detailed: true }),
+      };
+    } catch (error) {
+      console.error("Error unassigning owner:", error);
       return { success: false, error: error.message };
     }
   }
@@ -284,19 +331,7 @@ class ParkingUseCases {
 
       return {
         success: true,
-        data: spots.map((spot) => ({
-          id: spot.id,
-          spotNumber: spot.spot_number,
-          floor: spot.floor,
-          section: spot.section,
-          status: spot.status,
-          price: spot.price,
-          description: spot.description,
-          contactInfo: spot.contact_info,
-          isActive: spot.is_active,
-          createdAt: spot.created_at,
-          updatedAt: spot.updated_at,
-        })),
+        data: spots.map((spot) => mapSpot(spot, { detailed: true })),
       };
     } catch (error) {
       console.error("Error getting user parking spots:", error);
@@ -446,8 +481,8 @@ class ParkingUseCases {
     }
   }
 
-  // Создать новое парковочное место
-  async createParkingSpot(spotData, userId) {
+  // Создать новое парковочное место (администратор паркинга)
+  async createParkingSpot(spotData) {
     try {
       // Валидация входных данных
       if (!spotData.spotNumber) {
@@ -469,33 +504,20 @@ class ParkingUseCases {
       const newSpot = await prisma.parkingSpot.create({
         data: {
           spot_number: spotData.spotNumber,
-          floor: 1, // Значение по умолчанию
-          section: null, // Секция не используется
+          floor: spotData.floor ?? 1,
+          section: spotData.section ?? null,
           status: spotData.status || PARKING_STATUSES.UNDEFINED,
           price: spotData.price || null,
           description: spotData.description || null,
           contact_info: spotData.contactInfo || null,
-          owner_id: userId,
+          owner_id: spotData.ownerId ? BigInt(spotData.ownerId) : null,
           is_active: true,
         },
       });
 
       return {
         success: true,
-        data: {
-          id: newSpot.id,
-          spotNumber: newSpot.spot_number,
-          floor: newSpot.floor,
-          section: newSpot.section,
-          status: newSpot.status,
-          price: newSpot.price,
-          description: newSpot.description,
-          contactInfo: newSpot.contact_info,
-          isActive: newSpot.is_active,
-          createdAt: newSpot.created_at,
-          updatedAt: newSpot.updated_at,
-          owner: userId ? { id: userId } : null,
-        },
+        data: mapSpot(newSpot, { detailed: true }),
       };
     } catch (error) {
       console.error("Error creating parking spot:", error);
@@ -503,8 +525,8 @@ class ParkingUseCases {
     }
   }
 
-  // Удалить парковочное место (только владелец)
-  async deleteParkingSpot(spotId, userId) {
+  // Удалить парковочное место (владелец или администратор паркинга)
+  async deleteParkingSpot(spotId, user) {
     try {
       const spot = await prisma.parkingSpot.findUnique({
         where: { id: spotId },
@@ -514,8 +536,7 @@ class ParkingUseCases {
         return { success: false, error: "Parking spot not found" };
       }
 
-      // Проверяем, что пользователь является владельцем места
-      if (spot.owner_id !== userId) {
+      if (!isParkingAdmin(user) && !isOwnerOf(spot, user?.user_id)) {
         return {
           success: false,
           error: "You are not authorized to delete this parking spot",

@@ -1,5 +1,6 @@
 import { prisma } from "../database/db.js";
 import { logger } from "../../core/utils/logger.js";
+import { isAdmin } from "../../core/utils/roles.js";
 
 /**
  * House Comment Repository Implementation
@@ -280,12 +281,10 @@ export class HouseCommentRepository {
       // User can manage if they are the author or admin
       const user = await prisma.user.findUnique({
         where: { user_id: BigInt(userId) },
-        select: { role: true },
+        select: { roles: true },
       });
 
-      return (
-        comment.author_id === BigInt(userId) || user?.role === true // Admin check
-      );
+      return comment.author_id === BigInt(userId) || isAdmin(user);
     } catch (error) {
       logger.error("Error checking user permissions for house comment:", error);
       return false;

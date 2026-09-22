@@ -1,20 +1,12 @@
 import { AuthenticationError, ValidationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 import { prisma } from "../../../infrastructure/database/prisma.js";
-
-const STATUS_RANK = {
-  admin: 3,
-  moderator: 2,
-  active: 1,
-  blocking: 0,
-  blocked: 0,
-  banned: 0,
-};
+import { normalizeRoles } from "../../../core/utils/roles.js";
 
 /**
  * Link Telegram or MAX identity to the currently logged-in user.
  * If the other identity already has a row, merge it into the current user
- * so status/rights stay on one shared account.
+ * so roles/rights stay on one shared account.
  */
 export class LinkPlatformUseCase {
   constructor(userRepository, authenticateUserUseCase, authenticateMaxUserUseCase) {
@@ -23,10 +15,9 @@ export class LinkPlatformUseCase {
     this.authenticateMaxUserUseCase = authenticateMaxUserUseCase;
   }
 
-  pickStatus(a, b) {
-    const ra = STATUS_RANK[a] ?? 1;
-    const rb = STATUS_RANK[b] ?? 1;
-    return ra >= rb ? a || "active" : b || "active";
+  /** Merged account inherits the union of both role lists. */
+  mergeRoles(a, b) {
+    return normalizeRoles([...(a || []), ...(b || [])]);
   }
 
   async reassignUserId(fromId, toId) {
@@ -77,7 +68,7 @@ export class LinkPlatformUseCase {
       return currentUser;
     }
 
-    const mergedStatus = this.pickStatus(currentUser.status, otherUser.status);
+    const mergedRoles = this.mergeRoles(currentUser.roles, otherUser.roles);
 
     await prisma.$transaction(async () => {
       await this.reassignUserId(otherUser.user_id, currentUser.user_id);
@@ -87,7 +78,7 @@ export class LinkPlatformUseCase {
     });
 
     await this.userRepository.update(currentUser.user_id, {
-      status: mergedStatus,
+      roles: mergedRoles,
       telegram_id: otherUser.telegram_id ?? currentUser.telegram_id,
       max_id: otherUser.max_id ?? currentUser.max_id,
       max_username: otherUser.max_username ?? currentUser.max_username,
@@ -99,7 +90,7 @@ export class LinkPlatformUseCase {
     logger.info("Merged user accounts", {
       kept_user_id: currentUser.user_id,
       removed_user_id: otherUser.user_id,
-      status: mergedStatus,
+      roles: mergedRoles,
     });
 
     return this.userRepository.findById(currentUser.user_id);

@@ -1,5 +1,4 @@
 import Joi from "joi";
-import { USER_STATUS } from "../../constants/index.js";
 
 export const telegramAuthSchema = Joi.object({
   id: Joi.number().integer().positive().required().messages({
@@ -29,5 +28,5 @@ export const updateUserSchema = Joi.object({
   telegram_first_name: Joi.string().trim().min(1).max(100),
   telegram_last_name: Joi.string().trim().min(1).max(100).allow("", null),
   is_manually_updated: Joi.boolean(),
-  status: Joi.string().valid(...Object.values(USER_STATUS)),
+  roles: Joi.array().items(Joi.string()),
 }).min(1);

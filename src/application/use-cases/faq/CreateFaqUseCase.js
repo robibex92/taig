@@ -3,6 +3,7 @@ import {
   ValidationError,
 } from "../../../domain/errors/index.js";
 import logger from "../../../infrastructure/logger/index.js";
+import { isAdmin } from "../../../core/utils/roles.js";
 
 /**
  * CreateFaqUseCase
@@ -22,7 +23,7 @@ export class CreateFaqUseCase {
    */
   async execute(faqData, user) {
     // Validate user is admin
-    if (!user || user.status !== "admin") {
+    if (!isAdmin(user)) {
       logger.warn("Non-admin user attempted to create FAQ", {
         userId: user?.user_id,
       });

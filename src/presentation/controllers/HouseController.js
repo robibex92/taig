@@ -143,9 +143,7 @@ export class HouseController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const info = await this.getHouseInfoUseCase.execute(
-      parseInt(req.params.id)
-    );
+    const info = await this.getHouseInfoUseCase.execute(parseInt(req.params.id), req.user);
 
     res.json({
       info,

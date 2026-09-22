@@ -53,8 +53,6 @@ export class TokenService {
     const payload = {
       id: user.user_id,
       type: "access",
-      status:
-        user.status || "active",
 
       device:
         this._hashDeviceInfo(

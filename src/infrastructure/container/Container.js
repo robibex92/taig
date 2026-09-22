@@ -22,6 +22,10 @@ import { FileUploadService } from "../../application/services/FileUploadService.
 import { CarImageUploadService } from "../../application/services/CarImageUploadService.js";
 import NotificationService from "../../application/services/NotificationService.js";
 
+// Services - MAX Bot (инфраструктурный HTTP-клиент + сборщик входящих)
+import { maxBotService } from "../services/MaxBotService.js";
+import { MaxBotUpdatePoller } from "../services/MaxBotUpdatePoller.js";
+
 // Use Cases - Ad
 import { GetAdsUseCase } from "../../application/use-cases/ad/GetAdsUseCase.js";
 import { GetAdByIdUseCase } from "../../application/use-cases/ad/GetAdByIdUseCase.js";
@@ -37,6 +41,10 @@ import { UploadAvatarUseCase } from "../../application/use-cases/user/UploadAvat
 import { LogoutUseCase } from "../../application/use-cases/user/LogoutUseCase.js";
 import { AuthenticateMaxUserUseCase } from "../../application/use-cases/user/AuthenticateMaxUserUseCase.js";
 import { LinkPlatformUseCase } from "../../application/use-cases/user/LinkPlatformUseCase.js";
+
+// Use Cases - MAX Bot (админка: рассылки и входящие обращения)
+import { MaxBotAdminUseCases } from "../../application/use-cases/maxBot/MaxBotAdminUseCases.js";
+import { MaxBotBroadcastUseCases } from "../../application/use-cases/maxBot/MaxBotBroadcastUseCases.js";
 
 // Use Cases - Session
 import { GetUserSessionsUseCase } from "../../application/use-cases/session/GetUserSessionsUseCase.js";
@@ -131,8 +139,9 @@ import { ToggleTelegramChatActiveUseCase } from "../../application/use-cases/tel
 
 // Use Cases - Admin
 import { GetAllUsersUseCase } from "../../application/use-cases/admin/GetAllUsersUseCase.js";
-import { UpdateUserRoleUseCase } from "../../application/use-cases/admin/UpdateUserRoleUseCase.js";
+import { UpdateUserRolesUseCase } from "../../application/use-cases/admin/UpdateUserRolesUseCase.js";
 import { GetStatisticsUseCase } from "../../application/use-cases/admin/GetStatisticsUseCase.js";
+import { GetRoleCatalogUseCase } from "../../application/use-cases/admin/GetRoleCatalogUseCase.js";
 
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
@@ -151,6 +160,7 @@ import { AdminController } from "../../presentation/controllers/AdminController.
 import { EventController } from "../../presentation/controllers/EventController.js";
 import { BannerController } from "../../presentation/controllers/BannerController.js";
 import { ParkingController } from "../../presentation/controllers/ParkingController.js";
+import { MaxBotController } from "../../presentation/controllers/MaxBotController.js";
 
 // Real Use Cases for Events
 import { GetEventsUseCase } from "../../application/use-cases/event/GetEventsUseCase.js";
@@ -1028,12 +1038,14 @@ export class Container {
     );
 
     this.register(
-      "updateUserRoleUseCase",
+      "updateUserRolesUseCase",
       (container) =>
-        new UpdateUserRoleUseCase(container.resolve("userRepository"))
+        new UpdateUserRolesUseCase(container.resolve("userRepository"))
     );
 
     this.register("getStatisticsUseCase", () => new GetStatisticsUseCase());
+
+    this.register("getRoleCatalogUseCase", () => new GetRoleCatalogUseCase());
 
     // Controllers - Admin
     this.register(
@@ -1041,8 +1053,9 @@ export class Container {
       (container) =>
         new AdminController(
           container.resolve("getAllUsersUseCase"),
-          container.resolve("updateUserRoleUseCase"),
-          container.resolve("getStatisticsUseCase")
+          container.resolve("updateUserRolesUseCase"),
+          container.resolve("getStatisticsUseCase"),
+          container.resolve("getRoleCatalogUseCase")
         )
     );
 
@@ -1078,6 +1091,47 @@ export class Container {
 
     // Controllers - Parking
     this.register("parkingController", () => new ParkingController());
+
+    // Services - MAX Bot
+    this.register("maxBotService", () => maxBotService);
+
+    // Сборщик входящих сообщений (long polling /updates). Стартуется из server.js,
+    // Singleton — чтобы статус polling в админке показывал реальный цикл.
+    this.register(
+      "maxBotUpdatePoller",
+      (container) =>
+        new MaxBotUpdatePoller({
+          service: container.resolve("maxBotService"),
+        })
+    );
+
+    // Use Cases - MAX Bot
+    this.register(
+      "maxBotAdminUseCases",
+      (container) =>
+        new MaxBotAdminUseCases({
+          service: container.resolve("maxBotService"),
+          poller: container.resolve("maxBotUpdatePoller"),
+        })
+    );
+
+    this.register(
+      "maxBotBroadcastUseCases",
+      (container) =>
+        new MaxBotBroadcastUseCases({
+          service: container.resolve("maxBotService"),
+        })
+    );
+
+    // Controllers - MAX Bot
+    this.register(
+      "maxBotController",
+      (container) =>
+        new MaxBotController({
+          adminUseCases: container.resolve("maxBotAdminUseCases"),
+          broadcastUseCases: container.resolve("maxBotBroadcastUseCases"),
+        })
+    );
   }
 }
 

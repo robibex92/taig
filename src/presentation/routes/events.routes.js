@@ -1,8 +1,8 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { requireAdmin } from "../middlewares/adminMiddleware.js";
-import { checkRole } from "../../core/middlewares/checkRole.js";
+import { requireRoles } from "../../core/middlewares/checkRole.js";
+import { GLOBAL_ROLES } from "../../core/utils/roles.js";
 
 const router = express.Router();
 const eventController = container.resolve("eventController");
@@ -110,7 +110,11 @@ router.get(BASE_ROUTE, eventController.getEvents);
 router.post(
   BASE_ROUTE,
   authenticateJWT,
-  checkRole("admin", "moderator", "activist"),
+  requireRoles(
+    GLOBAL_ROLES.ADMIN,
+    GLOBAL_ROLES.MODERATOR,
+    GLOBAL_ROLES.ACTIVIST
+  ),
   eventController.createEvent
 );
 

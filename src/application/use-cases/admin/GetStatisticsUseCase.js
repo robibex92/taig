@@ -1,4 +1,5 @@
 import { prisma } from "../../../infrastructure/database/prisma.js";
+import { PRIVILEGED_ROLES } from "../../../core/utils/roles.js";
 
 /**
  * Get Statistics Use Case
@@ -7,11 +8,23 @@ import { prisma } from "../../../infrastructure/database/prisma.js";
 export class GetStatisticsUseCase {
   async execute() {
     // Get user statistics
-    const totalUsers = await prisma.user.count();
-    const usersByRole = await prisma.user.groupBy({
-      by: ["status"],
-      _count: true,
-    });
+    const [totalUsers, usersByRole, usersOutsidePrivilegedRoles, houseRoleRows] =
+      await Promise.all([
+        prisma.user.count(),
+        Promise.all(
+          PRIVILEGED_ROLES.map(async (role) => [
+            role,
+            await prisma.user.count({ where: { roles: { has: role } } }),
+          ])
+        ),
+        // "Обычный житель" = никто из держателей привилегированных ролей (домовые роли учитываются)
+        prisma.user.count({ where: { NOT: { roles: { hasSome: PRIVILEGED_ROLES } } } }),
+        prisma.$queryRaw`SELECT COUNT(*)::int AS count FROM users WHERE EXISTS (
+          SELECT 1 FROM unnest(roles) AS r WHERE r LIKE 'house:%'
+        )`,
+      ]);
+
+    const houseRoleHolders = Number(houseRoleRows?.[0]?.count ?? 0);
 
     // Get ad statistics
     const totalAds = await prisma.ad.count();
@@ -183,9 +196,9 @@ export class GetStatisticsUseCase {
     return {
       users: {
         total: totalUsers,
-        by_role: Object.fromEntries(
-          usersByRole.map((r) => [r.status, r._count])
-        ),
+        by_role: Object.fromEntries(usersByRole),
+        regular: usersOutsidePrivilegedRoles,
+        house_role_holders: houseRoleHolders,
       },
       ads: {
         total: totalAds,

@@ -1,28 +1,26 @@
+import { AuthenticationError, AuthorizationError } from "../errors/AppError.js";
+import { hasAnyRole, isBlocked } from "../utils/roles.js";
+
 /**
- * Role-Based Access Control (RBAC) Middleware
- * Checks if user has required role(s)
+ * Role-Based Access Control middleware.
+ *
+ * Usage: requireRoles(SERVICE_ROLES.PARKING_ADMIN, GLOBAL_ROLES.ADMIN)
+ * An empty call only requires an unblocked, authenticated user.
  */
-export const checkRole = (...allowedRoles) => {
-  return async (req, res, next) => {
-    const user = req.user;
+export const requireRoles = (...allowedRoles) => (req, res, next) => {
+  const user = req.user;
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "Unauthorized",
-        message: "Authentication required",
-      });
-    }
+  if (!user) {
+    throw new AuthenticationError("Authentication required");
+  }
 
-    // Check if user has one of the allowed roles (using status field)
-    if (!allowedRoles.includes(user.status)) {
-      return res.status(403).json({
-        success: false,
-        error: "Forbidden",
-        message: `Access denied. Required role(s): ${allowedRoles.join(", ")}`,
-      });
-    }
+  if (isBlocked(user)) {
+    throw new AuthorizationError("Account is blocked");
+  }
 
-    next();
-  };
+  if (allowedRoles.length > 0 && !hasAnyRole(user, allowedRoles)) {
+    throw new AuthorizationError(`Access denied. Required role(s): ${allowedRoles.join(", ")}`);
+  }
+
+  next();
 };

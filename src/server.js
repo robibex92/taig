@@ -49,9 +49,13 @@ import imageProxyRoutes from "./presentation/routes/imageProxy.routes.js";
 import eventsRoutes from "./presentation/routes/events.routes.js";
 import bannersRoutes from "./presentation/routes/banners.routes.js";
 import parkingRoutes from "./presentation/routes/parking.routes.js";
+import maxBotRoutes from "./presentation/routes/maxBot.routes.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
+
+// DI-контейнер (нужен для поллера MAX-бота)
+import { container } from "./infrastructure/container/Container.js";
 
 // Load environment variables
 dotenv.config();
@@ -188,6 +192,8 @@ app.use("/api/messages", messageRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
+// Вкладка админки «MAX-бот»: рассылки, входящие от жителей, настройка webhook
+app.use("/api/admin/max-bot", maxBotRoutes);
 app.use("/api", imageProxyRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/banners", bannersRoutes);
@@ -290,6 +296,21 @@ testConnection().then((connected) => {
     telegramBot.launch().catch((err) => {
       logger.error("Failed to start Telegram bot", { error: err.message });
     });
+
+    // MAX Bot: сборщик входящих сообщений (long polling GET /updates).
+    // Отключается переменной MAX_BOT_POLLING=false — например при переходе на
+    // webhook (см. заголовку src/infrastructure/services/MaxBotUpdatePoller.js).
+    if (process.env.MAX_BOT_TOKEN && process.env.MAX_BOT_POLLING !== "false") {
+      try {
+        container.resolve("maxBotUpdatePoller").start();
+      } catch (err) {
+        logger.error("Failed to start MAX bot update poller", { error: err.message });
+      }
+    } else {
+      logger.info("MAX bot poller is not started", {
+        reason: process.env.MAX_BOT_TOKEN ? "MAX_BOT_POLLING=false" : "MAX_BOT_TOKEN missing",
+      });
+    }
   });
 });
 
@@ -303,6 +324,13 @@ const gracefulShutdown = async (signal) => {
     await telegramBot.stop();
   } catch (err) {
     logger.error("Error stopping Telegram bot", { error: err.message });
+  }
+
+  // Stop MAX bot collector (long polling) — иначе процесс висит на удержанном запросе /updates
+  try {
+    await container.resolve("maxBotUpdatePoller").stop();
+  } catch (err) {
+    logger.error("Error stopping MAX bot poller", { error: err.message });
   }
 
   // Close server

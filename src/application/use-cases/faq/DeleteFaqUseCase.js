@@ -3,6 +3,7 @@ import {
   ForbiddenError,
 } from "../../../domain/errors/index.js";
 import logger from "../../../infrastructure/logger/index.js";
+import { isAdmin } from "../../../core/utils/roles.js";
 
 /**
  * Use case for soft deleting a FAQ
@@ -15,7 +16,7 @@ export class DeleteFaqUseCase {
 
   async execute(faqId, user) {
     // Validate user is admin
-    if (!user || user.status !== "admin") {
+    if (!isAdmin(user)) {
       logger.warn("Non-admin user attempted to delete FAQ", {
         userId: user?.user_id,
         faqId,

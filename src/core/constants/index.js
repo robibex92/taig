@@ -33,21 +33,6 @@ export const AD_STATUS = {
   DELETED: "deleted",
 };
 
-export const USER_STATUS = {
-  ACTIVE: "active",
-  INACTIVE: "inactive",
-  BANNED: "banned",
-  BLOCKING: "blocking",
-};
-
-export const USER_ROLES = {
-  ACTIVE: "active", // Обычный пользователь (ранее "user")
-  ACTIVIST: "activist", // Активист - может создавать события и получать уведомления
-  MODERATOR: "moderator",
-  ADMIN: "admin",
-  BLOCKED: "blocked", // Заблокированный пользователь
-};
-
 export const TOKEN_TYPES = {
   ACCESS: "access",
   REFRESH: "refresh",
@@ -81,8 +66,6 @@ if (typeof module !== "undefined" && module.exports) {
     HTTP_STATUS,
     ERROR_CODES,
     AD_STATUS,
-    USER_STATUS,
-    USER_ROLES,
     TOKEN_TYPES,
     PAGINATION,
     SORT_ORDER,

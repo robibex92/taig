@@ -3,6 +3,7 @@ import {
   ForbiddenError,
 } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
+import { isModerator } from "../../../core/utils/roles.js";
 
 /**
  * Use case for deleting (closing) a post
@@ -15,10 +16,10 @@ export class DeletePostUseCase {
 
   async execute(postId, user) {
     // Authorization: Only admins and moderators can delete posts
-    if (!user || (user.status !== "admin" && user.status !== "moderator")) {
+    if (!isModerator(user)) {
       logger.warn("Unauthorized attempt to delete post", {
         userId: user?.user_id,
-        status: user?.status,
+        roles: user?.roles,
         postId,
       });
       throw new ForbiddenError(

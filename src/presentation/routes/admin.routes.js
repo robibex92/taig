@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
-import { checkRole } from "../../core/middlewares/checkRole.js";
+import { requireRoles } from "../../core/middlewares/checkRole.js";
+import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
 import { container } from "../../infrastructure/container/Container.js";
 
 const router = express.Router();
@@ -13,24 +14,30 @@ router.use(authenticateJWT);
 
 /**
  * @route   GET /api/admin/users
- * @desc    Get all users with pagination and filters
- * @access  Private (admin and moderators)
+ * @desc    Resident directory (name + platform ids). Parking and cars admins
+ *          need it to attach a place or a car to a resident.
+ * @access  Private (staff, parking admin, cars admin)
  */
 router.get(
   "/users",
-  checkRole("admin", "moderator"),
+  requireRoles(
+    GLOBAL_ROLES.ADMIN,
+    GLOBAL_ROLES.MODERATOR,
+    SERVICE_ROLES.PARKING_ADMIN,
+    SERVICE_ROLES.CARS_ADMIN
+  ),
   adminController.getAllUsers
 );
 
 /**
- * @route   PATCH /api/admin/users/:id/role
- * @desc    Update user role (user/moderator/admin)
+ * @route   PATCH /api/admin/users/:id/roles
+ * @desc    Replace a user's role list
  * @access  Private (admin only)
  */
 router.patch(
-  "/users/:id/role",
-  checkRole("admin"),
-  adminController.updateUserRole
+  "/users/:id/roles",
+  requireRoles(GLOBAL_ROLES.ADMIN),
+  adminController.updateUserRoles
 );
 
 /**
@@ -40,8 +47,15 @@ router.patch(
  */
 router.get(
   "/statistics",
-  checkRole("admin", "moderator"),
+  requireRoles(GLOBAL_ROLES.ADMIN, GLOBAL_ROLES.MODERATOR),
   adminController.getStatistics
 );
+
+/**
+ * @route   GET /api/admin/roles
+ * @desc    Catalog of assignable roles (global, services, per-house)
+ * @access  Private (admin only)
+ */
+router.get("/roles", requireRoles(GLOBAL_ROLES.ADMIN), adminController.getRoleCatalog);
 
 export default router;

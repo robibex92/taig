@@ -26,6 +26,7 @@ model User {
   max_last_name       String?
   max_avatar          String?
   status              String? @default("active")
+  roles               String[] @default([])
   refresh_token       String?             @db.VarChar(500)
   bookings            Booking[]
   event_registrations EventRegistration[] @relation("EventRegistrations")
@@ -35,6 +36,7 @@ model User {
   parking_messages_sent     ParkingMessage[] @relation("ParkingMessageSender")
   parking_messages_received  ParkingMessage[] @relation("ParkingMessageReceiver")
 
+  @@index([roles], type: Gin)
   @@map("users")
 }
 
@@ -431,4 +433,89 @@ model ParkingMessage {
 
   @@index([parking_spot_id], map: "idx_parking_messages_parking_spot_id")
   @@map("parking_messages")
+}
+
+// ============================================================
+// MAX BOT (рассылки + входящие обращения жителей)
+// Модуль админки «MAX-бот»: src/presentation/controllers/MaxBotController.js
+// ============================================================
+
+/// One event of the MAX Bot conversation: direction "in" — письмо жителя боту,
+/// "out" — ответ администратора, отправленный через бота.
+model MaxBotInboxMessage {
+  id           BigInt    @id @default(autoincrement())
+  /// "in" | "out"
+  direction    String    @default("in")
+  /// MAX user id (локальный ключ переписки в MAX)
+  max_user_id  BigInt
+  /// Совпавший локальный аккаунт (users.user_id), null — если житель не привязан
+  user_id      BigInt?
+  display_name String?
+  username     String?
+  text         String
+  received_at  DateTime  @default(now()) @db.Timestamptz(6)
+  /// Курсор события GET /updates — используется как ключ дедупликации
+  marker       BigInt?   @unique
+  is_handled   Boolean   @default(false)
+  handled_by   BigInt?
+  handled_at   DateTime?
+  note         String?
+
+  @@index([received_at], map: "idx_max_bot_inbox_received_at")
+  @@index([is_handled], map: "idx_max_bot_inbox_is_handled")
+  @@index([max_user_id], map: "idx_max_bot_inbox_max_user_id")
+  @@map("max_bot_inbox_messages")
+}
+
+/// Рассылка текста по аудитории жителей через MAX-бота.
+model MaxBotBroadcast {
+  id          BigInt    @id @default(autoincrement())
+  text        String
+  /// Selector as entered by the admin: all_max | role:<role> | house:<n>
+  audience    String
+  /// draft | queued | running | completed | cancelled | failed
+  status      String    @default("draft")
+  total       Int       @default(0)
+  sent        Int       @default(0)
+  failed      Int       @default(0)
+  /// Не отправлено: у пользователя нет диалога с ботом (dialog.not.found)
+  skipped     Int       @default(0)
+  created_by  BigInt?
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  started_at  DateTime?
+  finished_at DateTime?
+  error       String?
+
+  recipients MaxBotBroadcastRecipient[]
+
+  @@index([status], map: "idx_max_bot_broadcasts_status")
+  @@index([created_at], map: "idx_max_bot_broadcasts_created_at")
+  @@map("max_bot_broadcasts")
+}
+
+/// Строка очереди отправки: один получатель одной рассылки.
+model MaxBotBroadcastRecipient {
+  id           BigInt    @id @default(autoincrement())
+  broadcast_id BigInt
+  user_id      BigInt?
+  /// MAX id получателя (получатели без max_id в рассылку не попадают)
+  max_id       BigInt
+  /// pending | sent | failed | skipped
+  status       String    @default("pending")
+  error        String?
+  sent_at      DateTime?
+
+  broadcast MaxBotBroadcast @relation(fields: [broadcast_id], references: [id], onDelete: Cascade)
+
+  @@unique([broadcast_id, max_id], map: "max_bot_broadcast_recipients_bc_max_key")
+  @@index([broadcast_id, status], map: "idx_max_bot_recipients_broadcast_status")
+  @@map("max_bot_broadcast_recipients")
+}
+
+/// Ключ/value хранилище состояния бота. Ключ "updates_marker" хранит курсор GET /updates.
+model MaxBotState {
+  key   String @id
+  value String
+
+  @@map("max_bot_state")
 }

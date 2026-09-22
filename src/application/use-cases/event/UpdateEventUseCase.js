@@ -5,13 +5,14 @@ import {
   ValidationError,
 } from "../../../core/errors/AppError.js";
 import logger from "../../../infrastructure/logger/index.js";
+import { isAdmin as hasAdminRole } from "../../../core/utils/roles.js";
 
 /**
  * Update Event Use Case
  * Updates an existing event (only by creator or admin)
  */
 export class UpdateEventUseCase {
-  async execute(eventId, updateData, userId, userStatus) {
+  async execute(eventId, updateData, userId, userRoles) {
     try {
       // Find event
       const event = await prisma.event.findUnique({
@@ -24,7 +25,7 @@ export class UpdateEventUseCase {
 
       // Check permissions (only creator or admin can update)
       const isCreator = Number(event.created_by) === Number(userId);
-      const isAdmin = userStatus === "admin";
+      const isAdmin = hasAdminRole({ roles: userRoles });
 
       if (!isCreator && !isAdmin) {
         throw new ForbiddenError("You can only edit your own events");
