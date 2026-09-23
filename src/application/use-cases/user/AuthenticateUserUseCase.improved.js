@@ -35,26 +35,29 @@ export class AuthenticateUserUseCase {
       .update(checkString)
       .digest("hex");
 
-    // Детальное логирование для отладки
-    logger.info("🔍 Hash verification details", {
-      received_hash: hash,
-      calculated_hash: hmac,
-      check_string: checkString,
-      data_keys: Object.keys(data),
-      token_prefix: process.env.TELEGRAM_BOT_TOKEN?.substring(0, 20),
-      hashes_match: hmac === hash,
-    });
+    // Сравнение только по результату: хеши, check_string и токен в логи не пишутся,
+    // иначе перехват лога даёт готовый переиспользуемый логин.
+    const expected = Buffer.from(hmac, "hex");
+    const received = Buffer.from(String(hash ?? ""), "hex");
 
-    return hmac === hash;
+    // Разная длина — сразу отказ: timingSafeEqual на неравных буферах бросает исключение.
+    if (expected.length !== received.length) return false;
+
+    return crypto.timingSafeEqual(expected, received);
   }
 
   /**
    * Check auth_date to prevent replay attacks
    */
-  isAuthDateValid(authDate, maxAgeSeconds = 86400) {
-    // Default 24 hours
+  /**
+   * Окно 1 час (как в MAX WebAppData) плюс допуск на перекос часов клиента.
+   * Суточное окно превращало перехваченный initData в логин на целый день.
+   */
+  isAuthDateValid(authDate, maxAgeSeconds = 3600) {
     const currentTime = Math.floor(Date.now() / 1000);
-    return currentTime - authDate < maxAgeSeconds;
+    const skewAllowanceSeconds = 60;
+
+    return currentTime - authDate < maxAgeSeconds + skewAllowanceSeconds;
   }
 
   async execute(telegramAuthData, deviceInfo = {}, rememberMe = false) {
@@ -72,10 +75,10 @@ export class AuthenticateUserUseCase {
     logger.info("🔐 Auth verification result", { isValidAuth });
 
     if (!isValidAuth) {
+      // Сам хеш и payload не логируются: в окне action_date их достаточно, чтобы войти.
       logger.warn("Invalid Telegram authentication attempt", {
         telegram_id: telegramAuthData.id,
         ip: deviceInfo.ip,
-        received_data: telegramAuthData,
       });
       throw new AuthenticationError("Invalid Telegram authentication");
     }

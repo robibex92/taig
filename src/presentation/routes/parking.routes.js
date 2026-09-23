@@ -5,10 +5,16 @@ import {
   authenticateOptional,
 } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
-import { SERVICE_ROLES } from "../../core/utils/roles.js";
+import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
 
 const router = express.Router();
 const parkingController = new ParkingController();
+
+/**
+ * Администратор паркинга; глобальный администратор — тоже (иначе он видит
+ * вкладку «Парковка», но все её запросы получают 403).
+ */
+const parkingAdmin = requireRoles(SERVICE_ROLES.PARKING_ADMIN, GLOBAL_ROLES.ADMIN);
 
 const BASE_ROUTE = "/parking-spots";
 
@@ -96,7 +102,7 @@ router.get(
 router.get(
   `${BASE_ROUTE}/:id/history`,
   authenticateJWT,
-  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
+  parkingAdmin,
   parkingController.getParkingSpotHistory
 );
 
@@ -212,7 +218,7 @@ router.put(
 router.post(
   "/parking/spots/:id/assign-owner",
   authenticateJWT,
-  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
+  parkingAdmin,
   parkingController.assignOwner
 );
 
@@ -271,7 +277,7 @@ router.post(
  *       201:
  *         description: Parking spot created
  */
-router.post(BASE_ROUTE, authenticateJWT, requireRoles(SERVICE_ROLES.PARKING_ADMIN), parkingController.createParkingSpot);
+router.post(BASE_ROUTE, authenticateJWT, parkingAdmin, parkingController.createParkingSpot);
 
 /**
  * @swagger
@@ -320,7 +326,7 @@ router.delete(
 router.post(
   "/parking/spots/:id/unassign-owner",
   authenticateJWT,
-  requireRoles(SERVICE_ROLES.PARKING_ADMIN),
+  parkingAdmin,
   parkingController.unassignOwner
 );
 

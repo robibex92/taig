@@ -1,5 +1,6 @@
 import { NotFoundError, AppError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
+import { resolveApartmentSubject } from "./apartmentAccess.js";
 
 /**
  * Use case for linking a user to an apartment
@@ -10,9 +11,12 @@ export class LinkUserToApartmentUseCase {
     this.houseRepository = houseRepository;
   }
 
-  async execute(house, number, telegramId) {
+  async execute(house, number, telegramId, user) {
     // Convert number to integer
     const apartmentNumber = parseInt(number);
+
+    // The resident is who the token says, not whatever the body claimed.
+    const subjectIdTelegram = resolveApartmentSubject(user, telegramId);
 
     // Find base record (position=1) by house and number
     const baseRecord = await this.houseRepository.findBasePosition(
@@ -28,13 +32,13 @@ export class LinkUserToApartmentUseCase {
     if (!baseRecord.id_telegram) {
       const updated = await this.houseRepository.updateTelegramId(
         baseRecord.id,
-        telegramId
+        subjectIdTelegram
       );
 
       logger.info("Updated existing position 1", {
         house,
         number: apartmentNumber,
-        telegram_id: telegramId,
+        telegram_id: subjectIdTelegram,
       });
 
       return {
@@ -74,14 +78,14 @@ export class LinkUserToApartmentUseCase {
       facade_color: baseRecord.facade_color,
       info: "",
       status: true,
-      id_telegram: telegramId,
+      id_telegram: subjectIdTelegram,
     });
 
     logger.info("Created new position", {
       house,
       number: apartmentNumber,
       position: newPosition,
-      telegram_id: telegramId,
+      telegram_id: subjectIdTelegram,
     });
 
     return {

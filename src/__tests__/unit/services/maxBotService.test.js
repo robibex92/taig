@@ -216,3 +216,65 @@ describe("MaxBotService — webhook", () => {
     expect(logged).not.toContain(TOKEN);
   });
 });
+
+describe("MaxBotService — резервный хост", () => {
+  const networkFail = () => {
+    const error = new Error("unable to get local issuer certificate");
+    return Promise.reject(error);
+  };
+
+  it("при сетевом отказе уходит на резервный хост и отвечает", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockImplementationOnce(networkFail)
+      .mockImplementationOnce(async () => jsonResponse(200, { payload: { user_id: 7 } }));
+
+    const service = makeService(fetchImpl, {
+      baseUrl: "https://primary.test",
+      fallbackBaseUrl: "https://backup.test",
+    });
+
+    await expect(service.getMe()).resolves.toEqual({ payload: { user_id: 7 } });
+    expect(fetchImpl.mock.calls[0][0]).toContain("primary.test");
+    expect(fetchImpl.mock.calls[1][0]).toContain("backup.test");
+  });
+
+  it("переключившись, остаётся на резервном хосте", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockImplementationOnce(networkFail)
+      .mockImplementation(async () => jsonResponse(200, { updates: [], marker: 3 }));
+
+    const service = makeService(fetchImpl, {
+      baseUrl: "https://primary.test",
+      fallbackBaseUrl: "https://backup.test",
+    });
+
+    await service.getUpdates({ timeoutMs: 1000 });
+    await service.getUpdates({ timeoutMs: 1000 });
+
+    expect(fetchImpl.mock.calls[1][0]).toContain("backup.test");
+    expect(fetchImpl.mock.calls[2][0]).toContain("backup.test");
+  });
+
+  it("явно заданный без резерва хост не подменяется", async () => {
+    const fetchImpl = jest.fn(networkFail);
+    const service = makeService(fetchImpl, { baseUrl: "https://only.test", fallbackBaseUrl: null });
+
+    await expect(service.getMe()).rejects.toBeInstanceOf(MaxBotApiError);
+    expect(fetchImpl.mock.calls.every(([url]) => url.includes("only.test"))).toBe(true);
+  });
+
+  it("таймаут long-poll не считается поводом менять хост", async () => {
+    const timeout = Object.assign(new Error("aborted"), { name: "AbortError" });
+    const fetchImpl = jest.fn().mockImplementation(() => Promise.reject(timeout));
+
+    const service = makeService(fetchImpl, {
+      baseUrl: "https://primary.test",
+      fallbackBaseUrl: "https://backup.test",
+    });
+
+    await expect(service.getMe()).rejects.toThrow(/таймаут/i);
+    expect(fetchImpl.mock.calls.every(([url]) => url.includes("primary.test"))).toBe(true);
+  });
+});

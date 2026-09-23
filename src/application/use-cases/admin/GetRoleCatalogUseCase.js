@@ -21,8 +21,9 @@ const ROLE_LABELS = {
  */
 export class GetRoleCatalogUseCase {
   async execute() {
+    // Те же дома, что показывает «Привет, сосед»: только активные записи.
     const houses = await prisma.house.findMany({
-      where: { house: { not: null } },
+      where: { house: { not: null }, status: true },
       distinct: ["house"],
       select: { house: true },
       orderBy: { house: "asc" },

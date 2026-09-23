@@ -5,6 +5,22 @@ import userRepository from "../../infrastructure/repositories/UserRepository.js"
 import { container } from "../../infrastructure/container/Container.js";
 
 /**
+ * Identity as seen by every middleware/handler down the chain.
+ * Platform ids travel here (and not in request bodies) so that ownership can
+ * be checked against the token instead of against whatever the client sent.
+ */
+function toRequestUser(user) {
+  return {
+    user_id: user.user_id,
+    roles: user.roles || [],
+    username: user.username,
+    first_name: user.first_name,
+    telegram_id: user.telegram_id ?? null,
+    max_id: user.max_id ?? null,
+  };
+}
+
+/**
  * Middleware to authenticate JWT tokens
  */
 export const authenticateJWT = asyncHandler(async (req, res, next) => {
@@ -37,12 +53,7 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     throw new AuthenticationError("User not found");
   }
 
-  req.user = {
-    user_id: user.user_id,
-    roles: user.roles || [],
-    username: user.username,
-    first_name: user.first_name,
-  };
+  req.user = toRequestUser(user);
 
   next();
 });
@@ -77,12 +88,7 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
       const user = await userRepository.findById(decoded.id);
 
       if (user) {
-        req.user = {
-          user_id: user.user_id,
-          roles: user.roles || [],
-          username: user.username,
-          first_name: user.first_name,
-        };
+        req.user = toRequestUser(user);
       } else {
         req.user = null;
       }

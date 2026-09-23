@@ -1,5 +1,6 @@
 import { NotFoundError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
+import { assertApartmentBelongsTo, resolveApartmentSubject } from "./apartmentAccess.js";
 
 /**
  * Use case for unlinking a user from an apartment
@@ -13,13 +14,17 @@ export class UnlinkUserFromApartmentUseCase {
     this.houseRepository = houseRepository;
   }
 
-  async execute(houseId, telegramId) {
+  async execute(houseId, telegramId, user) {
+    const subjectIdTelegram = resolveApartmentSubject(user, telegramId);
+
     // Find the record by ID
     const house = await this.houseRepository.findById(houseId);
 
     if (!house) {
       throw new NotFoundError("House");
     }
+
+    assertApartmentBelongsTo(house, subjectIdTelegram, user);
 
     logger.info("Unlink request", {
       house_id: houseId,

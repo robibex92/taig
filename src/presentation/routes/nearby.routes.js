@@ -31,10 +31,14 @@ router.get("/nearby", houseController.getHousesByFilter);
 
 /**
  * @route   GET /nearby/user/:id_telegram
- * @desc    Get all houses for a user
- * @access  Public
+ * @desc    Get all houses of the current user (admins may query anyone)
+ * @access  Private
  */
-router.get("/nearby/user/:id_telegram", houseController.getUserHouses);
+router.get(
+  "/nearby/user/:id_telegram",
+  authenticateJWT,
+  houseController.getUserHouses
+);
 
 /**
  * @route   GET /nearby/:id/info
@@ -49,17 +53,21 @@ router.get(
 
 /**
  * @route   POST /nearby
- * @desc    Link user to apartment (create or update position)
- * @access  Private (add auth middleware if needed)
+ * @desc    Link the current user to an apartment
+ * @access  Private (resident may only link themselves)
  */
-router.post("/nearby", houseController.linkUserToApartment);
+router.post("/nearby", authenticateJWT, houseController.linkUserToApartment);
 
 /**
  * @route   POST /nearby/unlink
- * @desc    Unlink user from apartment
- * @access  Private (add auth middleware if needed)
+ * @desc    Unlink the current user from an apartment
+ * @access  Private (resident may only unlink their own binding)
  */
-router.post("/nearby/unlink", houseController.unlinkUserFromApartment);
+router.post(
+  "/nearby/unlink",
+  authenticateJWT,
+  houseController.unlinkUserFromApartment
+);
 
 /**
  * @route   PATCH /nearby/:id/info

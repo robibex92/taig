@@ -3,6 +3,7 @@ import { logger } from "../../../core/utils/logger.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../../core/errors/AppError.js";
 import { maxBotService as defaultService } from "../../../infrastructure/services/MaxBotService.js";
 import {
+  MAX_BOT_BROADCAST_ACTIVE_STATUSES,
   MAX_BOT_BROADCAST_STATUS,
   MAX_BOT_RECIPIENT_STATUS,
   validateMaxBotText,
@@ -197,6 +198,18 @@ export class MaxBotBroadcastUseCases {
     });
 
     if (!reset.count) {
+      // Прерванная перезапуском рассылка: неудачных нет, но очередь не пройдена.
+      const pendingLeft = await this.db.maxBotBroadcastRecipient.count({
+        where: {
+          broadcast_id: broadcast.id,
+          status: MAX_BOT_RECIPIENT_STATUS.PENDING,
+        },
+      });
+
+      if (pendingLeft > 0) {
+        return this.startBroadcast(idToPlain(broadcast.id));
+      }
+
       throw new ValidationError("Неудачных или пропущенных получателей нет — повторять нечего");
     }
 
@@ -236,6 +249,68 @@ export class MaxBotBroadcastUseCases {
     }
 
     return this._decorateBroadcast(updated);
+  }
+
+  /**
+   * DELETE /api/admin/max-bot/broadcasts/:id — удалить черновик.
+   *
+   * Черновик («Создать черновик», dry_run) не имеет статуса queued/running, поэтому
+   * кнопка «Отменить» на нём законно неактивна: без этого действия такая строка
+   * оставалась бы в журнале навсегда.
+   */
+  async deleteBroadcast(id) {
+    const broadcast = await this._requireBroadcast(id);
+
+    if (MAX_BOT_BROADCAST_ACTIVE_STATUSES.includes(broadcast.status)) {
+      throw new ConflictError("Сначала отмените отправку, потом удаляйте рассылку");
+    }
+
+    if (broadcast.status === MAX_BOT_BROADCAST_STATUS.COMPLETED) {
+      throw new ConflictError(
+        "Завершённую рассылку удалять нельзя — это единственная запись о том, что ушло жителям"
+      );
+    }
+
+    await this.db.maxBotBroadcast.delete({ where: { id: broadcast.id } });
+
+    this.log.info("MAX-бот: рассылка удалена", {
+      broadcast_id: idToPlain(broadcast.id),
+      status: broadcast.status,
+    });
+
+    return { deleted: idToPlain(broadcast.id) };
+  }
+
+  /**
+   * Разбор осиротевших рассылок при старте процесса.
+   *
+   * Очередь живёт в памяти, поэтому `pm2 restart` оставляет в БД `queued`/`running`
+   * строки, которые никто не отправляет: журнал вечно показывал бы их активными.
+   */
+  async reconcileInterruptedBroadcasts() {
+    const orphans = await this.db.maxBotBroadcast.findMany({
+      where: { status: { in: MAX_BOT_BROADCAST_ACTIVE_STATUSES } },
+      select: { id: true, status: true },
+    });
+
+    const stale = orphans.filter((row) => !this.runningIds.has(idToPlain(row.id)));
+    if (!stale.length) return { reconciled: 0 };
+
+    await this.db.maxBotBroadcast.updateMany({
+      where: { id: { in: stale.map((row) => row.id) } },
+      data: {
+        status: MAX_BOT_BROADCAST_STATUS.FAILED,
+        error: "Отправка прервана перезапуском API. Нажмите «Повторить неудачные», чтобы продолжить",
+        finished_at: new Date(),
+      },
+    });
+
+    this.log.warn("MAX-бот: рассылки без процесса отправки помечены прерванными", {
+      count: stale.length,
+      ids: stale.map((row) => idToPlain(row.id)),
+    });
+
+    return { reconciled: stale.length };
   }
 
   /** GET /api/admin/max-bot/broadcasts */

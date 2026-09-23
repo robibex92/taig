@@ -81,6 +81,13 @@ router.post("/broadcasts/:id/cancel", maxBotController.cancelBroadcast);
 router.post("/broadcasts/:id/retry-failed", maxBotController.retryFailedBroadcast);
 
 /**
+ * @route   DELETE /api/admin/max-bot/broadcasts/:id
+ * @desc    Удалить черновик (или отменённую/провалившуюся) рассылку
+ * @access  Private (admin)
+ */
+router.delete("/broadcasts/:id", maxBotController.deleteBroadcast);
+
+/**
  * @route   GET /api/admin/max-bot/broadcasts
  * @desc    Журнал рассылок
  * @access  Private (admin only)

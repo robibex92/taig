@@ -66,6 +66,7 @@ export class MaxBotService {
   constructor({
     token,
     baseUrl,
+    fallbackBaseUrl,
     fetchImpl,
     timeoutMs,
     maxAttempts,
@@ -73,14 +74,36 @@ export class MaxBotService {
     loggerImpl,
   } = {}) {
     this.token = token ?? process.env.MAX_BOT_TOKEN ?? null;
-    this.baseUrl = String(
+
+    const primary = String(
       baseUrl ?? process.env.MAX_BOT_API_URL ?? MAX_BOT_DEFAULT_BASE_URL
     ).replace(/\/+$/, "");
+    const fallback = String(
+      fallbackBaseUrl ?? process.env.MAX_BOT_API_URL_FALLBACK ?? MAX_BOT_FALLBACK_BASE_URL
+    ).replace(/\/+$/, "");
+
+    /**
+     * Хосты в порядке приоритета. `platform-api2.max.ru` на части серверов не
+     * проходит TLS-валидацию, а `botapi.max.ru` отдаёт то же самое, поэтому при
+     * сетевом отказе переключаемся на резервный и держим его до перезапуска.
+     * Резервный хост подключается только к URL по умолчанию: явно указавший свой
+     * хост администратор знает, что он хочет, и подменять его не стоит.
+     */
+    const explicitFallback = fallbackBaseUrl ?? process.env.MAX_BOT_API_URL_FALLBACK ?? null;
+    const useFallback = Boolean(explicitFallback) || primary === MAX_BOT_DEFAULT_BASE_URL;
+    this.hosts =
+      useFallback && fallback && fallback !== primary ? [primary, fallback] : [primary];
+    this.hostIndex = 0;
+
     this.fetchImpl = fetchImpl ?? ((...args) => globalThis.fetch(...args));
     this.timeoutMs = timeoutMs ?? REQUEST_TIMEOUT_MS;
     this.maxAttempts = maxAttempts ?? MAX_ATTEMPTS;
     this.retryBaseDelayMs = retryBaseDelayMs ?? RETRY_BASE_DELAY_MS;
     this.log = loggerImpl ?? logger;
+  }
+
+  get baseUrl() {
+    return this.hosts[this.hostIndex];
   }
 
   isConfigured() {
@@ -101,12 +124,15 @@ export class MaxBotService {
   async request(path, { method = "GET", query = null, body, timeoutMs } = {}) {
     this.assertConfigured();
 
-    const url = new URL(`${this.baseUrl}${path}`);
-    if (query) {
-      Object.entries(query).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
-      });
-    }
+    const buildUrl = () => {
+      const url = new URL(`${this.baseUrl}${path}`);
+      if (query) {
+        Object.entries(query).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+        });
+      }
+      return url;
+    };
 
     const payloadText = body === undefined ? null : JSON.stringify(body);
     let lastError = null;
@@ -119,7 +145,7 @@ export class MaxBotService {
       );
 
       try {
-        const response = await this.fetchImpl(url.toString(), {
+        const response = await this.fetchImpl(buildUrl().toString(), {
           method,
           headers: {
             Authorization: this.token,
@@ -182,6 +208,20 @@ export class MaxBotService {
           aborted ? `MAX API: превышен таймаут запроса ${path}` : `MAX API: сетевая ошибка (${path})`,
           { status: null, code: aborted ? "timeout" : "network_error" }
         );
+
+        // Сеть/TLS/DNS: возможно, винован конкретный хост, а не MAX в целом.
+        if (!aborted && this.hostIndex < this.hosts.length - 1) {
+          const failedHost = this.baseUrl;
+          this.hostIndex += 1;
+          this.log.warn("MAX API: переключаюсь на резервный хост", {
+            method,
+            path,
+            from: failedHost,
+            to: this.baseUrl,
+            error: err?.message,
+          });
+          continue;
+        }
 
         if (attempt < this.maxAttempts) {
           const delay = this.retryBaseDelayMs * 2 ** (attempt - 1);

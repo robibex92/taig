@@ -311,6 +311,17 @@ testConnection().then((connected) => {
         reason: process.env.MAX_BOT_TOKEN ? "MAX_BOT_POLLING=false" : "MAX_BOT_TOKEN missing",
       });
     }
+
+    // MAX Bot: рассылки, оставшиеся queued/running после перезапуска процесса,
+    // никто не отправляет — приводим журнал в честное состояние.
+    if (connected && process.env.MAX_BOT_TOKEN) {
+      container
+        .resolve("maxBotBroadcastUseCases")
+        .reconcileInterruptedBroadcasts()
+        .catch((err) =>
+          logger.error("Failed to reconcile MAX bot broadcasts", { error: err.message })
+        );
+    }
   });
 });
 

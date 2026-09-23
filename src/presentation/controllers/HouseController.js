@@ -1,6 +1,7 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
 import { prisma } from "../../infrastructure/database/prisma.js";
+import { resolveApartmentSubject } from "../../application/use-cases/house/apartmentAccess.js";
 import {
   getEntrancesSchema,
   getHousesFilterSchema,
@@ -121,9 +122,12 @@ export class HouseController {
       throw new ValidationError(error.details[0].message);
     }
 
-    const houses = await this.getUserHousesUseCase.execute(
+    const subject = resolveApartmentSubject(
+      req.user,
       parseInt(req.params.id_telegram)
     );
+
+    const houses = await this.getUserHousesUseCase.execute(subject);
 
     res.json({
       data: houses,
@@ -165,7 +169,8 @@ export class HouseController {
     const result = await this.linkUserToApartmentUseCase.execute(
       house,
       number,
-      id_telegram
+      id_telegram,
+      req.user
     );
 
     const statusCode = result.message.includes("Created") ? 201 : 200;
@@ -187,7 +192,8 @@ export class HouseController {
     const { id, id_telegram } = req.body;
     const result = await this.unlinkUserFromApartmentUseCase.execute(
       id,
-      id_telegram
+      id_telegram,
+      req.user
     );
 
     res.json(result);

@@ -132,6 +132,12 @@ export class MaxBotController {
     ok(res, broadcast);
   });
 
+  /** DELETE /broadcasts/:id — удалить черновик или отменённую рассылку */
+  deleteBroadcast = asyncHandler(async (req, res) => {
+    const result = await this.broadcasts.deleteBroadcast(req.params.id);
+    ok(res, result);
+  });
+
   /** GET /broadcasts */
   getBroadcasts = asyncHandler(async (req, res) => {
     const { limit, offset } = req.query;
