@@ -90,18 +90,6 @@ export class GetStatisticsUseCase {
       console.warn("Event table not found, skipping event statistics");
     }
 
-    // Get banners statistics
-    let totalBanners = 0;
-    let activeBanners = 0;
-    try {
-      totalBanners = await prisma.banner.count();
-      activeBanners = await prisma.banner.count({
-        where: { is_active: true },
-      });
-    } catch (error) {
-      console.warn("Banner table not found, skipping banner statistics");
-    }
-
     // Get parking statistics
     let totalParkingSpots = 0;
     let occupiedParkingSpots = 0;
@@ -224,10 +212,6 @@ export class GetStatisticsUseCase {
       events: {
         total: totalEvents,
         active: activeEvents,
-      },
-      banners: {
-        total: totalBanners,
-        active: activeBanners,
       },
       parking: {
         total: totalParkingSpots,

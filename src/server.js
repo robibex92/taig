@@ -47,8 +47,8 @@ import telegramChatRoutes from "./presentation/routes/telegramChatRoutes.js";
 import adminRoutes from "./presentation/routes/admin.routes.js";
 import imageProxyRoutes from "./presentation/routes/imageProxy.routes.js";
 import eventsRoutes from "./presentation/routes/events.routes.js";
-import bannersRoutes from "./presentation/routes/banners.routes.js";
 import parkingRoutes from "./presentation/routes/parking.routes.js";
+import favoritesRoutes from "./presentation/routes/favorites.routes.js";
 import maxBotRoutes from "./presentation/routes/maxBot.routes.js";
 
 // Telegram Bot
@@ -196,8 +196,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin/max-bot", maxBotRoutes);
 app.use("/api", imageProxyRoutes);
 app.use("/api/events", eventsRoutes);
-app.use("/api/banners", bannersRoutes);
 app.use("/api", parkingRoutes);
+app.use("/api/favorites", favoritesRoutes);
 
 // ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
 // app.use(routerPosts); // MIGRATED ✅

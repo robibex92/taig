@@ -35,6 +35,7 @@ model User {
   parking_spots       ParkingSpot[]       @relation("ParkingSpotOwner")
   parking_messages_sent     ParkingMessage[] @relation("ParkingMessageSender")
   parking_messages_received  ParkingMessage[] @relation("ParkingMessageReceiver")
+  favorite_ads              FavoriteAd[]
 
   @@index([roles], type: Gin)
   @@map("users")
@@ -53,10 +54,27 @@ model Ad {
   price        String?
   view_count   Int?
   bookings     Booking[]
+  favorites    FavoriteAd[]
   category_rel Category?    @relation(fields: [category], references: [id], onDelete: Cascade)
   subcategory_rel Subcategory? @relation(fields: [subcategory], references: [id], onDelete: Cascade)
 
   @@map("ads")
+}
+
+/// Сохранённые объявления жителя: переживают перезагрузку и синхронизируются
+/// между телефоном и браузером (раньше «Избранное» было локальным useState).
+model FavoriteAd {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  ad_id      BigInt
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  ad         Ad       @relation(fields: [ad_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([user_id, ad_id])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([ad_id])
+  @@map("favorite_ads")
 }
 
 model AdImage {

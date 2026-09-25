@@ -8,13 +8,19 @@ import logger from "../../../infrastructure/logger/index.js";
 export class GetEventsUseCase {
   async execute(filters = {}, pagination = {}) {
     try {
-      const { status, event_type } = filters;
+      const { status, event_type, search } = filters;
       const { page = 0, limit = 10 } = pagination;
 
       // Build where clause
       const where = {};
       if (status) where.status = status;
       if (event_type) where.event_type = event_type;
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ];
+      }
 
       // Get total count
       const total = await prisma.event.count({ where });
@@ -51,6 +57,12 @@ export class GetEventsUseCase {
               },
             },
           },
+          telegram_chats: {
+            select: {
+              id: true,
+              telegram_chat_id: true,
+            },
+          },
         },
       });
 
@@ -68,6 +80,11 @@ export class GetEventsUseCase {
         created_by: Number(event.created_by),
         created_at: event.created_at.toISOString(),
         updated_at: event.updated_at.toISOString(),
+        image_url: event.image_url,
+        telegram_chats: (event.telegram_chats || []).map((chat) => ({
+          id: Number(chat.id),
+          telegram_chat_id: Number(chat.telegram_chat_id),
+        })),
         creator: event.creator
           ? {
               first_name: event.creator.first_name,

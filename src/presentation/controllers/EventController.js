@@ -27,8 +27,8 @@ export class EventController {
    * Get all events
    */
   getEvents = asyncHandler(async (req, res) => {
-    const { page = 0, limit = 10, status, event_type } = req.query;
-    const filters = { status, event_type };
+    const { page = 0, limit = 10, status, event_type, search } = req.query;
+    const filters = { status, event_type, search };
     const pagination = { page: parseInt(page), limit: parseInt(limit) };
 
     const result = await this.getEventsUseCase.execute(filters, pagination);
