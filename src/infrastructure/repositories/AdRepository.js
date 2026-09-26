@@ -4,6 +4,27 @@ import { IAdRepository } from "../../domain/repositories/IAdRepository.js";
 import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
 
+/** Порядок картинок одного объявления: главное фото первым. */
+const IMAGES_ORDER_BY = [{ is_main: "desc" }, { created_at: "asc" }];
+
+// `ad_images.ad_id` — Int, а `ads.id` — BigInt: отношения в схеме Prisma между ними нет,
+// поэтому `include` не работает и картинки дотягиваются отдельным запросом.
+const imagesWhere = (adId) => ({ ad_id: Number(adId) });
+
+/**
+ * Число из `price`: колонка строковая, и в ней лежит и «1200», и «1 200 ₽», и
+ * «Договорная». Пусто для всего, что числом не является.
+ */
+const parsePriceNumber = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+
+  const digits = String(value).replace(/[^\d.]/g, "");
+  if (!digits) return null;
+
+  const parsed = parseFloat(digits);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 /**
  * Prisma implementation of Ad Repository
  */
@@ -21,13 +42,12 @@ export class AdRepository extends IAdRepository {
         return null;
       }
 
-      // Получаем изображения отдельно из-за несоответствия типов (Ad.id BigInt vs AdImage.ad_id Int)
       const images = await prisma.adImage.findMany({
-        where: { ad_id: Number(id) },
-        orderBy: [{ is_main: "desc" }, { created_at: "asc" }],
+        where: imagesWhere(id),
+        orderBy: IMAGES_ORDER_BY,
       });
 
-      return new AdEntity({ ...ad, images: images || [] });
+      return new AdEntity({ ...ad, images });
     } catch (error) {
       logger.error("Error finding ad by ID", { error: error.message, id });
       throw new DatabaseError("Failed to find ad", error);
@@ -53,110 +73,53 @@ export class AdRepository extends IAdRepository {
       } = filters;
       const { page = 1, limit = 20 } = pagination;
 
-      const where = {};
+      const where = this._buildWhere({
+        status,
+        category,
+        subcategory,
+        dateFrom,
+        dateTo,
+        search,
+      });
 
-      if (status) {
-        where.status = status;
-      }
-
-      if (category) {
-        where.category = parseInt(category);
-      }
-
-      if (subcategory) {
-        where.subcategory = parseInt(subcategory);
-      }
-
-      // Price filter - since price is stored as string, we need to convert to number for comparison
-      if (priceMin !== undefined || priceMax !== undefined) {
-        where.AND = where.AND || [];
-
-        // We'll need to use raw query for price comparison since it's stored as string
-        // For now, let's try to convert and filter
-        if (priceMin !== undefined) {
-          where.AND.push({
-            price: {
-              not: null,
-            },
-          });
-        }
-      }
-
-      // Date filter
-      if (dateFrom) {
-        where.created_at = {
-          ...where.created_at,
-          gte: new Date(dateFrom),
-        };
-      }
-
-      if (dateTo) {
-        where.created_at = {
-          ...where.created_at,
-          lte: new Date(dateTo),
-        };
-      }
-
-      // Search filter (search in title and content)
-      if (search) {
-        where.OR = [
-          { title: { contains: search, mode: "insensitive" } },
-          { content: { contains: search, mode: "insensitive" } },
-        ];
-      }
-
-      // Build orderBy
-      let orderBy;
       const safeOrder = order === "ASC" ? "asc" : "desc";
+      const orderBy = { [sort]: safeOrder };
+      const numericPrice =
+        priceMin !== undefined || priceMax !== undefined || sort === "price";
 
-      if (sort === "price") {
-        // For price sorting, we'll use raw SQL since it's stored as string
-        orderBy = { price: safeOrder };
+      let ads;
+      let total;
+
+      if (numericPrice) {
+        // `price` — VarChar: фильтр и сортировку по нему Prisma в SQL не выразит.
+        // Такую страницу читаем целиком, считаем и режем в JS. Раньше цена
+        // отфильтровывалась уже ПОСЛЕ `take: limit`, а `total` приравнивался к
+        // числу оставшихся строк страницы — из-за этого `totalPages` врал, часть
+        // объявлений пропадала из выдачи, а порядок был лексикографическим
+        // («10000» раньше «900»).
+        const rows = await prisma.ad.findMany({ where, orderBy });
+        const filtered = this._filterByPrice(rows, priceMin, priceMax);
+        const sorted =
+          sort === "price" ? this._sortByPrice(filtered, safeOrder) : filtered;
+
+        total = sorted.length;
+        ads = sorted.slice((page - 1) * limit, (page - 1) * limit + limit);
       } else {
-        orderBy = { [sort]: safeOrder };
+        [ads, total] = await prisma.$transaction([
+          prisma.ad.findMany({
+            where,
+            orderBy,
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.ad.count({ where }),
+        ]);
       }
 
-      // Get ads with pagination
-      let [ads, total] = await prisma.$transaction([
-        prisma.ad.findMany({
-          where,
-          orderBy,
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.ad.count({ where }),
-      ]);
-
-      // Apply price filtering post-query since price is stored as string
-      if (priceMin !== undefined || priceMax !== undefined) {
-        ads = ads.filter((ad) => {
-          if (!ad.price) return false;
-
-          // Try to parse price (handle "Не указана" and other non-numeric values)
-          const priceStr = ad.price.toString().replace(/[^\d.]/g, "");
-          const priceNum = parseFloat(priceStr);
-
-          if (isNaN(priceNum)) return false;
-
-          if (priceMin !== undefined && priceNum < parseFloat(priceMin)) {
-            return false;
-          }
-
-          if (priceMax !== undefined && priceNum > parseFloat(priceMax)) {
-            return false;
-          }
-
-          return true;
-        });
-
-        // Update total count after filtering
-        total = ads.length;
-      }
-
-      const adEntities = ads.map((ad) => new AdEntity(ad));
+      const withImages = await this._attachImages(ads);
 
       return {
-        ads: adEntities,
+        ads: withImages.map((ad) => new AdEntity(ad)),
         total,
         page,
         limit,
@@ -168,6 +131,115 @@ export class AdRepository extends IAdRepository {
     }
   }
 
+  /** Общий билдер `where` для списка и для «мои объявления». */
+  _buildWhere({ status, category, subcategory, dateFrom, dateTo, search, userId }) {
+    const where = {};
+
+    if (userId !== undefined) {
+      where.user_id = BigInt(userId);
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (category) {
+      where.category = parseInt(category);
+    }
+
+    if (subcategory) {
+      where.subcategory = parseInt(subcategory);
+    }
+
+    if (dateFrom || dateTo) {
+      where.created_at = {
+        ...(dateFrom && { gte: new Date(dateFrom) }),
+        ...(dateTo && { lte: new Date(dateTo) }),
+      };
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { content: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    return where;
+  }
+
+  _filterByPrice(rows, priceMin, priceMax) {
+    if (priceMin === undefined && priceMax === undefined) return rows;
+
+    const min = priceMin === undefined ? null : parseFloat(priceMin);
+    const max = priceMax === undefined ? null : parseFloat(priceMax);
+
+    return rows.filter((row) => {
+      const price = parsePriceNumber(row.price);
+      if (price === null) return false;
+      if (min !== null && price < min) return false;
+      if (max !== null && price > max) return false;
+      return true;
+    });
+  }
+
+  /** Объявления без цены (и «Договорная») всегда в конце — сравнить их нельзя. */
+  _sortByPrice(rows, order) {
+    const direction = order === "asc" ? 1 : -1;
+
+    return [...rows].sort((a, b) => {
+      const left = parsePriceNumber(a.price);
+      const right = parsePriceNumber(b.price);
+
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+
+      return (left - right) * direction;
+    });
+  }
+
+  /**
+   * Картинки пачкой на всю страницу.
+   *
+   * Отношения `ads` ↔ `ad_images` в схеме Prisma нет (типы ключей разные), поэтому
+   * раньше каждая карточка списка добирала своё фото отдельным запросом — при
+   * `ADS_PER_PAGE = 20` это 20 лишних round-trip'ов на страницу.
+   */
+  async _attachImages(ads) {
+    if (!ads.length) return [];
+
+    const images = await prisma.adImage.findMany({
+      where: { ad_id: { in: ads.map((ad) => Number(ad.id)) } },
+      orderBy: IMAGES_ORDER_BY,
+    });
+
+    const byAd = new Map();
+    for (const image of images) {
+      const bucket = byAd.get(image.ad_id) ?? [];
+      bucket.push(image);
+      byAd.set(image.ad_id, bucket);
+    }
+
+    return ads.map((ad) => ({ ...ad, images: byAd.get(Number(ad.id)) ?? [] }));
+  }
+
+  /** Картинки объявления перезаписываются целиком: старое удаляется, новое вставляется. */
+  async _replaceImages(tx, adId, images = []) {
+    await tx.adImage.deleteMany({ where: imagesWhere(adId) });
+
+    if (!images.length) return;
+
+    await tx.adImage.createMany({
+      data: images.map((img) => ({
+        ad_id: Number(adId),
+        image_url: img.url,
+        is_main: img.is_main || false,
+        created_at: new Date(),
+      })),
+    });
+  }
+
   /**
    * Find ads by user ID
    */
@@ -175,23 +247,17 @@ export class AdRepository extends IAdRepository {
     try {
       const { status, sort = "created_at", order = "DESC" } = filters;
 
-      const where = {
-        user_id: BigInt(userId),
-      };
-
-      if (status) {
-        where.status = status;
-      }
-
+      const where = this._buildWhere({ userId, status });
       const safeOrder = order === "ASC" ? "asc" : "desc";
-      const orderBy = { [sort]: safeOrder };
 
       const ads = await prisma.ad.findMany({
         where,
-        orderBy,
+        orderBy: { [sort]: safeOrder },
       });
 
-      return ads.map((ad) => new AdEntity(ad));
+      const withImages = await this._attachImages(ads);
+
+      return withImages.map((ad) => new AdEntity(ad));
     } catch (error) {
       logger.error("Error finding ads by user ID", {
         error: error.message,
@@ -234,22 +300,11 @@ export class AdRepository extends IAdRepository {
 
         // Save images if provided
         if (images && images.length > 0) {
-          await tx.adImage.createMany({
-            data: images.map((img) => ({
-              ad_id: Number(newAd.id),
-              image_url: img.url,
-              is_main: img.is_main || false,
-              created_at: new Date(),
-            })),
+          await this._replaceImages(tx, newAd.id, images);
+          newAd.images = await tx.adImage.findMany({
+            where: imagesWhere(newAd.id),
+            orderBy: IMAGES_ORDER_BY,
           });
-
-          // Fetch saved images
-          const savedImages = await tx.adImage.findMany({
-            where: { ad_id: Number(newAd.id) },
-            orderBy: [{ is_main: "desc" }, { created_at: "asc" }],
-          });
-
-          newAd.images = savedImages;
         }
 
         return newAd;
@@ -308,28 +363,13 @@ export class AdRepository extends IAdRepository {
 
         // Handle images update if provided
         if (data.images !== undefined) {
-          // Delete existing images
-          await tx.adImage.deleteMany({
-            where: { ad_id: Number(id) },
-          });
-
-          // Insert new images
-          if (data.images.length > 0) {
-            await tx.adImage.createMany({
-              data: data.images.map((img) => ({
-                ad_id: Number(id),
-                image_url: img.url,
-                is_main: img.is_main || false,
-                created_at: new Date(),
-              })),
-            });
-          }
+          await this._replaceImages(tx, id, data.images);
         }
 
         // Fetch images
         const images = await tx.adImage.findMany({
-          where: { ad_id: Number(id) },
-          orderBy: [{ is_main: "desc" }, { created_at: "asc" }],
+          where: imagesWhere(id),
+          orderBy: IMAGES_ORDER_BY,
         });
 
         updatedAd.images = images;
@@ -352,7 +392,7 @@ export class AdRepository extends IAdRepository {
    */
   async delete(id) {
     try {
-      const ad = await prisma.ad.update({
+      await prisma.ad.update({
         where: { id: BigInt(id) },
         data: {
           status: "deleted",
@@ -530,7 +570,7 @@ export class AdRepository extends IAdRepository {
     try {
       // First delete all related images
       await prisma.adImage.deleteMany({
-        where: { ad_id: Number(id) },
+        where: imagesWhere(id),
       });
 
       // Delete all telegram messages

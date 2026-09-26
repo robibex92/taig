@@ -1,5 +1,6 @@
 import { AuthorizationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
+import { publishToChats } from "./adPublishing.js";
 
 /**
  * Use case for creating a new ad
@@ -18,7 +19,6 @@ export class CreateAdUseCase {
   }
 
   async execute(adData, authenticatedUserId, selectedChats = []) {
-    console.log("[CreateAdUseCase] selectedChats входящие:", selectedChats); // log
     // Verify user exists and is active
     const user = await this.userRepository.findById(adData.user_id);
 
@@ -52,63 +52,52 @@ export class CreateAdUseCase {
     });
 
     if (selectedChats && selectedChats.length > 0) {
-      console.log("[CreateAdUseCase] публикация будет, чаты:", selectedChats); // log
-      try {
-        // Get all active ads chats from DB
-        // Note: We don't filter by visible_to_all here because user already selected specific chats
-        const allAdsChats = await this.telegramChatRepository.getActiveChats(
-          "ads",
-          false // visibleToAllOnly = false, because we trust the user's selection
-        );
-
-        // Filter to only selected chats
-        const selectedChatsAsString = selectedChats.map(String);
-        const filteredChats = allAdsChats.filter((chat) =>
-          selectedChatsAsString.includes(String(chat.id))
-        );
-        if (!filteredChats.length) {
-          logger.warn("[CreateAdUseCase] Нет совпадающих чатов для публикации!", {
-            selectedChats,
-            allAdsChats: allAdsChats.map(c => ({id: c.id, chat_id: c.chat_id, name: c.name})),
-          });
-        } else {
-          logger.info("[CreateAdUseCase] Чаты для публикации:", filteredChats.map(c => ({id: c.id, chat_id: c.chat_id, name: c.name})));
-        }
-        // Publish to each selected chat
-        for (const chat of filteredChats) {
-          try {
-            logger.info("[CreateAdUseCase] Публикую в Telegram:", {adId: ad.id, chat_id: chat.chat_id, thread_id: chat.thread_id});
-            await this.telegramService.publishAd(
-              ad,
-              chat.chat_id,
-              chat.thread_id
-            );
-            logger.info(`Ad published to Telegram chat: ${chat.name}`, {
-              ad_id: ad.id,
-              chat_id: chat.chat_id,
-              thread_id: chat.thread_id,
-            });
-          } catch (err) {
-            logger.error(
-              `[CreateAdUseCase] Ошибка публикации в Telegram: ${chat.name}`,
-              {
-                ad_id: ad.id,
-                chat_id: chat.chat_id,
-                thread_id: chat.thread_id,
-                error: err.stack || err.message,
-              }
-            );
-          }
-        }
-      } catch (err) {
-        logger.error("Error publishing ad to Telegram", {
-          ad_id: ad.id,
-          error: err.message,
-        });
-        // Don't throw - ad creation should succeed even if Telegram fails
-      }
+      await this.#publishToSelectedChats(ad, selectedChats);
     }
 
     return ad;
+  }
+
+  /**
+   * Публикуем только в те чаты, которые выбрал автор: он уже видит доступный
+   * список, поэтому дополнительная фильтрация по `visible_to_all` не нужна.
+   * Сбой Telegram не отменяет созданное объявление.
+   */
+  async #publishToSelectedChats(ad, selectedChats) {
+    try {
+      const allAdsChats = await this.telegramChatRepository.getActiveChats(
+        "ads",
+        false
+      );
+      const chosen = new Set(selectedChats.map(String));
+      const chats = allAdsChats
+        .filter((chat) => chosen.has(String(chat.id)))
+        .map(({ chat_id: chatId, thread_id: threadId }) => ({
+          chat_id: chatId,
+          thread_id: threadId,
+        }));
+
+      if (!chats.length) {
+        logger.warn("No matching Telegram chats for publication", {
+          ad_id: ad.id,
+          selected_chats: selectedChats,
+          available_chats: allAdsChats.map((chat) => ({
+            id: chat.id,
+            chat_id: chat.chat_id,
+            name: chat.name,
+          })),
+        });
+        return;
+      }
+
+      await publishToChats({ ad, chats, telegramService: this.telegramService });
+    } catch (err) {
+      logger.error("Error publishing ad to Telegram", {
+        ad_id: ad.id,
+        error: err.message,
+      });
+      // Не пробрасываем: объявление создано, и сбой бота не должен выглядеть
+      // как несозданное.
+    }
   }
 }

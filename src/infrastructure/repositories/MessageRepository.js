@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
 import { MessageEntity } from "../../domain/entities/Message.entity.js";
 import { DatabaseError } from "../../domain/errors/index.js";
 import logger from "../../infrastructure/logger/index.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../database/prisma.js";
 
 /**
  * MessageRepository - handles all database operations for messages

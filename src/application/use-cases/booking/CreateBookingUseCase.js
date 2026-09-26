@@ -1,7 +1,8 @@
 import BookingRepository from "../../../infrastructure/repositories/BookingRepository.js";
 import AdRepository from "../../../infrastructure/repositories/AdRepository.js";
 import UserRepository from "../../../infrastructure/repositories/UserRepository.js";
-import TelegramService from "../../services/TelegramService.js";
+import { telegramService } from "../../services/TelegramService.js";
+import { messageDeliveryService } from "../../services/MessageDeliveryService.js";
 import {
   ValidationError,
   NotFoundError,
@@ -112,20 +113,30 @@ export class CreateBookingUseCase {
       // Convert Prisma booking to entity
       const bookingEntity = this.bookingRepository._toEntity(booking);
 
-      // Send Telegram notification to seller (non-blocking)
-      const telegramService = new TelegramService(this.adRepository);
+      // Уведомление владельцу — неблокирующее: получатель это человек, и канал
+      // (Telegram или MAX) вместе с настоящим id выбирает сервис доставки.
       telegramService.queueTask(async () => {
         try {
-          const seller = await this.userRepository.findById(ad.user_id);
-          if (seller && seller.user_id) {
-            await telegramService.sendBookingNotification({
-              sellerTelegramId: seller.user_id.toString(),
-              buyerName: user.first_name || user.username || "Не указано",
-              buyerUsername: user.username || null,
-              adTitle: ad.title,
-              adPrice: ad.price,
-              bookingOrder: Number(booking.booking_order),
-              adId: ad.id.toString(),
+          const delivery = await messageDeliveryService.deliver({
+            userId: ad.user_id,
+            text: (format) =>
+              telegramService.buildBookingNotificationText({
+                action: "created",
+                buyerName: user.first_name || user.username || "Не указано",
+                buyerUsername: user.username || null,
+                adTitle: ad.title,
+                adPrice: ad.price,
+                bookingOrder: Number(booking.booking_order),
+                adId: ad.id.toString(),
+                format,
+              }),
+          });
+
+          if (!delivery.ok) {
+            logger.warn("Booking notification not delivered", {
+              ad_id: adId,
+              code: delivery.code,
+              error: delivery.error,
             });
           }
 

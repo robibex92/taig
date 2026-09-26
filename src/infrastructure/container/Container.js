@@ -17,11 +17,10 @@ import { EntranceCommentRepository } from "../repositories/EntranceCommentReposi
 
 // Services
 import { TokenService } from "../../application/services/TokenService.improved.js";
-import { TelegramService } from "../../application/services/TelegramService.js";
-import { MessageDeliveryService } from "../../application/services/MessageDeliveryService.js";
+import { telegramService } from "../../application/services/TelegramService.js";
+import { messageDeliveryService } from "../../application/services/MessageDeliveryService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
 import { CarImageUploadService } from "../../application/services/CarImageUploadService.js";
-import NotificationService from "../../application/services/NotificationService.js";
 
 // Services - MAX Bot (инфраструктурный HTTP-клиент + сборщик входящих)
 import { maxBotService } from "../services/MaxBotService.js";
@@ -172,6 +171,10 @@ import { RegisterForEventUseCase } from "../../application/use-cases/event/Regis
 import { UnregisterFromEventUseCase } from "../../application/use-cases/event/UnregisterFromEventUseCase.js";
 
 import { ParkingUseCases } from "../../application/use-cases/parking/ParkingUseCases.js";
+import { GetSpotNotesUseCase } from "../../application/use-cases/parking/GetSpotNotesUseCase.js";
+import { AddSpotNoteUseCase } from "../../application/use-cases/parking/AddSpotNoteUseCase.js";
+import { DeleteSpotNoteUseCase } from "../../application/use-cases/parking/DeleteSpotNoteUseCase.js";
+import { ParkingSpotNoteRepository } from "../repositories/ParkingSpotNoteRepository.js";
 
 /**
  * Dependency Injection Container
@@ -227,6 +230,10 @@ export class Container {
     this.register("carRepository", () => new CarRepository());
     this.register("carImageRepository", () => new CarImageRepository());
     this.register("carAdminNoteRepository", () => new CarAdminNoteRepository());
+    this.register(
+      "parkingSpotNoteRepository",
+      () => new ParkingSpotNoteRepository()
+    );
     this.register("adImageRepository", () => new AdImageRepository());
     this.register("houseRepository", () => new HouseRepository());
     this.register("refreshTokenRepository", () => new RefreshTokenRepository());
@@ -239,34 +246,13 @@ export class Container {
 
     // Services
     this.register("tokenService", () => new TokenService());
-    this.register(
-      "telegramService",
-      (container) =>
-        new TelegramService(
-          container.resolve("adRepository"),
-          container.resolve("postRepository")
-        )
-    );
+    // Экземпляр из модуля, а не new: очередь pLimit и пауза 2с защищают один токен бота,
+    // поэтому инстанс должен быть ровно один на процесс.
+    this.register("telegramService", () => telegramService);
     this.register("fileUploadService", () => new FileUploadService());
     this.register("carImageUploadService", () => new CarImageUploadService());
     // Один экземпляр: резолвер получателя + общий rate-limiter TelegramService.
-    this.register(
-      "messageDeliveryService",
-      (container) =>
-        new MessageDeliveryService({
-          telegramService: container.resolve("telegramService"),
-        })
-    );
-
-    // Notification Service
-    this.register(
-      "notificationService",
-      (container) =>
-        new NotificationService({
-          userRepository: container.resolve("userRepository"),
-          telegramService: container.resolve("telegramService"),
-        })
-    );
+    this.register("messageDeliveryService", () => messageDeliveryService);
 
     // Use Cases - Ad
     this.register(
@@ -975,7 +961,37 @@ export class Container {
     );
 
     // Use Cases - Parking (Real)
-    this.register("parkingUseCases", () => new ParkingUseCases());
+    this.register(
+      "parkingUseCases",
+      (container) =>
+        new ParkingUseCases({
+          delivery: container.resolve("messageDeliveryService"),
+        })
+    );
+
+    // Use Cases - Заметки администрации о парковочном месте
+    this.register(
+      "getSpotNotesUseCase",
+      (container) =>
+        new GetSpotNotesUseCase(
+          container.resolve("parkingSpotNoteRepository"),
+          container.resolve("userRepository")
+        )
+    );
+
+    this.register(
+      "addSpotNoteUseCase",
+      (container) =>
+        new AddSpotNoteUseCase(container.resolve("parkingSpotNoteRepository"))
+    );
+
+    this.register(
+      "deleteSpotNoteUseCase",
+      (container) =>
+        new DeleteSpotNoteUseCase(
+          container.resolve("parkingSpotNoteRepository")
+        )
+    );
 
     // Controllers - TelegramChat
     this.register(
@@ -1059,7 +1075,16 @@ export class Container {
     );
 
     // Controllers - Parking
-    this.register("parkingController", () => new ParkingController());
+    this.register(
+      "parkingController",
+      (container) =>
+        new ParkingController({
+          parkingUseCases: container.resolve("parkingUseCases"),
+          getSpotNotesUseCase: container.resolve("getSpotNotesUseCase"),
+          addSpotNoteUseCase: container.resolve("addSpotNoteUseCase"),
+          deleteSpotNoteUseCase: container.resolve("deleteSpotNoteUseCase"),
+        })
+    );
 
     // Services - MAX Bot
     this.register("maxBotService", () => maxBotService);

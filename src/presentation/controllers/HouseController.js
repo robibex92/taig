@@ -496,58 +496,6 @@ export class HouseController {
   };
 
   /**
-   * GET /api-v1/nearby/:house_id/entrances/:entrance/comment
-   * Get simplified entrance comment (only comment text)
-   */
-  getEntranceCommentSimple = asyncHandler(async (req, res) => {
-    const { house_id, entrance } = req.params;
-
-    console.log(
-      `getEntranceCommentSimple called with house_id=${house_id}, entrance=${entrance}`
-    );
-
-    try {
-      // Если house_id это число, используем обычный метод
-      if (!isNaN(house_id)) {
-        const comment = await this.getEntranceCommentsUseCase.execute(
-          parseInt(house_id),
-          parseInt(entrance)
-        );
-
-        console.log(`getEntranceCommentSimple result:`, comment);
-
-        if (comment && comment.comment) {
-          res.json({ comment: comment.comment });
-        } else {
-          res.json(null);
-        }
-      } else {
-        // Если это строка (номер дома), используем упрощенный метод
-        const comment = await this.getEntranceCommentsUseCase.executeSimple(
-          house_id,
-          parseInt(entrance)
-        );
-
-        console.log(`getEntranceCommentSimple result:`, comment);
-
-        if (comment) {
-          res.json({ comment });
-        } else {
-          res.json(null);
-        }
-      }
-    } catch (error) {
-      console.error("Error in getEntranceCommentSimple:", error);
-      res.status(500).json({
-        error: "Internal Server Error",
-        message: error.message,
-        details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
-      });
-    }
-  });
-
-  /**
    * PUT /api-v1/nearby/entrance-comments/:comment_id
    * Update entrance comment (admin only)
    */

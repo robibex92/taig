@@ -72,6 +72,26 @@ export class UserRepository extends IUserRepository {
   }
 
   /**
+   * Пакетный поиск по внутренним id — чтобы список авторов одного места
+   * читался одним запросом, а не по запросу на строку.
+   */
+  async findByIds(ids) {
+    const unique = [...new Set((ids ?? []).map((id) => String(id)).filter(Boolean))];
+    if (!unique.length) return [];
+
+    try {
+      const users = await prisma.user.findMany({
+        where: { user_id: { in: unique.map((id) => BigInt(id)) } },
+      });
+
+      return users.map((user) => new UserEntity(user));
+    } catch (error) {
+      logger.error("Error finding users by IDs", { error: error.message, ids: unique });
+      throw new DatabaseError("Failed to find users", error);
+    }
+  }
+
+  /**
    * Find user by Telegram ID
    */
   async findByTelegramId(telegramId) {

@@ -13,6 +13,15 @@ export class IUserRepository {
   }
 
   /**
+   * Find many users by their internal IDs (one round trip)
+   * @param {Array<number|string>} ids - User IDs
+   * @returns {Promise<UserEntity[]>}
+   */
+  async findByIds(ids) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
    * Find user by Telegram ID
    * @param {number} telegramId - Telegram user ID
    * @returns {Promise<UserEntity|null>}

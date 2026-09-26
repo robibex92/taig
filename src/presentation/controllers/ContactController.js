@@ -90,12 +90,15 @@ export class ContactController {
       });
     }
 
+    const author = await this.authorInfo(senderId);
+
     const finalMessage = this.telegramService.buildContextMessage({
       message,
       contextType,
       contextData,
       user_id: senderId,
-      dbUsername: await this.authorName(senderId),
+      telegram_id: author.telegramId,
+      dbUsername: author.username,
       format: channel === "telegram" ? "HTML" : "plain",
     });
 
@@ -126,15 +129,18 @@ export class ContactController {
       });
   });
 
-  async authorName(userId) {
-    if (!userId) return null;
+  async authorInfo(userId) {
+    if (!userId) return { username: null, telegramId: null };
 
     const author = await this.db.user.findUnique({
       where: { user_id: BigInt(userId) },
-      select: { username: true },
+      select: { username: true, telegram_id: true },
     });
 
-    return author?.username || null;
+    return {
+      username: author?.username || null,
+      telegramId: author?.telegram_id ? String(author.telegram_id) : null,
+    };
   }
 }
 

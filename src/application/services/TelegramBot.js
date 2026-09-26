@@ -4,6 +4,8 @@ import { logger } from "../../core/utils/logger.js";
 import adRepository from "../../infrastructure/repositories/AdRepository.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 import messageRepository from "../../infrastructure/repositories/MessageRepository.js";
+import { telegramService } from "./TelegramService.js";
+import { messageDeliveryService } from "./MessageDeliveryService.js";
 
 // Утилита для форматирования имени отправителя
 function formatSenderName(sender) {
@@ -100,36 +102,41 @@ export class TelegramBot {
           return;
         }
 
-        // Get replier info
-        const replierName =
-          ctx.from.first_name || ctx.from.username || "Пользователь";
-        const replierUsername = ctx.from.username || null;
         const replyText = ctx.message.text;
 
-        // Send notification to ad owner via Telegram
+        // Уведомление владельцу идёт через сервис доставки: он резолвит, в какой
+        // именно мессенджер этого человека можно достать. Сюда раньше подставляли
+        // `users.user_id` как chat_id, и сообщение уходило в несуществующий чат.
         try {
-          let notificationText = `📩 <b>Новый вопрос по вашему объявлению</b>\n\n`;
-          notificationText += `📢 Объявление: <b>${ad.title}</b>\n\n`;
-          notificationText += `👤 От: ${formatSenderName({
+          const senderName = formatSenderName({
             username: ctx.from.username,
             first_name: ctx.from.first_name,
             telegram_first_name: ctx.from.first_name,
-          })}\n`;
-          notificationText += `💬 Сообщение:\n<i>"${replyText}"</i>\n\n`;
-          notificationText += `🔗 Просмотреть объявление: https://taiginsky.md/ads/${adId}`;
+          });
 
-          await ctx.telegram.sendMessage(
-            adOwner.user_id.toString(),
-            notificationText,
-            {
-              parse_mode: "HTML",
-            }
-          );
+          const delivery = await messageDeliveryService.deliver({
+            userId: adOwner.user_id,
+            text: (format) =>
+              telegramService.buildOwnerQuestionText({
+                adTitle: ad.title,
+                senderName,
+                question: replyText,
+                adId,
+                format,
+              }),
+          });
+
+          if (!delivery.ok) {
+            throw new Error(
+              `Не доставлено (${delivery.code})${delivery.error ? `: ${delivery.error}` : ""}`
+            );
+          }
 
           logger.info("Reply forwarded to ad owner", {
             ad_id: adId,
             owner_id: adOwner.user_id,
             replier_id: ctx.from.id,
+            channel: delivery.channel,
           });
 
           // Optionally: Save to internal messages system

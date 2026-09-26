@@ -23,7 +23,12 @@ export const validate = (schema, data, options = {}) => {
       message: detail.message,
     }));
 
-    throw new ValidationError("Validation failed", details);
+    // Текст идёт в интерфейс как есть (фронт берёт его из `error.message`),
+    // поэтому показываем сообщение схемы, а не абстрактное «Validation failed».
+    throw new ValidationError(
+      details.map((detail) => detail.message).join("; ") || "Validation failed",
+      details
+    );
   }
 
   return value;

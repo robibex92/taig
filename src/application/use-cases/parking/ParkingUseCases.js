@@ -1,8 +1,19 @@
-import { PrismaClient } from "@prisma/client";
-import { MessageDeliveryService } from "../../services/MessageDeliveryService.js";
-import { canViewResidentData, isParkingAdmin } from "../../../core/utils/roles.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../../../infrastructure/database/prisma.js";
+import { messageDeliveryService } from "../../services/MessageDeliveryService.js";
+import {
+  ForbiddenError,
+  ValidationError,
+} from "../../../core/errors/AppError.js";
+import { logger } from "../../../core/utils/logger.js";
+import { PARKING_STATUSES } from "../../../core/constants/parking.js";
+import {
+  canSeeSpotDetails,
+  loadManageableSpot,
+  loadSpot,
+  OWNER_SELECT,
+  toSpotId,
+} from "./parkingAccess.js";
+import { canViewResidentData } from "../../../core/utils/roles.js";
 
 /** Текст уведомления экранируется: сообщение пишет пользователь, а разметка наша. */
 const escapeHtml = (value) =>
@@ -31,41 +42,12 @@ function formatSenderName(sender) {
   return "Пользователь";
 }
 
-// Parking Spot Statuses
-const PARKING_STATUSES = {
-  UNDEFINED: "undefined", // Серое - не определен
-  OWNED: "owned", // Зеленое - во владении
-  FOR_SALE: "for_sale", // Синее - продается
-  FOR_RENT: "for_rent", // Оранжевое - аренда
-  MAINTENANCE: "maintenance", // Красное - техническое обслуживание
-  RESERVED: "reserved", // Фиолетовое - зарезервировано
-};
-
-// Parking Spot Colors (for frontend)
-const PARKING_COLORS = {
-  [PARKING_STATUSES.UNDEFINED]: "#9E9E9E", // Серый
-  [PARKING_STATUSES.OWNED]: "#4CAF50", // Зеленый
-  [PARKING_STATUSES.FOR_SALE]: "#2196F3", // Синий
-  [PARKING_STATUSES.FOR_RENT]: "#FF9800", // Оранжевый
-  [PARKING_STATUSES.MAINTENANCE]: "#F44336", // Красный
-  [PARKING_STATUSES.RESERVED]: "#9C27B0", // Фиолетовый
-};
-
-const OWNER_SELECT = {
-  user_id: true,
-  username: true,
-  first_name: true,
-  telegram_id: true,
-  max_id: true,
-};
-
 /**
  * Single serializer for parking spots.
  *
  * The public grid exposes only the place number and its status: price,
  * description, contacts and owner identity are resident data, included only
- * for staff: administrator, moderator or parking administrator (or the owner
- * of that exact place).
+ * for staff (see `RESIDENT_DATA_ROLES`) or the owner of that exact place.
  */
 function mapSpot(spot, { detailed = false } = {}) {
   const base = {
@@ -100,58 +82,103 @@ function mapSpot(spot, { detailed = false } = {}) {
   };
 }
 
-function isOwnerOf(spot, userId) {
-  return userId != null && spot.owner_id != null && Number(spot.owner_id) === Number(userId);
+/** Поля места, за которыми следит история изменений. */
+const TRACKED_FIELDS = [
+  ["status", "status"],
+  ["price", "price"],
+  ["description", "description"],
+  ["contact_info", "contact_info"],
+];
+
+/** Пара old_/new_ для `parking_spot_history` — одна на все способы изменения места. */
+function historyValues(before, after) {
+  const values = {};
+  for (const [column, key] of TRACKED_FIELDS) {
+    values[`old_${column}`] = before?.[key] ?? null;
+    values[`new_${column}`] = after?.[key] ?? before?.[key] ?? null;
+  }
+  return values;
+}
+
+const STATS_KEY_BY_STATUS = {
+  [PARKING_STATUSES.UNDEFINED]: "undefined",
+  [PARKING_STATUSES.OWNED]: "owned",
+  [PARKING_STATUSES.FOR_SALE]: "forSale",
+  [PARKING_STATUSES.FOR_RENT]: "forRent",
+  [PARKING_STATUSES.MAINTENANCE]: "maintenance",
+  [PARKING_STATUSES.RESERVED]: "reserved",
+};
+
+/**
+ * Данные места при создании/обновлении: HTTP-имена → колонки.
+ * `undefined` означает «не трогать», `null` — «очистить».
+ */
+function toSpotData(input = {}, { forCreate = false } = {}) {
+  const data = {
+    status: input.status,
+    price: input.price != null ? String(input.price) : null,
+    description: input.description,
+    contact_info: input.contactInfo,
+  };
+
+  if (!forCreate) return data;
+
+  return {
+    spot_number: input.spotNumber,
+    floor: input.floor ?? 1,
+    section: input.section ?? null,
+    status: input.status || PARKING_STATUSES.UNDEFINED,
+    price: input.price || null,
+    description: input.description || null,
+    contact_info: input.contactInfo || null,
+    owner_id: input.ownerId ? BigInt(input.ownerId) : null,
+    is_active: true,
+  };
 }
 
 class ParkingUseCases {
-  constructor({ delivery = new MessageDeliveryService() } = {}) {
+  constructor({ delivery = messageDeliveryService } = {}) {
     this.delivery = delivery;
   }
 
   // Получить все парковочные места
   async getAllParkingSpots(viewer) {
-    try {
-      const detailed = canViewResidentData(viewer);
+    const detailed = canViewResidentData(viewer);
 
-      const spots = await prisma.parkingSpot.findMany({
-        orderBy: { spot_number: "asc" },
-        include: detailed ? { owner: { select: OWNER_SELECT } } : undefined,
-      });
+    const spots = await prisma.parkingSpot.findMany({
+      orderBy: { spot_number: "asc" },
+      include: detailed ? { owner: { select: OWNER_SELECT } } : undefined,
+    });
 
-      return {
-        success: true,
-        data: spots.map((spot) => mapSpot(spot, { detailed })),
-      };
-    } catch (error) {
-      console.error("Error getting parking spots:", error);
-      return { success: false, error: error.message };
-    }
+    return {
+      success: true,
+      data: spots.map((spot) => mapSpot(spot, { detailed })),
+    };
   }
 
   // Получить парковочное место по ID
   async getParkingSpotById(spotId, viewer) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-        include: { owner: { select: OWNER_SELECT } },
-      });
+    const spot = await loadSpot(spotId, { withOwner: true });
+    const detailed = canSeeSpotDetails(spot, viewer);
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
+    return {
+      success: true,
+      data: {
+        ...mapSpot(spot, { detailed }),
+        history: detailed ? await this.#historyOf(spot.id) : [],
+      },
+    };
+  }
 
-      const detailed =
-        canViewResidentData(viewer) || isOwnerOf(spot, viewer?.user_id);
+  // История изменений места (данные жителя — только персоналу и владельцу)
+  async getSpotHistory(spotId, viewer) {
+    const spot = await loadSpot(spotId);
 
-      return {
-        success: true,
-        data: { ...mapSpot(spot, { detailed }), history: detailed ? await this.#historyOf(spotId) : [] },
-      };
-    } catch (error) {
-      console.error("Error getting parking spot:", error);
-      return { success: false, error: error.message };
+    if (!canSeeSpotDetails(spot, viewer)) {
+      throw new ForbiddenError("Not authorized");
     }
+
+    return { success: true, data: { spotId: Number(spot.id), history: await this.#historyOf(spot.id) } };
   }
 
   async #historyOf(spotId) {
@@ -173,544 +200,235 @@ class ParkingUseCases {
     }));
   }
 
+  async #recordHistory({ before, after, spotId, changedById, changeReason }) {
+    await prisma.parkingSpotHistory.create({
+      data: {
+        parking_spot_id: spotId,
+        changed_by_id: changedById,
+        ...historyValues(before, after),
+        ...(changeReason ? { change_reason: changeReason } : {}),
+      },
+    });
+  }
+
   // Обновить парковочное место (владелец или администратор паркинга)
   async updateParkingSpot(spotId, updateData, user) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-      });
+    const id = toSpotId(spotId);
+    const spot = await loadManageableSpot(
+      id,
+      user,
+      "You can only update your own parking spots"
+    );
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
+    const updatedSpot = await prisma.parkingSpot.update({
+      where: { id },
+      data: { ...toSpotData(updateData), updated_at: new Date() },
+      include: { owner: { select: OWNER_SELECT } },
+    });
 
-      if (!isParkingAdmin(user) && !isOwnerOf(spot, user?.user_id)) {
-        return {
-          success: false,
-          error: "You can only update your own parking spots",
-        };
-      }
+    await this.#recordHistory({
+      before: spot,
+      after: updatedSpot,
+      spotId: id,
+      changedById: user.user_id,
+    });
 
-      const updatedSpot = await prisma.parkingSpot.update({
-        where: { id: spotId },
-        data: {
-          status: updateData.status,
-          price: updateData.price != null ? String(updateData.price) : null,
-          description: updateData.description,
-          contact_info: updateData.contactInfo,
-          updated_at: new Date(),
-        },
-        include: { owner: { select: OWNER_SELECT } },
-      });
-
-      await prisma.parkingSpotHistory.create({
-        data: {
-          parking_spot_id: spotId,
-          changed_by_id: user.user_id,
-          old_status: spot.status,
-          new_status: updatedSpot.status,
-          old_price: spot.price,
-          new_price: updatedSpot.price,
-          old_description: spot.description,
-          new_description: updatedSpot.description,
-          old_contact_info: spot.contact_info,
-          new_contact_info: updatedSpot.contact_info,
-        },
-      });
-
-      return {
-        success: true,
-        data: mapSpot(updatedSpot, { detailed: true }),
-      };
-    } catch (error) {
-      console.error("Error updating parking spot:", error);
-      return { success: false, error: error.message };
-    }
+    return { success: true, data: mapSpot(updatedSpot, { detailed: true }) };
   }
 
   // Назначить владельца парковочного места
   async assignOwner(spotId, ownerId, assignedByUserId) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-      });
+    const id = toSpotId(spotId);
+    const spot = await loadSpot(id);
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
-
-      // Проверяем, не занято ли место уже другим пользователем
-      if (spot.owner_id && Number(spot.owner_id) !== Number(ownerId)) {
-        const ownerName = `ID: ${spot.owner_id}`;
-        return {
-          success: false,
-          error: `Парковочное место №${spot.spot_number} уже принадлежит пользователю ${ownerName}. Сначала освободите место.`,
-        };
-      }
-
-      const updatedSpot = await prisma.parkingSpot.update({
-        where: { id: spotId },
-        data: {
-          owner_id: ownerId,
-          updated_at: new Date(),
-        },
-        include: { owner: { select: OWNER_SELECT } },
-      });
-
-      // Записываем в историю
-      await prisma.parkingSpotHistory.create({
-        data: {
-          parking_spot_id: spotId,
-          changed_by_id: assignedByUserId,
-          old_status: spot.status,
-          new_status: spot.status, // Статус не меняется при смене владельца
-          old_price: spot.price,
-          new_price: spot.price,
-          old_description: spot.description,
-          new_description: spot.description,
-          old_contact_info: spot.contact_info,
-          new_contact_info: spot.contact_info,
-        },
-      });
-
-      return {
-        success: true,
-        data: mapSpot(updatedSpot, { detailed: true }),
-      };
-    } catch (error) {
-      console.error("Error assigning owner:", error);
-      return { success: false, error: error.message };
+    // Проверяем, не занято ли место уже другим пользователем
+    if (spot.owner_id && Number(spot.owner_id) !== Number(ownerId)) {
+      throw new ValidationError(
+        `Парковочное место №${spot.spot_number} уже принадлежит пользователю ID: ${spot.owner_id}. Сначала освободите место.`
+      );
     }
+
+    const updatedSpot = await prisma.parkingSpot.update({
+      where: { id },
+      data: { owner_id: ownerId, updated_at: new Date() },
+      include: { owner: { select: OWNER_SELECT } },
+    });
+
+    await this.#recordHistory({
+      before: spot,
+      after: updatedSpot,
+      spotId: id,
+      changedById: assignedByUserId,
+      changeReason: "Владелец назначен",
+    });
+
+    return { success: true, data: mapSpot(updatedSpot, { detailed: true }) };
   }
 
   // Освободить место от владельца (администратор паркинга)
   async unassignOwner(spotId, changedById) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-        include: { owner: { select: OWNER_SELECT } },
-      });
+    const id = toSpotId(spotId);
+    const spot = await loadSpot(id);
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
-
-      if (!spot.owner_id) {
-        return { success: false, error: "У места и так нет владельца" };
-      }
-
-      const updatedSpot = await prisma.parkingSpot.update({
-        where: { id: spotId },
-        data: {
-          owner_id: null,
-          status: PARKING_STATUSES.UNDEFINED,
-          updated_at: new Date(),
-        },
-      });
-
-      await prisma.parkingSpotHistory.create({
-        data: {
-          parking_spot_id: spotId,
-          changed_by_id: changedById,
-          old_status: spot.status,
-          new_status: PARKING_STATUSES.UNDEFINED,
-          old_price: spot.price,
-          new_price: spot.price,
-          old_description: spot.description,
-          new_description: spot.description,
-          old_contact_info: spot.contact_info,
-          new_contact_info: spot.contact_info,
-          change_reason: "Владелец снят с места",
-        },
-      });
-
-      return {
-        success: true,
-        data: mapSpot(updatedSpot, { detailed: true }),
-      };
-    } catch (error) {
-      console.error("Error unassigning owner:", error);
-      return { success: false, error: error.message };
+    if (!spot.owner_id) {
+      throw new ValidationError("У места и так нет владельца");
     }
+
+    const updatedSpot = await prisma.parkingSpot.update({
+      where: { id },
+      data: {
+        owner_id: null,
+        status: PARKING_STATUSES.UNDEFINED,
+        updated_at: new Date(),
+      },
+    });
+
+    await this.#recordHistory({
+      before: spot,
+      after: updatedSpot,
+      spotId: id,
+      changedById,
+      changeReason: "Владелец снят с места",
+    });
+
+    return { success: true, data: mapSpot(updatedSpot, { detailed: true }) };
   }
 
   // Получить парковочные места пользователя
   async getUserParkingSpots(userId) {
-    try {
-      const spots = await prisma.parkingSpot.findMany({
-        where: { owner_id: userId },
-        orderBy: { spot_number: "asc" },
-      });
+    const spots = await prisma.parkingSpot.findMany({
+      where: { owner_id: userId },
+      orderBy: { spot_number: "asc" },
+    });
 
-      return {
-        success: true,
-        data: spots.map((spot) => mapSpot(spot, { detailed: true })),
-      };
-    } catch (error) {
-      console.error("Error getting user parking spots:", error);
-      return { success: false, error: error.message };
-    }
+    return {
+      success: true,
+      data: spots.map((spot) => mapSpot(spot, { detailed: true })),
+    };
   }
 
   // Отправить сообщение владельцу парковочного места
   async sendMessageToOwner(spotId, senderId, content) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-      });
+    const id = toSpotId(spotId);
+    const spot = await loadSpot(id);
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
-
-      if (!spot.owner_id) {
-        return { success: false, error: "Parking spot has no owner" };
-      }
-
-      // Убираем ограничение на отправку сообщений самому себе для парковочных мест
-      // if (spot.owner_id === senderId) {
-      //   return { success: false, error: "Cannot send message to yourself" };
-      // }
-
-      const message = await prisma.parkingMessage.create({
-        data: {
-          parking_spot_id: spotId,
-          sender_id: senderId,
-          receiver_id: spot.owner_id,
-          content: content,
-        },
-        include: {
-          sender: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-          receiver: {
-            select: {
-              user_id: true,
-              username: true,
-              first_name: true,
-              last_name: true,
-              telegram_first_name: true,
-              telegram_last_name: true,
-              avatar: true,
-            },
-          },
-        },
-      });
-
-      // Уведомление владельцу: канал и id получателя выбирает сервис доставки.
-      const recipientId = message.receiver.user_id;
-      const availability = await this.delivery.availability({ userId: recipientId });
-      const channel = availability.telegram
-        ? "telegram"
-        : availability.max
-        ? "max"
-        : null;
-
-      let delivery = { ok: false, code: "no_channel", channels: availability };
-
-      if (channel) {
-        const senderName = formatSenderName(message.sender);
-        const notificationText =
-          channel === "telegram"
-            ? `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
-              `💬 Сообщение: <i>"${escapeHtml(content)}"</i>\n\n` +
-              `👤 От: ${escapeHtml(senderName)}`
-            : `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
-              `💬 Сообщение: "${content}"\n\n` +
-              `👤 От: ${senderName}`;
-
-        delivery = await this.delivery.deliver({
-          userId: recipientId,
-          text: notificationText,
-          channel,
-        });
-
-        if (!delivery.ok) {
-          console.error("Parking notification not delivered:", delivery.code, delivery.error);
-        }
-      }
-
-      return {
-        success: true,
-        data: {
-          id: message.id,
-          content: message.content,
-          createdAt: message.created_at,
-          delivered: delivery.ok,
-          channel: delivery.channel ?? null,
-          message: delivery.ok
-            ? "Сообщение отправлено владельцу парковочного места"
-            : "Сообщение сохранено, но доставить уведомление не удалось",
-        },
-      };
-    } catch (error) {
-      console.error("Error sending message:", error);
-      return { success: false, error: error.message };
+    if (!spot.owner_id) {
+      throw new ValidationError("Parking spot has no owner");
     }
+
+    const message = await prisma.parkingMessage.create({
+      data: {
+        parking_spot_id: id,
+        sender_id: senderId,
+        receiver_id: spot.owner_id,
+        content,
+      },
+      include: {
+        sender: {
+          select: {
+            user_id: true,
+            username: true,
+            first_name: true,
+            telegram_first_name: true,
+          },
+        },
+        receiver: { select: { user_id: true } },
+      },
+    });
+
+    // Уведомление владельцу: канал и id получателя выбирает сервис доставки,
+    // разметка под него подставляется там же.
+    const senderName = formatSenderName(message.sender);
+    const delivery = await this.delivery.deliver({
+      userId: message.receiver.user_id,
+      text: (format) =>
+        format === "plain"
+          ? `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
+            `💬 Сообщение: "${content}"\n\n` +
+            `👤 От: ${senderName}`
+          : `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
+            `💬 Сообщение: <i>"${escapeHtml(content)}"</i>\n\n` +
+            `👤 От: ${escapeHtml(senderName)}`,
+    });
+
+    if (!delivery.ok) {
+      logger.warn("Parking notification not delivered", {
+        spot_id: Number(id),
+        code: delivery.code,
+        error: delivery.error,
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        id: message.id,
+        content: message.content,
+        createdAt: message.created_at,
+        delivered: delivery.ok,
+        channel: delivery.channel ?? null,
+        message: delivery.ok
+          ? "Сообщение отправлено владельцу парковочного места"
+          : "Сообщение сохранено, но доставить уведомление не удалось",
+      },
+    };
   }
 
   // Получить статистику парковки
   async getParkingStats() {
-    try {
-      const totalSpots = await prisma.parkingSpot.count({
-        where: { is_active: true },
-      });
-
-      const statusCounts = await prisma.parkingSpot.groupBy({
+    const [totalSpots, statusCounts] = await Promise.all([
+      prisma.parkingSpot.count({ where: { is_active: true } }),
+      prisma.parkingSpot.groupBy({
         by: ["status"],
         where: { is_active: true },
         _count: { status: true },
-      });
+      }),
+    ]);
 
-      const stats = {
-        totalSpots,
-        undefined: 0,
-        owned: 0,
-        forSale: 0,
-        forRent: 0,
-        maintenance: 0,
-        reserved: 0,
-      };
+    const stats = { totalSpots, ...Object.fromEntries(Object.values(STATS_KEY_BY_STATUS).map((key) => [key, 0])) };
 
-      statusCounts.forEach((item) => {
-        switch (item.status) {
-          case PARKING_STATUSES.UNDEFINED:
-            stats.undefined = item._count.status;
-            break;
-          case PARKING_STATUSES.OWNED:
-            stats.owned = item._count.status;
-            break;
-          case PARKING_STATUSES.FOR_SALE:
-            stats.forSale = item._count.status;
-            break;
-          case PARKING_STATUSES.FOR_RENT:
-            stats.forRent = item._count.status;
-            break;
-          case PARKING_STATUSES.MAINTENANCE:
-            stats.maintenance = item._count.status;
-            break;
-          case PARKING_STATUSES.RESERVED:
-            stats.reserved = item._count.status;
-            break;
-        }
-      });
-
-      return {
-        success: true,
-        data: stats,
-      };
-    } catch (error) {
-      console.error("Error getting parking stats:", error);
-      return { success: false, error: error.message };
+    for (const row of statusCounts) {
+      const key = STATS_KEY_BY_STATUS[row.status];
+      if (key) stats[key] = row._count.status;
     }
+
+    return { success: true, data: stats };
   }
 
   // Создать новое парковочное место (администратор паркинга)
   async createParkingSpot(spotData) {
-    try {
-      // Валидация входных данных
-      if (!spotData.spotNumber) {
-        throw new Error("Номер парковочного места обязателен");
-      }
+    const existingSpot = await prisma.parkingSpot.findFirst({
+      where: { spot_number: spotData.spotNumber },
+    });
 
-      // Проверяем, не существует ли уже такое место (только по номеру)
-      const existingSpot = await prisma.parkingSpot.findFirst({
-        where: {
-          spot_number: spotData.spotNumber,
-        },
-      });
-
-      if (existingSpot) {
-        throw new Error("Парковочное место с таким номером уже существует");
-      }
-
-      // Создаем новое парковочное место
-      const newSpot = await prisma.parkingSpot.create({
-        data: {
-          spot_number: spotData.spotNumber,
-          floor: spotData.floor ?? 1,
-          section: spotData.section ?? null,
-          status: spotData.status || PARKING_STATUSES.UNDEFINED,
-          price: spotData.price || null,
-          description: spotData.description || null,
-          contact_info: spotData.contactInfo || null,
-          owner_id: spotData.ownerId ? BigInt(spotData.ownerId) : null,
-          is_active: true,
-        },
-      });
-
-      return {
-        success: true,
-        data: mapSpot(newSpot, { detailed: true }),
-      };
-    } catch (error) {
-      console.error("Error creating parking spot:", error);
-      return { success: false, error: error.message };
+    if (existingSpot) {
+      throw new ValidationError("Парковочное место с таким номером уже существует");
     }
+
+    const newSpot = await prisma.parkingSpot.create({
+      data: toSpotData(spotData, { forCreate: true }),
+    });
+
+    return { success: true, data: mapSpot(newSpot, { detailed: true }) };
   }
 
   // Удалить парковочное место (владелец или администратор паркинга)
   async deleteParkingSpot(spotId, user) {
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: spotId },
-      });
+    const id = toSpotId(spotId);
+    await loadManageableSpot(id, user, "You are not authorized to delete this parking spot");
 
-      if (!spot) {
-        return { success: false, error: "Parking spot not found" };
-      }
+    // Сообщение и история висят на месте FK'ом — удаляем одним атомарным шагом,
+    // иначе место остаётся с осиротевшими записями при неудаленном сообщении.
+    await prisma.$transaction([
+      prisma.parkingMessage.deleteMany({ where: { parking_spot_id: id } }),
+      prisma.parkingSpotHistory.deleteMany({ where: { parking_spot_id: id } }),
+      prisma.parkingSpot.delete({ where: { id } }),
+    ]);
 
-      if (!isParkingAdmin(user) && !isOwnerOf(spot, user?.user_id)) {
-        return {
-          success: false,
-          error: "You are not authorized to delete this parking spot",
-        };
-      }
-
-      // Сначала удаляем связанные сообщения
-      await prisma.parkingMessage.deleteMany({
-        where: { parking_spot_id: spotId },
-      });
-
-      // Удаляем историю изменений
-      await prisma.parkingSpotHistory.deleteMany({
-        where: { parking_spot_id: spotId },
-      });
-
-      // Удаляем само парковочное место
-      await prisma.parkingSpot.delete({
-        where: { id: spotId },
-      });
-
-      return {
-        success: true,
-        message: "Парковочное место успешно удалено",
-      };
-    } catch (error) {
-      console.error("Error deleting parking spot:", error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // ---------- Служебные заметки администрации о месте ----------
-  //
-  // Отделяем от `description`: описание места видит покупатель, заметка — внутренняя
-  // (кому жаловались, что обещали, нарушения). Читают и пишут только персонал,
-  // поэтому ни одна из этих строк не попадает в публичный `mapSpot`.
-
-  async getSpotNotes(spotId, user) {
-    if (!canViewResidentData(user)) {
-      return { success: false, error: "Not authorized", status: 403 };
-    }
-
-    try {
-      const notes = await prisma.parkingSpotNote.findMany({
-        where: { spot_id: BigInt(spotId) },
-        orderBy: { created_at: "desc" },
-      });
-
-      const authors = await this.loadNoteAuthors(notes);
-
-      return {
-        success: true,
-        data: notes.map((note) => ({
-          id: Number(note.id),
-          spotId: Number(note.spot_id),
-          note: note.note,
-          createdAt: note.created_at,
-          createdByLabel: formatSenderName(authors.get(String(note.created_by_admin_id))),
-        })),
-      };
-    } catch (error) {
-      console.error("Error loading parking spot notes:", error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async addSpotNote(spotId, note, user) {
-    if (!canViewResidentData(user)) {
-      return { success: false, error: "Not authorized", status: 403 };
-    }
-
-    const text = String(note ?? "").trim();
-    if (!text) {
-      return { success: false, error: "Note content is required", status: 400 };
-    }
-
-    try {
-      const spot = await prisma.parkingSpot.findUnique({
-        where: { id: BigInt(spotId) },
-      });
-
-      if (!spot) {
-        return { success: false, error: "Parking spot not found", status: 404 };
-      }
-
-      const created = await prisma.parkingSpotNote.create({
-        data: {
-          spot_id: spot.id,
-          note: text,
-          created_by_admin_id: BigInt(user.user_id),
-        },
-      });
-
-      return {
-        success: true,
-        data: {
-          id: Number(created.id),
-          spotId: Number(created.spot_id),
-          note: created.note,
-          createdAt: created.created_at,
-          createdByLabel: formatSenderName(user),
-        },
-      };
-    } catch (error) {
-      console.error("Error adding parking spot note:", error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async deleteSpotNote(noteId, user) {
-    if (!canViewResidentData(user)) {
-      return { success: false, error: "Not authorized", status: 403 };
-    }
-
-    try {
-      const deleted = await prisma.parkingSpotNote.deleteMany({
-        where: { id: BigInt(noteId) },
-      });
-
-      if (!deleted.count) {
-        return { success: false, error: "Note not found", status: 404 };
-      }
-
-      return { success: true, message: "Заметка удалена" };
-    } catch (error) {
-      console.error("Error deleting parking spot note:", error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /** Имена авторов одной пачкой — `formatSenderName` берёт @username, затем имя. */
-  async loadNoteAuthors(notes) {
-    const ids = [...new Set(notes.map((note) => String(note.created_by_admin_id)))];
-    if (!ids.length) return new Map();
-
-    const rows = await prisma.user.findMany({
-      where: { user_id: { in: ids.map((id) => BigInt(id)) } },
-      select: { user_id: true, username: true, first_name: true, telegram_first_name: true },
-    });
-
-    return new Map(rows.map((row) => [String(row.user_id), row]));
+    return { success: true, message: "Парковочное место успешно удалено" };
   }
 }
 
-export { ParkingUseCases, PARKING_STATUSES, PARKING_COLORS };
+export { ParkingUseCases };
+export { PARKING_STATUSES } from "../../../core/constants/parking.js";
+export { PARKING_COLORS } from "../../../core/constants/parking.js";

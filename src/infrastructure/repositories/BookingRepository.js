@@ -1,9 +1,7 @@
-import { PrismaClient } from "@prisma/client";
 import { BookingEntity } from "../../domain/entities/Booking.entity.js";
 import { DatabaseError } from "../../domain/errors/index.js";
 import logger from "../../infrastructure/logger/index.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../database/prisma.js";
 
 /**
  * BookingRepository - handles all database operations for bookings

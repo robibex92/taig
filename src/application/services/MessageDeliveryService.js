@@ -1,7 +1,7 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import { logger } from "../../core/utils/logger.js";
 import { maxBotService } from "../../infrastructure/services/MaxBotService.js";
-import { TelegramService } from "./TelegramService.js";
+import { telegramService as sharedTelegramService } from "./TelegramService.js";
 
 /**
  * Доставка личного сообщения человеку, а не «в чат с номером из клиента».
@@ -27,7 +27,11 @@ const toKey = (value) => {
 };
 
 export class MessageDeliveryService {
-  constructor({ telegramService = new TelegramService(), maxService = maxBotService, db = prisma } = {}) {
+  constructor({
+    telegramService = sharedTelegramService,
+    maxService = maxBotService,
+    db = prisma,
+  } = {}) {
     this.telegramService = telegramService;
     this.maxService = maxService;
     this.db = db;
@@ -73,15 +77,13 @@ export class MessageDeliveryService {
   /**
    * @param {'telegram'|'max'|'auto'} channel — `auto` выбирает Telegram, если он
    *   привязан, иначе MAX.
+   * @param {string|((format: 'HTML'|'plain') => string)} text — функцией можно
+   *   передать сборщик текста, чтобы разметка выбиралась уже по каналу: MAX
+   *   показывает HTML-теги как текст.
    * @returns {{ok: boolean, channel?: string, code?: string, error?: string,
    *   skipped?: boolean, channels: {telegram: boolean, max: boolean}}}
    */
-  async deliver({ userId, idTelegram, text, channel = CHANNEL_AUTO, parseMode = "HTML" }) {
-    const message = String(text ?? "").trim();
-    if (!message) {
-      return this._fail({ code: "empty.text", error: "Пустой текст сообщения" });
-    }
-
+  async deliver({ userId, idTelegram, text, channel = CHANNEL_AUTO, parseMode }) {
     const recipient = await this.findRecipient({ userId, idTelegram });
     if (!recipient) {
       return this._fail({ code: "no_recipient", error: "Получатель не найден" });
@@ -114,8 +116,23 @@ export class MessageDeliveryService {
       });
     }
 
+    const message = String(
+      typeof text === "function"
+        ? text(chosen === MESSAGE_CHANNELS.TELEGRAM ? "HTML" : "plain")
+        : text ?? ""
+    ).trim();
+
+    if (!message) {
+      return this._fail({ code: "empty.text", error: "Пустой текст сообщения" });
+    }
+
     return chosen === MESSAGE_CHANNELS.TELEGRAM
-      ? this._sendTelegram({ recipient, message, parseMode, channels })
+      ? this._sendTelegram({
+          recipient,
+          message,
+          parseMode: parseMode ?? "HTML",
+          channels,
+        })
       : this._sendMax({ recipient, message, channels });
   }
 
@@ -172,3 +189,11 @@ export class MessageDeliveryService {
     return { ok: false, channels: { telegram: false, max: false }, ...extra };
   }
 }
+
+/**
+ * Единственный экземпляр на процесс: он держит ссылку на общий `telegramService`
+ * с его очередью, поэтому инстансов должно быть столько же.
+ */
+export const messageDeliveryService = new MessageDeliveryService();
+
+export default MessageDeliveryService;

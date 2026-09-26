@@ -1,9 +1,23 @@
 import { Telegraf } from "telegraf";
 import pLimit from "p-limit";
 import { logger } from "../../core/utils/logger.js";
+import { AdRepository } from "../../infrastructure/repositories/AdRepository.js";
+import { PostRepository } from "../../infrastructure/repositories/PostRepository.js";
 
 // Initialize bot instance
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+/**
+ * Ссылка на страницу сайта в текстах уведомлений.
+ *
+ * Фронт намеренно на `HashRouter`: адрес без решётки на проде отдаёт 404, поэтому
+ * форма `/#/ads/5` — единственная рабочая. База читается при вызове, а не при импорте:
+ * `dotenv.config()` в server.js выполняется уже после статических импортов.
+ */
+const frontendBase = () =>
+  (process.env.FRONTEND_URL || "https://infojk.ru").replace(/\/+$/, "");
+
+export const frontendLink = (page) => `${frontendBase()}/#${page}`;
 
 /**
  * Centralized Telegram Service
@@ -394,11 +408,12 @@ export class TelegramService {
     if (username) {
       text += `👤 Автор: @${this._escapeHtml(username)}\n`;
     } else if (user_id) {
-      text += `👤 Автор: <a href="tg://user?id=${user_id}">ID ${user_id}</a>\n`;
+      // Ссылки `tg://user?id=` тут быть не может: это внутренний id пользователя
+      // сайта, а не Telegram-аккаунт — такой чат не существует.
+      text += `👤 Автор: ID ${this._escapeHtml(user_id)}\n`;
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
-    text += `\n🔗 Просмотреть: ${frontendUrl}/ads/${ad_id}`;
+    text += `\n🔗 Просмотреть: ${frontendLink(`/ads/${ad_id}`)}`;
 
     return text;
   }
@@ -412,8 +427,9 @@ export class TelegramService {
     text += `${this._escapeHtml(content)}`;
 
     if (post_id) {
-      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
-      text += `\n\n🔗 Подробнее: ${frontendUrl}/posts/${post_id}`;
+      // Страницы одной новости на фронте нет — лента живёт на `/`, поэтому
+      // ссылка ведёт в ленту, а не на несуществующий /posts/:id.
+      text += `\n\n🔗 Все новости: ${frontendLink("/")}`;
     }
 
     return text;
@@ -431,14 +447,13 @@ export class TelegramService {
     contextType,
     contextData,
     user_id,
+    telegram_id,
     dbUsername,
     format = "HTML",
   }) {
     const plain = format !== "HTML";
     const text = (value) => (plain ? String(value ?? "") : this._escapeHtml(value));
     const strong = (value) => (plain ? value : `<b>${value}</b>`);
-    const idMention = (id) =>
-      plain ? `ID ${id}` : `<a href="tg://user?id=${id}"><b>ID ${id}</b></a>`;
 
     let header = "";
 
@@ -460,144 +475,101 @@ export class TelegramService {
       header = `💬 ${strong("Обратная связь с сайта")} 💬\n\n`;
     }
 
-    // Format author information
-    let authorLink;
-    if (contextType === "feedback") {
-      if (user_id && dbUsername && dbUsername.trim() !== "") {
-        authorLink = `Обратная связь от: ${strong(`@${text(dbUsername)}`)}`;
-      } else if (user_id) {
-        authorLink = `Обратная связь от: ${idMention(user_id)}`;
-      } else {
-        authorLink = `Обратная связь от: ${strong("Неавторизованный пользователь")}`;
-      }
-    } else {
-      authorLink =
-        dbUsername && dbUsername.trim() !== ""
-          ? `Сообщение от: ${strong(`@${text(dbUsername)}`)}`
-          : user_id
-          ? `Сообщение от: ${idMention(user_id)}`
-          : `Сообщение от: ${strong("Не определен")}`;
-    }
+    // Ссылка `tg://user?id=` работает только по настоящему telegram_id: внутренний
+    // id сайта ведёт в несуществующий профиль, поэтому без telegram_id печатаем
+    // просто ID.
+    const prefix = contextType === "feedback" ? "Обратная связь от" : "Сообщение от";
+    const author =
+      dbUsername && dbUsername.trim() !== ""
+        ? strong(`@${text(dbUsername)}`)
+        : telegram_id
+        ? plain
+          ? `ID ${text(telegram_id)}`
+          : `<a href="tg://user?id=${text(telegram_id)}">${strong(`ID ${text(telegram_id)}`)}</a>`
+        : user_id
+        ? `ID ${text(user_id)}`
+        : strong(contextType === "feedback" ? "Неавторизованный пользователь" : "Не определен");
 
-    return `${header}${text(message)}\n\n${authorLink}`;
+    return `${header}${text(message)}\n\n${prefix}: ${author}`;
   }
 
   /**
-   * Send booking notification to seller
+   * Текст уведомления владельцу объявления о брони или её отмене.
+   *
+   * Только текст: доставкой занимается `MessageDeliveryService` — только там
+   * резолвится настоящий `telegram_id`/`max_id` получателя. Раньше вызывающий
+   * подставлял в `chatIds` `users.user_id`, и уведомление уходило в
+   * несуществующий чат.
+   *
+   * `format: 'HTML'` — Telegram, `'plain'` — MAX, где теги видны как текст.
    */
-  async sendBookingNotification({
-    sellerTelegramId,
+  buildBookingNotificationText({
+    action,
     buyerName,
     buyerUsername,
     adTitle,
     adPrice,
     bookingOrder,
     adId,
+    format = "HTML",
   }) {
-    try {
-      const orderTexts = {
-        1: "первым",
-        2: "вторым",
-        3: "третьим",
-        4: "четвертым",
-        5: "пятым",
-      };
-      const orderText = orderTexts[bookingOrder] || `${bookingOrder}-м`;
+    const plain = format !== "HTML";
+    const text = (value) =>
+      plain ? String(value ?? "") : this._escapeHtml(value);
+    const strong = (value) => (plain ? value : `<b>${value}</b>`);
 
-      const buyerDisplay = buyerUsername
-        ? `@${this._escapeHtml(buyerUsername)}`
-        : this._escapeHtml(buyerName || "Не указано");
+    const orderTexts = {
+      1: "первым",
+      2: "вторым",
+      3: "третьим",
+      4: "четвертым",
+      5: "пятым",
+    };
+    const orderText = orderTexts[bookingOrder] || `${bookingOrder}-м`;
+    const buyer = buyerUsername ? `@${buyerUsername}` : buyerName || "Не указано";
 
-      let message = `🔔 <b>Новое бронирование!</b>\n\n`;
-      message += `👤 Пользователь: ${buyerDisplay}\n`;
-      message += `📦 Объявление: <b>${this._escapeHtml(adTitle)}</b>\n`;
+    const head =
+      action === "cancelled"
+        ? `❌ ${strong("Отмена бронирования")}\n\n`
+        : `🔔 ${strong("Новое бронирование!")}\n\n`;
 
+    let message = `${head}👤 Пользователь: ${text(buyer)}\n`;
+    message += `📦 Объявление: ${strong(text(adTitle))}\n`;
+
+    if (action === "cancelled") {
+      message += `📊 Был: ${strong(text(orderText))}\n\n`;
+      message += `Пользователь передумал.\n\n`;
+    } else {
       if (adPrice) {
-        message += `💰 Цена: <b>${this._escapeHtml(adPrice)}</b> ₽\n`;
+        message += `💰 Цена: ${strong(text(`${adPrice} ₽`))}\n`;
       }
-
-      message += `📊 Забронировал: <b>${orderText}</b>\n\n`;
-      message += `Всего бронирований: <b>${bookingOrder}\n\n`;
-      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
-      message += `🔗 Просмотреть: ${frontendUrl}/ads/${adId}`;
-
-      const result = await this.sendMessage({
-        message,
-        chatIds: [sellerTelegramId],
-        parse_mode: "HTML",
-      });
-
-      logger.info("Booking notification sent", {
-        sellerTelegramId,
-        adId,
-        bookingOrder,
-      });
-
-      return result;
-    } catch (error) {
-      logger.error("Error sending booking notification", {
-        error: error.message,
-        sellerTelegramId,
-        adId,
-      });
-      throw error;
+      message += `📊 Забронировал: ${strong(text(orderText))}\n\n`;
+      message += `Всего бронирований: ${strong(text(bookingOrder))}\n\n`;
     }
+
+    return `${message}🔗 Просмотреть: ${frontendLink(`/ads/${adId}`)}`;
   }
 
   /**
-   * Send booking cancellation notification to seller
+   * Текст «вам задали вопрос по объявлению» — его бот отправляет владельцу, когда
+   * кто-то отвечает на опубликованное объявление.
+   *
+   * Заголовок объявления и текст вопроса пишет человек, поэтому оба экранируются:
+   * без этого `<b>` из объявления ломает разметку всего уведомления.
    */
-  async sendBookingCancellationNotification({
-    sellerTelegramId,
-    buyerName,
-    buyerUsername,
-    adTitle,
-    bookingOrder,
-    adId,
-  }) {
-    try {
-      const orderTexts = {
-        1: "первым",
-        2: "вторым",
-        3: "третьим",
-        4: "четвертым",
-        5: "пятым",
-      };
-      const orderText = orderTexts[bookingOrder] || `${bookingOrder}-м`;
+  buildOwnerQuestionText({ adTitle, senderName, question, adId, format = "HTML" }) {
+    const plain = format !== "HTML";
+    const text = (value) =>
+      plain ? String(value ?? "") : this._escapeHtml(value);
+    const strong = (value) => (plain ? value : `<b>${value}</b>`);
+    const italic = (value) => (plain ? value : `<i>${value}</i>`);
 
-      const buyerDisplay = buyerUsername
-        ? `@${this._escapeHtml(buyerUsername)}`
-        : this._escapeHtml(buyerName || "Не указано");
+    let message = `📩 ${strong("Новый вопрос по вашему объявлению")}\n\n`;
+    message += `📢 Объявление: ${strong(text(adTitle))}\n\n`;
+    message += `👤 От: ${text(senderName)}\n`;
+    message += `💬 Сообщение:\n${italic(`"${text(question)}"`)}\n\n`;
 
-      let message = `❌ <b>Отмена бронирования</b>\n\n`;
-      message += `👤 Пользователь: ${buyerDisplay}\n`;
-      message += `📦 Объявление: <b>${this._escapeHtml(adTitle)}</b>\n`;
-      message += `📊 Был: <b>${orderText}</b>\n\n`;
-      message += `Пользователь передумал.\n\n`;
-      const frontendUrl = process.env.FRONTEND_URL || 'https://taiginsky.md';
-      message += `🔗 Просмотреть: ${frontendUrl}/ads/${adId}`;
-
-      const result = await this.sendMessage({
-        message,
-        chatIds: [sellerTelegramId],
-        parse_mode: "HTML",
-      });
-
-      logger.info("Booking cancellation notification sent", {
-        sellerTelegramId,
-        adId,
-        bookingOrder,
-      });
-
-      return result;
-    } catch (error) {
-      logger.error("Error sending booking cancellation notification", {
-        error: error.message,
-        sellerTelegramId,
-        adId,
-      });
-      throw error;
-    }
+    return `${message}🔗 Просмотреть объявление: ${frontendLink(`/ads/${adId}`)}`;
   }
 
   /**
@@ -816,5 +788,17 @@ export class TelegramService {
     return new Promise((resolve) => setTimeout(resolve, this.delay));
   }
 }
+
+/**
+ * Единственный экземпляр на процесс.
+ *
+ * Очередь `pLimit(1)` и пауза между запросами берегут от флуда один токен бота, а не
+ * каждого получателя: инстансов должно быть ровно столько же. Раньше вызывающие делали
+ * `new TelegramService()` на запрос, и лимитеры считались раздельно.
+ */
+export const telegramService = new TelegramService(
+  new AdRepository(),
+  new PostRepository()
+);
 
 export default TelegramService;

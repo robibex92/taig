@@ -97,13 +97,15 @@ router.post(
 
       // Get username from database if user is authenticated
       let dbUsername = null;
+      let senderTelegramId = null;
       if (user_id) {
         try {
           const user = await prisma.user.findUnique({
             where: { user_id: BigInt(user_id) },
-            select: { username: true },
+            select: { username: true, telegram_id: true },
           });
           dbUsername = user?.username || null;
+          senderTelegramId = user?.telegram_id ? String(user.telegram_id) : null;
         } catch (error) {
           logger.error("Error fetching username", {
             user_id,
@@ -117,6 +119,7 @@ router.post(
         contextType: "feedback",
         contextData: null,
         user_id,
+        telegram_id: senderTelegramId,
         dbUsername,
       });
 

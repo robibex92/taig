@@ -1,30 +1,37 @@
 import express from "express";
-import { ParkingController } from "../controllers/ParkingController.js";
+import { container } from "../../infrastructure/container/Container.js";
 import {
   authenticateJWT,
   authenticateOptional,
 } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
-import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
+import { validateRequest } from "../../core/validation/validator.js";
+import {
+  assignOwnerSchema,
+  createParkingSpotSchema,
+  parkingMessageSchema,
+  parkingNoteSchema,
+  updateParkingSpotSchema,
+} from "../../core/validation/schemas/parking.schema.js";
+import {
+  PARKING_ADMIN_ROLES,
+  RESIDENT_DATA_ROLES,
+} from "../../core/utils/roles.js";
 
 const router = express.Router();
-const parkingController = new ParkingController();
+const parkingController = container.resolve("parkingController");
 
 /**
  * Администратор паркинга; глобальный администратор — тоже (иначе он видит
  * вкладку «Парковка», но все её запросы получают 403).
  */
-const parkingAdmin = requireRoles(SERVICE_ROLES.PARKING_ADMIN, GLOBAL_ROLES.ADMIN);
+const parkingAdmin = requireRoles(...PARKING_ADMIN_ROLES);
 
 /**
  * Персонал, которому видны данные жителя: администратор, модератор,
- * администратор паркинга — ровно `canViewResidentData` из core/utils/roles.
+ * администратор паркинга — ровно `canViewResidentData`, тем же списком ролей.
  */
-const staffViewer = requireRoles(
-  GLOBAL_ROLES.MODERATOR,
-  GLOBAL_ROLES.ADMIN,
-  SERVICE_ROLES.PARKING_ADMIN
-);
+const staffViewer = requireRoles(...RESIDENT_DATA_ROLES);
 
 const BASE_ROUTE = "/parking-spots";
 
@@ -185,6 +192,7 @@ router.get(
 router.put(
   `${BASE_ROUTE}/:id`,
   authenticateJWT,
+  validateRequest(updateParkingSpotSchema),
   parkingController.updateParkingSpot
 );
 
@@ -229,6 +237,7 @@ router.post(
   "/parking/spots/:id/assign-owner",
   authenticateJWT,
   parkingAdmin,
+  validateRequest(assignOwnerSchema),
   parkingController.assignOwner
 );
 
@@ -272,6 +281,7 @@ router.post(
 router.post(
   "/parking/spots/:id/message",
   authenticateJWT,
+  validateRequest(parkingMessageSchema),
   parkingController.sendMessageToOwner
 );
 
@@ -287,7 +297,13 @@ router.post(
  *       201:
  *         description: Parking spot created
  */
-router.post(BASE_ROUTE, authenticateJWT, parkingAdmin, parkingController.createParkingSpot);
+router.post(
+  BASE_ROUTE,
+  authenticateJWT,
+  parkingAdmin,
+  validateRequest(createParkingSpotSchema),
+  parkingController.createParkingSpot
+);
 
 /**
  * @swagger
@@ -381,6 +397,7 @@ router.post(
   `${BASE_ROUTE}/:id/notes`,
   authenticateJWT,
   staffViewer,
+  validateRequest(parkingNoteSchema),
   parkingController.addSpotNote
 );
 

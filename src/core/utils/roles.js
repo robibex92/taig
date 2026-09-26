@@ -68,8 +68,10 @@ export const isModerator = (user) => hasAnyRole(user, [GLOBAL_ROLES.ADMIN, GLOBA
 export const isActivist = (user) =>
   hasAnyRole(user, [GLOBAL_ROLES.ADMIN, GLOBAL_ROLES.MODERATOR, GLOBAL_ROLES.ACTIVIST]);
 
-export const isParkingAdmin = (user) =>
-  hasAnyRole(user, [GLOBAL_ROLES.ADMIN, SERVICE_ROLES.PARKING_ADMIN]);
+/** Те же роли списком — из них собирается `requireRoles` на маршрутах записи. */
+export const PARKING_ADMIN_ROLES = [GLOBAL_ROLES.ADMIN, SERVICE_ROLES.PARKING_ADMIN];
+
+export const isParkingAdmin = (user) => hasAnyRole(user, PARKING_ADMIN_ROLES);
 
 export const isCarsAdmin = (user) =>
   hasAnyRole(user, [GLOBAL_ROLES.ADMIN, SERVICE_ROLES.CARS_ADMIN]);
@@ -79,8 +81,18 @@ export const isCarsAdmin = (user) =>
  *
  * Шире, чем `isParkingAdmin`: модератор тоже отвечает на вопросы жителей,
  * но права на запись места при этом остаются у администратора паркинга.
+ *
+ * Единственный источник истины: из этого же списка собран `requireRoles`
+ * на маршрутах, чтобы проверка в слое HTTP и в use-case не разъезжались.
  */
-export const canViewResidentData = (user) => isModerator(user) || isParkingAdmin(user);
+export const RESIDENT_DATA_ROLES = [
+  GLOBAL_ROLES.ADMIN,
+  GLOBAL_ROLES.MODERATOR,
+  SERVICE_ROLES.PARKING_ADMIN,
+];
+
+export const canViewResidentData = (user) =>
+  hasAnyRole(user, RESIDENT_DATA_ROLES);
 
 const matchHouseRole = (user, house, action) => {
   const key = normalizeHouseKey(house);

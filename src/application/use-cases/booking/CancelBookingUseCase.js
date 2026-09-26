@@ -1,7 +1,8 @@
 import BookingRepository from "../../../infrastructure/repositories/BookingRepository.js";
 import AdRepository from "../../../infrastructure/repositories/AdRepository.js";
 import UserRepository from "../../../infrastructure/repositories/UserRepository.js";
-import TelegramService from "../../services/TelegramService.js";
+import { telegramService } from "../../services/TelegramService.js";
+import { messageDeliveryService } from "../../services/MessageDeliveryService.js";
 import {
   ValidationError,
   NotFoundError,
@@ -49,23 +50,33 @@ export class CancelBookingUseCase {
       // Cancel booking
       const cancelledBooking = await this.bookingRepository.cancel(bookingId);
 
-      // Send Telegram notification to seller (non-blocking)
-      const telegramService = new TelegramService(this.adRepository);
+      // Уведомление владельцу — неблокирующее, канал и id получателя выбирает
+      // сервис доставки.
       telegramService.queueTask(async () => {
         try {
           const ad = await this.adRepository.findById(booking.ad_id);
           const user = await this.userRepository.findById(userId);
 
           if (ad && user) {
-            const seller = await this.userRepository.findById(ad.user_id);
-            if (seller && seller.user_id) {
-              await telegramService.sendBookingCancellationNotification({
-                sellerTelegramId: seller.user_id.toString(),
-                buyerName: user.first_name || user.username || "Не указано",
-                buyerUsername: user.username || null,
-                adTitle: ad.title,
-                bookingOrder: booking.booking_order,
-                adId: ad.id.toString(),
+            const delivery = await messageDeliveryService.deliver({
+              userId: ad.user_id,
+              text: (format) =>
+                telegramService.buildBookingNotificationText({
+                  action: "cancelled",
+                  buyerName: user.first_name || user.username || "Не указано",
+                  buyerUsername: user.username || null,
+                  adTitle: ad.title,
+                  bookingOrder: booking.booking_order,
+                  adId: ad.id.toString(),
+                  format,
+                }),
+            });
+
+            if (!delivery.ok) {
+              logger.warn("Booking cancellation not delivered", {
+                ad_id: booking.ad_id,
+                code: delivery.code,
+                error: delivery.error,
               });
             }
 
