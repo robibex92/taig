@@ -86,8 +86,8 @@ const sendMessageSchema = Joi.object({
  */
 router.post(
   `${BASE_ROUTE}/send`,
-  feedbackLimiter,
   authenticateConditional,
+  feedbackLimiter,
   async (req, res, next) => {
     try {
       // Validate input
