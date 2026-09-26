@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { TelegramService } from "../../services/TelegramService.js";
-import { isParkingAdmin } from "../../../core/utils/roles.js";
+import { canViewResidentData, isParkingAdmin } from "../../../core/utils/roles.js";
 
 const prisma = new PrismaClient();
 
@@ -57,7 +57,8 @@ const OWNER_SELECT = {
  *
  * The public grid exposes only the place number and its status: price,
  * description, contacts and owner identity are resident data, included only
- * for parking administrators (or the owner of that exact place).
+ * for staff: administrator, moderator or parking administrator (or the owner
+ * of that exact place).
  */
 function mapSpot(spot, { detailed = false } = {}) {
   const base = {
@@ -100,7 +101,7 @@ class ParkingUseCases {
   // Получить все парковочные места
   async getAllParkingSpots(viewer) {
     try {
-      const detailed = isParkingAdmin(viewer);
+      const detailed = canViewResidentData(viewer);
 
       const spots = await prisma.parkingSpot.findMany({
         orderBy: { spot_number: "asc" },
@@ -129,7 +130,8 @@ class ParkingUseCases {
         return { success: false, error: "Parking spot not found" };
       }
 
-      const detailed = isParkingAdmin(viewer) || isOwnerOf(spot, viewer?.user_id);
+      const detailed =
+        canViewResidentData(viewer) || isOwnerOf(spot, viewer?.user_id);
 
       return {
         success: true,

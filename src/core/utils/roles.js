@@ -74,6 +74,14 @@ export const isParkingAdmin = (user) =>
 export const isCarsAdmin = (user) =>
   hasAnyRole(user, [GLOBAL_ROLES.ADMIN, SERVICE_ROLES.CARS_ADMIN]);
 
+/**
+ * Кто видит данные жителя (цена, описание, контакты, владелец места).
+ *
+ * Шире, чем `isParkingAdmin`: модератор тоже отвечает на вопросы жителей,
+ * но права на запись места при этом остаются у администратора паркинга.
+ */
+export const canViewResidentData = (user) => isModerator(user) || isParkingAdmin(user);
+
 const matchHouseRole = (user, house, action) => {
   const key = normalizeHouseKey(house);
   if (!key) return false;
