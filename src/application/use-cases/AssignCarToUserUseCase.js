@@ -5,9 +5,8 @@ import { AppError } from "../../core/errors/AppError.js";
  * Assigns an unassigned car to a user (admin only)
  */
 export class AssignCarToUserUseCase {
-  constructor(carRepository, carAdminNoteRepository) {
+  constructor(carRepository) {
     this.carRepository = carRepository;
-    this.carAdminNoteRepository = carAdminNoteRepository;
   }
 
   async execute(carId, userId) {
@@ -27,8 +26,8 @@ export class AssignCarToUserUseCase {
       user_id: userId,
     });
 
-    // Delete all admin notes for this car (they're no longer needed)
-    await this.carAdminNoteRepository.deleteByCarId(carId);
+    // Admin notes stay: they describe the car (violations, agreements, history),
+    // not the fact that it had no owner yet.
 
     return {
       success: true,

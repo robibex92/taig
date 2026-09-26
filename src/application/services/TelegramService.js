@@ -420,7 +420,11 @@ export class TelegramService {
   }
 
   /**
-   * Build message text for context-based messages (car, apartment, feedback)
+   * Build message text for context-based messages (car, apartment, feedback).
+   *
+   * `format: 'HTML'` — Telegram, где работает `<b>` и ссылка `tg://user?id=`.
+   * `'plain'` — MAX: там теги показываются как текст, поэтому тот же самый
+   * текст собирается без разметки.
    */
   buildContextMessage({
     message,
@@ -428,47 +432,54 @@ export class TelegramService {
     contextData,
     user_id,
     dbUsername,
+    format = "HTML",
   }) {
+    const plain = format !== "HTML";
+    const text = (value) => (plain ? String(value ?? "") : this._escapeHtml(value));
+    const strong = (value) => (plain ? value : `<b>${value}</b>`);
+    const idMention = (id) =>
+      plain ? `ID ${id}` : `<a href="tg://user?id=${id}"><b>ID ${id}</b></a>`;
+
     let header = "";
 
     if (contextType === "announcement") {
-      header = `📢 <b>Вам отправлено сообщение по объявлению "${this._escapeHtml(
-        contextData?.title || ""
-      )}"</b> 📢\n\n`;
+      header = `📢 ${strong(
+        `Вам отправлено сообщение по объявлению "${text(contextData?.title || "")}"`
+      )} 📢\n\n`;
     } else if (contextType === "car") {
-      header = `🚗 <b>Вам отправлено сообщение по автомобилю ${this._escapeHtml(
-        contextData?.car_brand || ""
-      )} ${this._escapeHtml(contextData?.car_model || "")}</b> 🚗\n\n`;
+      header = `🚗 ${strong(
+        `Вам отправлено сообщение по автомобилю ${text(
+          contextData?.car_brand || ""
+        )} ${text(contextData?.car_model || "")}`
+      )} 🚗\n\n`;
     } else if (contextType === "apartment") {
-      header = `🏠 <b>Вам отправлено сообщение по квартире ${this._escapeHtml(
-        String(contextData?.number || "")
-      )}</b> 🏠\n\n`;
+      header = `🏠 ${strong(
+        `Вам отправлено сообщение по квартире ${text(String(contextData?.number || ""))}`
+      )} 🏠\n\n`;
     } else if (contextType === "feedback") {
-      header = `💬 <b>Обратная связь с сайта</b> 💬\n\n`;
+      header = `💬 ${strong("Обратная связь с сайта")} 💬\n\n`;
     }
 
     // Format author information
     let authorLink;
     if (contextType === "feedback") {
       if (user_id && dbUsername && dbUsername.trim() !== "") {
-        authorLink = `Обратная связь от: <b>@${this._escapeHtml(
-          dbUsername
-        )}</b>`;
+        authorLink = `Обратная связь от: ${strong(`@${text(dbUsername)}`)}`;
       } else if (user_id) {
-        authorLink = `Обратная связь от: <a href="tg://user?id=${user_id}"><b>ID ${user_id}</b></a>`;
+        authorLink = `Обратная связь от: ${idMention(user_id)}`;
       } else {
-        authorLink = `Обратная связь от: <b>Неавторизованный пользователь</b>`;
+        authorLink = `Обратная связь от: ${strong("Неавторизованный пользователь")}`;
       }
     } else {
       authorLink =
         dbUsername && dbUsername.trim() !== ""
-          ? `Сообщение от: <b>@${this._escapeHtml(dbUsername)}</b>`
+          ? `Сообщение от: ${strong(`@${text(dbUsername)}`)}`
           : user_id
-          ? `Сообщение от: <a href="tg://user?id=${user_id}"><b>ID ${user_id}</b></a>`
-          : `Сообщение от: <b>Не определен</b>`;
+          ? `Сообщение от: ${idMention(user_id)}`
+          : `Сообщение от: ${strong("Не определен")}`;
     }
 
-    return `${header}${this._escapeHtml(message)}\n\n${authorLink}`;
+    return `${header}${text(message)}\n\n${authorLink}`;
   }
 
   /**

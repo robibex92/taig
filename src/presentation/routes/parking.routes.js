@@ -16,6 +16,16 @@ const parkingController = new ParkingController();
  */
 const parkingAdmin = requireRoles(SERVICE_ROLES.PARKING_ADMIN, GLOBAL_ROLES.ADMIN);
 
+/**
+ * Персонал, которому видны данные жителя: администратор, модератор,
+ * администратор паркинга — ровно `canViewResidentData` из core/utils/roles.
+ */
+const staffViewer = requireRoles(
+  GLOBAL_ROLES.MODERATOR,
+  GLOBAL_ROLES.ADMIN,
+  SERVICE_ROLES.PARKING_ADMIN
+);
+
 const BASE_ROUTE = "/parking-spots";
 
 /**
@@ -328,6 +338,73 @@ router.post(
   authenticateJWT,
   parkingAdmin,
   parkingController.unassignOwner
+);
+
+/**
+ * @swagger
+ * /api-v1/parking-spots/{id}/notes:
+ *   get:
+ *     summary: Service notes of a parking spot (staff only)
+ *     tags: [Parking]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Notes with author and date
+ *       403:
+ *         description: Forbidden (not staff)
+ */
+router.get(
+  `${BASE_ROUTE}/:id/notes`,
+  authenticateJWT,
+  staffViewer,
+  parkingController.getSpotNotes
+);
+
+/**
+ * @swagger
+ * /api-v1/parking-spots/{id}/notes:
+ *   post:
+ *     summary: Add a service note to a parking spot (staff only)
+ *     tags: [Parking]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Note created
+ *       400:
+ *         description: Empty note
+ *       403:
+ *         description: Forbidden (not staff)
+ */
+router.post(
+  `${BASE_ROUTE}/:id/notes`,
+  authenticateJWT,
+  staffViewer,
+  parkingController.addSpotNote
+);
+
+/**
+ * @swagger
+ * /api-v1/parking-spots/notes/{noteId}:
+ *   delete:
+ *     summary: Delete a service note (staff only)
+ *     tags: [Parking]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Note deleted
+ *       403:
+ *         description: Forbidden (not staff)
+ *       404:
+ *         description: Note not found
+ */
+router.delete(
+  `${BASE_ROUTE}/notes/:noteId`,
+  authenticateJWT,
+  staffViewer,
+  parkingController.deleteSpotNote
 );
 
 export default router;

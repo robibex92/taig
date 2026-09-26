@@ -197,7 +197,8 @@ export class ParkingController {
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       data: result.data,
-      message: "Сообщение отправлено владельцу парковочного места",
+      // Use-case знает, дошло ли уведомление; «отправлено» без этого было бы неправдой.
+      message: result.data.message,
     });
   });
 
@@ -274,5 +275,60 @@ export class ParkingController {
       data: result.data,
       message: "Место свободно",
     });
+  });
+
+  /**
+   * Service notes of one parking spot (staff only)
+   */
+  getSpotNotes = asyncHandler(async (req, res) => {
+    const result = await this.parkingUseCases.getSpotNotes(
+      Number(req.params.id),
+      req.user
+    );
+
+    if (!result.success) {
+      return res
+        .status(result.status || HTTP_STATUS.BAD_REQUEST)
+        .json({ success: false, error: result.error });
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: result.data });
+  });
+
+  /**
+   * Add a service note to a parking spot (staff only)
+   */
+  addSpotNote = asyncHandler(async (req, res) => {
+    const result = await this.parkingUseCases.addSpotNote(
+      Number(req.params.id),
+      req.body?.note,
+      req.user
+    );
+
+    if (!result.success) {
+      return res
+        .status(result.status || HTTP_STATUS.BAD_REQUEST)
+        .json({ success: false, error: result.error });
+    }
+
+    res.status(HTTP_STATUS.CREATED).json({ success: true, data: result.data });
+  });
+
+  /**
+   * Delete a service note (staff only)
+   */
+  deleteSpotNote = asyncHandler(async (req, res) => {
+    const result = await this.parkingUseCases.deleteSpotNote(
+      Number(req.params.noteId),
+      req.user
+    );
+
+    if (!result.success) {
+      return res
+        .status(result.status || HTTP_STATUS.BAD_REQUEST)
+        .json({ success: false, error: result.error });
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: result.message });
   });
 }

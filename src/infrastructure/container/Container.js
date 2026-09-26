@@ -18,6 +18,7 @@ import { EntranceCommentRepository } from "../repositories/EntranceCommentReposi
 // Services
 import { TokenService } from "../../application/services/TokenService.improved.js";
 import { TelegramService } from "../../application/services/TelegramService.js";
+import { MessageDeliveryService } from "../../application/services/MessageDeliveryService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
 import { CarImageUploadService } from "../../application/services/CarImageUploadService.js";
 import NotificationService from "../../application/services/NotificationService.js";
@@ -248,6 +249,14 @@ export class Container {
     );
     this.register("fileUploadService", () => new FileUploadService());
     this.register("carImageUploadService", () => new CarImageUploadService());
+    // Один экземпляр: резолвер получателя + общий rate-limiter TelegramService.
+    this.register(
+      "messageDeliveryService",
+      (container) =>
+        new MessageDeliveryService({
+          telegramService: container.resolve("telegramService"),
+        })
+    );
 
     // Notification Service
     this.register(
@@ -726,7 +735,8 @@ export class Container {
       (container) =>
         new GetCarAdminNotesUseCase(
           container.resolve("carAdminNoteRepository"),
-          container.resolve("carRepository")
+          container.resolve("carRepository"),
+          container.resolve("userRepository")
         )
     );
 
@@ -769,10 +779,7 @@ export class Container {
     this.register(
       "assignCarToUserUseCase",
       (container) =>
-        new AssignCarToUserUseCase(
-          container.resolve("carRepository"),
-          container.resolve("carAdminNoteRepository")
-        )
+        new AssignCarToUserUseCase(container.resolve("carRepository"))
     );
 
     // Controllers - Car

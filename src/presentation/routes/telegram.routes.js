@@ -19,31 +19,22 @@ const BASE_ROUTE = "/telegram";
  *   description: Telegram messaging API
  */
 
-// Validation schema for send message
+/**
+ * Обратная связь с сайта. Адресат берётся только отсюда: пока `chat_id`
+ * приходил из тела, эндпоинт был ретранслятором в любой чат Telegram.
+ * Личные сообщения жителям идут через `/api/contacts/send`.
+ */
+const FEEDBACK_CHAT_ID = process.env.ADMIN_FEEDBACK_CHAT_ID || "245946670";
+
+// Validation schema for the feedback message
 const sendMessageSchema = Joi.object({
-  chat_id: Joi.alternatives()
-    .try(Joi.number(), Joi.string())
-    .required()
-    .messages({
-      "any.required": "chat_id is required",
-    }),
   message: Joi.string().min(1).max(4096).required().messages({
     "any.required": "message is required",
     "string.max": "Message cannot exceed 4096 characters",
   }),
-  contextType: Joi.string()
-    .valid("announcement", "car", "apartment", "feedback")
-    .allow("", null),
-  contextData: Joi.object().allow(null),
-  parse_mode: Joi.string()
-    .valid("HTML", "Markdown", "MarkdownV2")
-    .default("HTML"),
-  captcha: Joi.string().when("contextType", {
-    is: "feedback",
-    then: Joi.required().messages({
-      "any.required": "Captcha is required for feedback messages",
-    }),
-    otherwise: Joi.optional(),
+  parse_mode: Joi.string().valid("HTML").default("HTML"),
+  captcha: Joi.string().messages({
+    "any.required": "Captcha is required for feedback messages",
   }),
 });
 
@@ -51,7 +42,7 @@ const sendMessageSchema = Joi.object({
  * @swagger
  * /api-v1/telegram/send:
  *   post:
- *     summary: Send message to Telegram
+ *     summary: Feedback message to the administration chat
  *     tags: [Telegram]
  *     requestBody:
  *       required: true
@@ -60,21 +51,16 @@ const sendMessageSchema = Joi.object({
  *           schema:
  *             type: object
  *             required:
- *               - chat_id
  *               - message
  *             properties:
- *               chat_id:
- *                 type: string
  *               message:
  *                 type: string
- *               contextType:
+ *               captcha:
  *                 type: string
- *                 enum: [announcement, car, apartment, feedback]
- *               contextData:
- *                 type: object
+ *                 description: обязателен для анонимной отправки
  *               parse_mode:
  *                 type: string
- *                 enum: [HTML, Markdown, MarkdownV2]
+ *                 enum: [HTML]
  *                 default: HTML
  *     responses:
  *       200:
@@ -90,35 +76,21 @@ router.post(
   feedbackLimiter,
   async (req, res, next) => {
     try {
-      // Validate input
-      const validatedData = validate(sendMessageSchema, req.body);
+      const { message, parse_mode, captcha } = validate(sendMessageSchema, req.body);
 
-      const {
-        chat_id,
-        message,
-        contextType,
-        contextData,
-        parse_mode = "HTML",
-        captcha,
-      } = validatedData;
-
-      // Get user_id from token (may be null for feedback)
+      // Get user_id from token (may be null for anonymous feedback)
       const user_id = req.user?.user_id;
 
-      // Простая проверка капчи для анонимной обратной связи
-      if (contextType === "feedback" && !user_id) {
-        // В реальном приложении здесь должна быть проверка капчи
-        // Пока что просто проверяем, что капча не пустая
-        if (!captcha || captcha.length !== 5) {
-          return res.status(400).json({
-            success: false,
-            error: "Invalid captcha",
-          });
-        }
+      // Простая проверка капчи для анонимной обратной связи: в реальном
+      // приложении здесь должна быть настоящая проверка, пока — только длина.
+      if (!user_id && (!captcha || captcha.length !== 5)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid captcha",
+        });
       }
 
-      logger.info("Telegram send request", {
-        contextType,
+      logger.info("Feedback message request", {
         user_id,
         isAuthenticated: !!user_id,
       });
@@ -140,19 +112,17 @@ router.post(
         }
       }
 
-      // Build context message
       const finalMessage = telegramService.buildContextMessage({
         message,
-        contextType,
-        contextData,
+        contextType: "feedback",
+        contextData: null,
         user_id,
         dbUsername,
       });
 
-      // Send message
       const result = await telegramService.sendMessage({
         message: finalMessage,
-        chatIds: [chat_id],
+        chatIds: [FEEDBACK_CHAT_ID],
         parse_mode,
       });
 
@@ -160,17 +130,14 @@ router.post(
         throw new Error(result.results[0].error);
       }
 
-      logger.info("Telegram message sent successfully", {
-        chat_id,
-        contextType,
-      });
+      logger.info("Feedback message sent successfully");
 
       res.json({
         success: true,
         result: result.results[0],
       });
     } catch (error) {
-      logger.error("Error sending Telegram message", {
+      logger.error("Error sending feedback message", {
         error: error.message,
       });
       next(error);

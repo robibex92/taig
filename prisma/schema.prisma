@@ -336,6 +336,20 @@ model ParkingSpot {
   @@map("parking_spots")
 }
 
+/// Служебные заметки администрации о месте — видны только персоналу (см. canViewResidentData)
+model ParkingSpotNote {
+  id                  BigInt    @id @default(autoincrement())
+  spot_id             BigInt
+  note                String
+  created_by_admin_id BigInt
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @updatedAt @db.Timestamptz(6)
+
+  @@index([spot_id], map: "idx_parking_spot_notes_spot_id")
+  @@index([created_at(sort: Desc)], map: "idx_parking_spot_notes_created_at")
+  @@map("parking_spot_notes")
+}
+
 model ParkingSpotHistory {
   id               BigInt   @id @default(autoincrement())
   parking_spot_id  BigInt

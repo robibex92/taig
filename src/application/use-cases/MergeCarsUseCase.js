@@ -81,8 +81,9 @@ export class MergeCarsUseCase {
       await this.carImageRepository.update(image.id, { car_id: carToKeepId });
     }
 
-    // Delete admin notes from the car to merge (they're no longer needed)
-    await this.carAdminNoteRepository.deleteByCarId(carToMergeId);
+    // Move admin notes to the surviving car before it is deleted — the FK on
+    // car_id is ON DELETE CASCADE, so deleting first would take the notes with it
+    await this.carAdminNoteRepository.moveByCarId(carToMergeId, carToKeepId);
 
     // Delete the car to merge
     await this.carRepository.delete(carToMergeId);

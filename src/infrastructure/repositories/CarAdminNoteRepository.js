@@ -76,11 +76,12 @@ export class CarAdminNoteRepository extends ICarAdminNoteRepository {
   }
 
   /**
-   * Delete all admin notes for a car (when car gets assigned to user)
+   * Move all admin notes of one car onto another (cars merge)
    */
-  async deleteByCarId(carId) {
-    await prisma.carAdminNote.deleteMany({
-      where: { car_id: BigInt(carId) },
+  async moveByCarId(fromCarId, toCarId) {
+    await prisma.carAdminNote.updateMany({
+      where: { car_id: BigInt(fromCarId) },
+      data: { car_id: BigInt(toCarId) },
     });
 
     return true;

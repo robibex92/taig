@@ -50,11 +50,12 @@ export class ICarAdminNoteRepository {
   }
 
   /**
-   * Delete all admin notes for a car (when car gets assigned to user)
-   * @param {number} carId - Car ID
+   * Move all admin notes of one car onto another (cars merge)
+   * @param {number} fromCarId - Car the notes currently belong to
+   * @param {number} toCarId - Car that survives the merge
    * @returns {Promise<boolean>}
    */
-  async deleteByCarId(carId) {
+  async moveByCarId(fromCarId, toCarId) {
     throw new Error("Method not implemented");
   }
 }

@@ -1,8 +1,15 @@
 import { PrismaClient } from "@prisma/client";
-import { TelegramService } from "../../services/TelegramService.js";
+import { MessageDeliveryService } from "../../services/MessageDeliveryService.js";
 import { canViewResidentData, isParkingAdmin } from "../../../core/utils/roles.js";
 
 const prisma = new PrismaClient();
+
+/** Текст уведомления экранируется: сообщение пишет пользователь, а разметка наша. */
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
 // Утилита для форматирования имени отправителя
 function formatSenderName(sender) {
@@ -98,6 +105,10 @@ function isOwnerOf(spot, userId) {
 }
 
 class ParkingUseCases {
+  constructor({ delivery = new MessageDeliveryService() } = {}) {
+    this.delivery = delivery;
+  }
+
   // Получить все парковочные места
   async getAllParkingSpots(viewer) {
     try {
@@ -394,22 +405,37 @@ class ParkingUseCases {
         },
       });
 
-      // Отправляем уведомление в Telegram владельцу
-      try {
-        const telegramService = new TelegramService();
-        const notificationText =
-          `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
-          `💬 Сообщение: <i>"${content}"</i>\n\n` +
-          `👤 От: ${formatSenderName(message.sender)}`;
+      // Уведомление владельцу: канал и id получателя выбирает сервис доставки.
+      const recipientId = message.receiver.user_id;
+      const availability = await this.delivery.availability({ userId: recipientId });
+      const channel = availability.telegram
+        ? "telegram"
+        : availability.max
+        ? "max"
+        : null;
 
-        await telegramService.sendMessage({
-          message: notificationText,
-          chatIds: [message.receiver.user_id.toString()],
-          parse_mode: "HTML",
+      let delivery = { ok: false, code: "no_channel", channels: availability };
+
+      if (channel) {
+        const senderName = formatSenderName(message.sender);
+        const notificationText =
+          channel === "telegram"
+            ? `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
+              `💬 Сообщение: <i>"${escapeHtml(content)}"</i>\n\n` +
+              `👤 От: ${escapeHtml(senderName)}`
+            : `📩 Новое сообщение по парковочному месту №${spot.spot_number}\n\n` +
+              `💬 Сообщение: "${content}"\n\n` +
+              `👤 От: ${senderName}`;
+
+        delivery = await this.delivery.deliver({
+          userId: recipientId,
+          text: notificationText,
+          channel,
         });
-      } catch (telegramError) {
-        console.error("Error sending Telegram notification:", telegramError);
-        // Не прерываем выполнение, если Telegram недоступен
+
+        if (!delivery.ok) {
+          console.error("Parking notification not delivered:", delivery.code, delivery.error);
+        }
       }
 
       return {
@@ -418,7 +444,11 @@ class ParkingUseCases {
           id: message.id,
           content: message.content,
           createdAt: message.created_at,
-          message: "Сообщение отправлено владельцу парковочного места",
+          delivered: delivery.ok,
+          channel: delivery.channel ?? null,
+          message: delivery.ok
+            ? "Сообщение отправлено владельцу парковочного места"
+            : "Сообщение сохранено, но доставить уведомление не удалось",
         },
       };
     } catch (error) {
@@ -568,6 +598,118 @@ class ParkingUseCases {
       console.error("Error deleting parking spot:", error);
       return { success: false, error: error.message };
     }
+  }
+
+  // ---------- Служебные заметки администрации о месте ----------
+  //
+  // Отделяем от `description`: описание места видит покупатель, заметка — внутренняя
+  // (кому жаловались, что обещали, нарушения). Читают и пишут только персонал,
+  // поэтому ни одна из этих строк не попадает в публичный `mapSpot`.
+
+  async getSpotNotes(spotId, user) {
+    if (!canViewResidentData(user)) {
+      return { success: false, error: "Not authorized", status: 403 };
+    }
+
+    try {
+      const notes = await prisma.parkingSpotNote.findMany({
+        where: { spot_id: BigInt(spotId) },
+        orderBy: { created_at: "desc" },
+      });
+
+      const authors = await this.loadNoteAuthors(notes);
+
+      return {
+        success: true,
+        data: notes.map((note) => ({
+          id: Number(note.id),
+          spotId: Number(note.spot_id),
+          note: note.note,
+          createdAt: note.created_at,
+          createdByLabel: formatSenderName(authors.get(String(note.created_by_admin_id))),
+        })),
+      };
+    } catch (error) {
+      console.error("Error loading parking spot notes:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async addSpotNote(spotId, note, user) {
+    if (!canViewResidentData(user)) {
+      return { success: false, error: "Not authorized", status: 403 };
+    }
+
+    const text = String(note ?? "").trim();
+    if (!text) {
+      return { success: false, error: "Note content is required", status: 400 };
+    }
+
+    try {
+      const spot = await prisma.parkingSpot.findUnique({
+        where: { id: BigInt(spotId) },
+      });
+
+      if (!spot) {
+        return { success: false, error: "Parking spot not found", status: 404 };
+      }
+
+      const created = await prisma.parkingSpotNote.create({
+        data: {
+          spot_id: spot.id,
+          note: text,
+          created_by_admin_id: BigInt(user.user_id),
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          id: Number(created.id),
+          spotId: Number(created.spot_id),
+          note: created.note,
+          createdAt: created.created_at,
+          createdByLabel: formatSenderName(user),
+        },
+      };
+    } catch (error) {
+      console.error("Error adding parking spot note:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteSpotNote(noteId, user) {
+    if (!canViewResidentData(user)) {
+      return { success: false, error: "Not authorized", status: 403 };
+    }
+
+    try {
+      const deleted = await prisma.parkingSpotNote.deleteMany({
+        where: { id: BigInt(noteId) },
+      });
+
+      if (!deleted.count) {
+        return { success: false, error: "Note not found", status: 404 };
+      }
+
+      return { success: true, message: "Заметка удалена" };
+    } catch (error) {
+      console.error("Error deleting parking spot note:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /** Имена авторов одной пачкой — `formatSenderName` берёт @username, затем имя. */
+  async loadNoteAuthors(notes) {
+    const ids = [...new Set(notes.map((note) => String(note.created_by_admin_id)))];
+    if (!ids.length) return new Map();
+
+    const rows = await prisma.user.findMany({
+      where: { user_id: { in: ids.map((id) => BigInt(id)) } },
+      select: { user_id: true, username: true, first_name: true, telegram_first_name: true },
+    });
+
+    return new Map(rows.map((row) => [String(row.user_id), row]));
   }
 }
 

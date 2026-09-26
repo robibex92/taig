@@ -110,6 +110,14 @@ export const writeLimiter = rateLimit(
 export const generalLimiter = (req, res, next) =>
   (req.method === "GET" || req.method === "HEAD" ? readLimiter : writeLimiter)(req, res, next);
 
+/** Личные сообщения жителям: 20 в час на ключ (пользователь, иначе IP). */
+export const contactMessageLimiter = rateLimit(
+  limiterOptions(
+    parseInt(process.env.RATE_LIMIT_CONTACT_MAX) || 20,
+    "CONTACT_RATE_LIMIT_EXCEEDED"
+  )
+);
+
 /**
  * Strict rate limiter for authentication endpoints
  */
