@@ -10,221 +10,113 @@ export class EntranceCommentRepository {
    * Create a new entrance comment
    */
   async create(commentData) {
-    try {
-      // Проверяем, существует ли модель в Prisma клиенте
-      if (!prisma.entranceComment) {
-        console.error(
-          "Prisma model 'entranceComment' not found. Please run 'npx prisma generate'"
-        );
-        throw new Error(
-          "Prisma model not found. Please regenerate Prisma client."
-        );
-      }
+    const comment = await prisma.entranceComment.create({
+      data: {
+        house_id: commentData.house_id,
+        entrance: commentData.entrance,
+        author_id: commentData.author_id,
+        comment: commentData.comment,
+      },
+    });
 
-      const comment = await prisma.entranceComment.create({
-        data: {
-          house_id: commentData.house_id,
-          entrance: commentData.entrance,
-          author_id: commentData.author_id,
-          comment: commentData.comment,
-        },
-        include: {
-          // house: {
-          //   select: {
-          //     id: true,
-          //     house: true,
-          //   },
-          // },
-        },
-      });
+    logger.info("Entrance comment created", {
+      commentId: comment.id,
+      houseId: comment.house_id,
+      entrance: comment.entrance,
+      authorId: comment.author_id,
+    });
 
-      logger.info("Entrance comment created", {
-        commentId: comment.id,
-        houseId: comment.house_id,
-        entrance: comment.entrance,
-        authorId: comment.author_id,
-      });
-
-      return comment;
-    } catch (error) {
-      logger.error("Error creating entrance comment:", error);
-      throw error;
-    }
+    return comment;
   }
 
   /**
    * Get comment by ID
    */
   async findById(id) {
-    try {
-      const comment = await prisma.entranceComment.findUnique({
-        where: { id: BigInt(id) },
-        include: {
-          // house: {
-          //   select: {
-          //     id: true,
-          //     house: true,
-          //   },
-          // },
-        },
-      });
-
-      return comment;
-    } catch (error) {
-      logger.error("Error finding entrance comment by ID:", error);
-      throw error;
-    }
+    return prisma.entranceComment.findUnique({
+      where: { id: BigInt(id) },
+    });
   }
 
   /**
    * Get comment for a specific house entrance
+   *
+   * Всегда с `orderBy: created_at desc`: «последний» комментарий подъезда не должен
+   * зависеть от порядка строк в БД.
    */
   async findByHouseAndEntrance(house_id, entrance) {
-    try {
-      // Проверяем, существует ли модель в Prisma клиенте
-      if (!prisma.entranceComment) {
-        console.error(
-          "Prisma model 'entranceComment' not found. Please run 'npx prisma generate'"
-        );
-        throw new Error(
-          "Prisma model not found. Please regenerate Prisma client."
-        );
-      }
-
-      console.log(
-        `Looking for entrance comment: house_id=${house_id}, entrance=${entrance}`
-      );
-
-      const comment = await prisma.entranceComment.findFirst({
-        where: {
-          house_id: house_id,
-          entrance: parseInt(entrance),
-        },
-        include: {
-          // house: {
-          //   select: {
-          //     id: true,
-          //     house: true,
-          //   },
-          // },
-        },
-      });
-
-      console.log(`Found entrance comment:`, comment ? "yes" : "no");
-      return comment;
-    } catch (error) {
-      logger.error(
-        "Error finding entrance comment by house and entrance:",
-        error
-      );
-      console.error("Detailed error:", error);
-      throw error;
-    }
+    return prisma.entranceComment.findFirst({
+      where: { house_id, entrance: Number(entrance) },
+      orderBy: { created_at: "desc" },
+    });
   }
 
   /**
    * Get all comments for a house
    */
   async findByHouseId(house_id) {
-    try {
-      const comments = await prisma.entranceComment.findMany({
-        where: { house_id: BigInt(house_id) },
-        include: {
-          // house: {
-          //   select: {
-          //     id: true,
-          //     house: true,
-          //   },
-          // },
-        },
-        orderBy: { entrance: "asc" },
-      });
-
-      return comments;
-    } catch (error) {
-      logger.error("Error finding entrance comments by house ID:", error);
-      throw error;
-    }
+    return prisma.entranceComment.findMany({
+      where: { house_id: BigInt(house_id) },
+      orderBy: { entrance: "asc" },
+    });
   }
 
   /**
    * Update a comment
    */
   async update(id, updateData) {
-    try {
-      const comment = await prisma.entranceComment.update({
-        where: { id: BigInt(id) },
-        data: {
-          comment: updateData.comment,
-          updated_at: new Date(),
-        },
-        include: {
-          // house: {
-          //   select: {
-          //     id: true,
-          //     house: true,
-          //   },
-          // },
-        },
-      });
+    const comment = await prisma.entranceComment.update({
+      where: { id: BigInt(id) },
+      data: {
+        comment: updateData.comment,
+        updated_at: new Date(),
+      },
+    });
 
-      logger.info("Entrance comment updated", {
-        commentId: comment.id,
-        houseId: comment.house_id,
-        entrance: comment.entrance,
-      });
+    logger.info("Entrance comment updated", {
+      commentId: comment.id,
+      houseId: comment.house_id,
+      entrance: comment.entrance,
+    });
 
-      return comment;
-    } catch (error) {
-      logger.error("Error updating entrance comment:", error);
-      throw error;
-    }
+    return comment;
   }
 
   /**
    * Delete a comment
    */
   async delete(id) {
-    try {
-      await prisma.entranceComment.delete({
-        where: { id: BigInt(id) },
-      });
+    await prisma.entranceComment.delete({
+      where: { id: BigInt(id) },
+    });
 
-      logger.info("Entrance comment deleted", { commentId: id });
-      return true;
-    } catch (error) {
-      logger.error("Error deleting entrance comment:", error);
-      throw error;
-    }
+    logger.info("Entrance comment deleted", { commentId: id });
+    return true;
   }
 
   /**
    * Check if user can manage comment
    */
   async canUserManage(commentId, userId) {
-    try {
-      const comment = await prisma.entranceComment.findUnique({
-        where: { id: BigInt(commentId) },
-        select: { author_id: true },
-      });
+    const comment = await prisma.entranceComment.findUnique({
+      where: { id: BigInt(commentId) },
+      select: { author_id: true },
+    });
 
-      if (!comment) {
-        return false;
-      }
-
-      // User can manage if they are the author or admin
-      const user = await prisma.user.findUnique({
-        where: { user_id: BigInt(userId) },
-        select: { roles: true },
-      });
-
-      return comment.author_id === BigInt(userId) || isAdmin(user);
-    } catch (error) {
-      logger.error(
-        "Error checking user permissions for entrance comment:",
-        error
-      );
+    if (!comment) {
       return false;
     }
+
+    // Автор не требует второго запроса к пользователю.
+    if (comment.author_id === BigInt(userId)) {
+      return true;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { user_id: BigInt(userId) },
+      select: { roles: true },
+    });
+
+    return isAdmin(user);
   }
 }

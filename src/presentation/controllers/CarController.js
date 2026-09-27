@@ -1,17 +1,19 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
-import { ValidationError } from "../../core/errors/AppError.js";
-import {
-  createCarSchema,
-  getUserIdSchema,
-  carIdSchema,
-} from "../../core/validation/schemas/car.schema.js";
+import { ValidationError, NotFoundError } from "../../core/errors/AppError.js";
+import { buildServerUrl } from "../../core/utils/requestUrl.js";
 
 /**
  * Car Controller
- * Handles HTTP requests for car operations
+ * Handles HTTP requests for car operations.
+ *
+ * Валидация входа живёт в маршрутах (`cars.routes.js`), отсутствие записи и прав
+ * бросает application-слой (`carAccess.js`) — здесь только разбор запроса и форма
+ * ответа. Зависимости передаются по именам: раньше это было 17 позиционных
+ * аргументов, и соседняя перестановка в контейнере молча подменяла, например,
+ * `updateCarImageUseCase` на `deleteCarImageUseCase`.
  */
 export class CarController {
-  constructor(
+  constructor({
     getCarsUseCase,
     getUserCarsUseCase,
     getCarByIdUseCase,
@@ -28,8 +30,8 @@ export class CarController {
     deleteCarAdminNoteUseCase,
     mergeCarsUseCase,
     assignCarToUserUseCase,
-    carImageUploadService
-  ) {
+    carImageUploadService,
+  }) {
     this.getCarsUseCase = getCarsUseCase;
     this.getUserCarsUseCase = getUserCarsUseCase;
     this.getCarByIdUseCase = getCarByIdUseCase;
@@ -49,95 +51,42 @@ export class CarController {
     this.carImageUploadService = carImageUploadService;
   }
 
-  /**
-   * GET /api-v1/cars
-   * Get all active cars
-   */
+  // ============================================
+  // CAR IDENTITY (публичная часть)
+  // ============================================
+
+  /** GET /api-v1/cars — все активные машины. */
   getAll = asyncHandler(async (req, res) => {
     const cars = await this.getCarsUseCase.execute();
 
-    res.json({
-      success: true,
-      data: cars,
-    });
+    res.json({ success: true, data: cars });
   });
 
-  /**
-   * GET /api-v1/cars/user/:user_id
-   * Get cars by user ID
-   */
+  /** GET /api-v1/cars/user/:user_id */
   getUserCars = asyncHandler(async (req, res) => {
-    const { error } = getUserIdSchema.validate({
-      user_id: parseInt(req.params.user_id),
-    });
+    const cars = await this.getUserCarsUseCase.execute(req.params.user_id);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const cars = await this.getUserCarsUseCase.execute(
-      parseInt(req.params.user_id)
-    );
-
-    res.json({
-      success: true,
-      data: cars,
-    });
+    res.json({ success: true, data: cars });
   });
 
-  /**
-   * GET /api-v1/cars/:id
-   * Get car by ID
-   */
+  /** GET /api-v1/cars/:id */
   getById = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const car = await this.getCarByIdUseCase.execute(parseInt(req.params.id));
+    const car = await this.getCarByIdUseCase.execute(req.params.id);
 
     if (!car) {
-      return res.status(404).json({
-        success: false,
-        message: "Car not found",
-      });
+      throw new NotFoundError("Car");
     }
 
-    res.json({
-      success: true,
-      data: car,
-    });
+    res.json({ success: true, data: car });
   });
 
-  /**
-   * PATCH /api-v1/cars/:id
-   * Update car by ID
-   */
+  /** PATCH /api-v1/cars/:id — резидент правит свою машину, cars:admin — любую. */
   update = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
     const updatedCar = await this.updateCarUseCase.execute(
-      parseInt(req.params.id),
+      req.params.id,
       req.body,
       req.user
     );
-
-    if (!updatedCar) {
-      return res.status(404).json({
-        success: false,
-        message: "Car not found",
-      });
-    }
 
     res.json({
       success: true,
@@ -146,114 +95,52 @@ export class CarController {
     });
   });
 
-  /**
-   * POST /api-v1/cars
-   * Create new car
-   */
+  /** POST /api-v1/cars */
   create = asyncHandler(async (req, res) => {
-    const { error } = createCarSchema.validate(req.body);
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
     const car = await this.createCarUseCase.execute(req.body, req.user);
 
-    res.status(201).json({
-      success: true,
-      data: car,
-    });
+    res.status(201).json({ success: true, data: car });
   });
 
-  /**
-   * DELETE /api-v1/cars/:id
-   * Soft delete car
-   */
+  /** DELETE /api-v1/cars/:id — мягкое удаление. */
   delete = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    await this.deleteCarUseCase.execute(parseInt(req.params.id), req.user);
+    await this.deleteCarUseCase.execute(req.params.id, req.user);
 
     res.status(204).send();
   });
 
   // ============================================
-  // CAR IMAGES (Gallery functionality)
+  // CAR IMAGES (галерея — cars:admin; чтение ещё и владельцу машины)
   // ============================================
 
-  /**
-   * GET /api-v1/cars/:id/images
-   * Get all images for a specific car.
-   * The gallery is cars:admin territory; the use case additionally lets the
-   * owner of this car read it and answers 403 for everyone else.
-   */
+  /** GET /api-v1/cars/:id/images */
   getCarImages = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
+    const images = await this.getCarImagesUseCase.execute(req.params.id, req.user);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const images = await this.getCarImagesUseCase.execute(
-      parseInt(req.params.id),
-      req.user
-    );
-
-    res.json({
-      success: true,
-      data: images,
-    });
+    res.json({ success: true, data: images });
   });
 
-  /**
-   * POST /api-v1/cars/:id/images
-   * Add new image to car gallery (supports both file upload and URL)
-   */
+  /** POST /api-v1/cars/:id/images — файл из multer или готовая ссылка. */
   addCarImage = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
+    const { comment, image_url: providedUrl } = req.body;
+    let imageUrl = providedUrl;
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
+    if (req.file) {
+      imageUrl = this.carImageUploadService.getFileUrl(
+        req.file.filename,
+        buildServerUrl(req)
+      );
+      await this.carImageUploadService.processImage(req.file.path);
     }
 
-    const { comment } = req.body;
-    let image_url;
-
-    // Check if file was uploaded
-    if (req.file) {
-      // File upload
-      // Используем API_URL из переменных окружения для правильного домена
-      const serverUrl = process.env.API_URL
-        ? process.env.API_URL.replace("/api-v1", "")
-        : `${req.protocol}://${req.get("host")}`;
-      image_url = this.carImageUploadService.getFileUrl(
-        req.file.filename,
-        serverUrl
-      );
-
-      // Process and optimize the image
-      await this.carImageUploadService.processImage(req.file.path);
-    } else {
-      // URL provided
-      image_url = req.body.image_url;
-      if (!image_url) {
-        throw new ValidationError("Either image file or image URL is required");
-      }
+    // Выбор «файл или ссылка» — вне полномочий Joi: нужно смотреть `req.file`.
+    if (!imageUrl) {
+      throw new ValidationError("Either image file or image URL is required");
     }
 
     const image = await this.addCarImageUseCase.execute(
-      parseInt(req.params.id),
-      { image_url, comment },
+      req.params.id,
+      { image_url: imageUrl, comment },
       req.user?.user_id
     );
 
@@ -264,24 +151,11 @@ export class CarController {
     });
   });
 
-  /**
-   * PATCH /api-v1/cars/images/:imageId
-   * Update car image (mainly for comments)
-   */
+  /** PATCH /api-v1/cars/images/:imageId — сейчас только комментарий к фото. */
   updateCarImage = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.imageId),
+    const image = await this.updateCarImageUseCase.execute(req.params.imageId, {
+      comment: req.body.comment,
     });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { comment } = req.body;
-    const image = await this.updateCarImageUseCase.execute(
-      parseInt(req.params.imageId),
-      { comment }
-    );
 
     res.json({
       success: true,
@@ -290,74 +164,29 @@ export class CarController {
     });
   });
 
-  /**
-   * DELETE /api-v1/cars/images/:imageId
-   * Delete car image
-   */
+  /** DELETE /api-v1/cars/images/:imageId */
   deleteCarImage = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.imageId),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const result = await this.deleteCarImageUseCase.execute(
-      parseInt(req.params.imageId)
-    );
+    const result = await this.deleteCarImageUseCase.execute(req.params.imageId);
 
     res.json(result);
   });
 
   // ============================================
-  // CAR ADMIN NOTES (Admin only)
+  // CAR ADMIN NOTES (cars:admin)
   // ============================================
 
-  /**
-   * GET /api-v1/cars/:id/admin-notes
-   * Get admin notes for a specific car (admin only)
-   */
+  /** GET /api-v1/cars/:id/admin-notes */
   getCarAdminNotes = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
+    const notes = await this.getCarAdminNotesUseCase.execute(req.params.id);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const notes = await this.getCarAdminNotesUseCase.execute(
-      parseInt(req.params.id)
-    );
-
-    res.json({
-      success: true,
-      data: notes,
-    });
+    res.json({ success: true, data: notes });
   });
 
-  /**
-   * POST /api-v1/cars/:id/admin-notes
-   * Add admin note to car (admin only)
-   */
+  /** POST /api-v1/cars/:id/admin-notes */
   addCarAdminNote = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { note } = req.body;
-    if (!note || note.trim().length === 0) {
-      throw new ValidationError("Note content is required");
-    }
-
     const adminNote = await this.addCarAdminNoteUseCase.execute(
-      parseInt(req.params.id),
-      { note },
+      req.params.id,
+      { note: req.body.note },
       req.user.user_id
     );
 
@@ -368,27 +197,11 @@ export class CarController {
     });
   });
 
-  /**
-   * PATCH /api-v1/cars/admin-notes/:noteId
-   * Update admin note (admin only)
-   */
+  /** PATCH /api-v1/cars/admin-notes/:noteId */
   updateCarAdminNote = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.noteId),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { note } = req.body;
-    if (!note || note.trim().length === 0) {
-      throw new ValidationError("Note content is required");
-    }
-
     const updatedNote = await this.updateCarAdminNoteUseCase.execute(
-      parseInt(req.params.noteId),
-      { note }
+      req.params.noteId,
+      { note: req.body.note }
     );
 
     res.json({
@@ -398,71 +211,38 @@ export class CarController {
     });
   });
 
-  /**
-   * DELETE /api-v1/cars/admin-notes/:noteId
-   * Delete admin note (admin only)
-   */
+  /** DELETE /api-v1/cars/admin-notes/:noteId */
   deleteCarAdminNote = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.noteId),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
     const result = await this.deleteCarAdminNoteUseCase.execute(
-      parseInt(req.params.noteId)
+      req.params.noteId
     );
 
     res.json(result);
   });
 
   // ============================================
-  // CAR MANAGEMENT (Admin only)
+  // CAR MANAGEMENT (cars:admin)
   // ============================================
 
-  /**
-   * POST /api-v1/cars/merge
-   * Merge two cars with the same number (admin only)
-   */
+  /** POST /api-v1/cars/merge — слияние двух записей с одним номером. */
   mergeCars = asyncHandler(async (req, res) => {
-    const { car_id_1, car_id_2, merge_options } = req.body;
-
-    if (!car_id_1 || !car_id_2) {
-      throw new ValidationError("Both car IDs are required");
-    }
+    const { car_id_1: carId1, car_id_2: carId2, merge_options: mergeOptions } =
+      req.body;
 
     const result = await this.mergeCarsUseCase.execute(
-      car_id_1,
-      car_id_2,
-      merge_options
+      carId1,
+      carId2,
+      mergeOptions
     );
 
     res.json(result);
   });
 
-  /**
-   * POST /api-v1/cars/:id/assign
-   * Assign car to user (admin only)
-   */
+  /** POST /api-v1/cars/:id/assign */
   assignCarToUser = asyncHandler(async (req, res) => {
-    const { error } = carIdSchema.validate({
-      id: parseInt(req.params.id),
-    });
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { user_id } = req.body;
-    if (!user_id) {
-      throw new ValidationError("User ID is required");
-    }
-
     const result = await this.assignCarToUserUseCase.execute(
-      parseInt(req.params.id),
-      user_id
+      req.params.id,
+      req.body.user_id
     );
 
     res.json(result);

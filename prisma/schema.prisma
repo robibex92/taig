@@ -246,6 +246,22 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+/// Одноразовые записи перехода между мини-приложением и браузером: `loginCode` и
+/// `requestId` жили в памяти процесса, поэтому второй инстанс PM2 или рестарт
+/// превращали «войти из MAX в браузер» в случайную ошибку.
+model AuthHandoff {
+  id         BigInt   @id @default(autoincrement())
+  kind       String   @db.VarChar(16)
+  key        String   @db.VarChar(128)
+  user_id    BigInt
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([kind, key], map: "uq_auth_handoffs_kind_key")
+  @@index([expires_at], map: "idx_auth_handoffs_expires_at")
+  @@map("auth_handoffs")
+}
+
 model Booking {
   id            BigInt    @id @default(autoincrement())
   ad_id         BigInt

@@ -3,59 +3,34 @@ import { AuthenticationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 
 export class AuthenticateMaxUserUseCase {
-  constructor(
-    userRepository,
-    tokenService,
-    refreshTokenRepository
-  ) {
+  constructor(userRepository, sessionIssuer, handoffRepository) {
     this.userRepository = userRepository;
-    this.tokenService = tokenService;
-    this.refreshTokenRepository = refreshTokenRepository;
+    this.sessionIssuer = sessionIssuer;
+    this.handoffs = handoffRepository;
 
-    this._loginCodes = new Map();
     this.LOGIN_CODE_TTL_MS = 5 * 60 * 1000;
-
-    this._pendingRequests = new Map();
     this.REQUEST_TTL_MS = 5 * 60 * 1000;
   }
 
-  _sweepLoginCodes() {
-    const now = Date.now();
+  /**
+   * Хендоверы живут в таблице `auth_handoffs`, а не в памяти процесса:
+   * мини-апп и браузер могут попасть на разные инстансы PM2, а между выдачей
+   * кода и его обменом спокойно попадает рестарт.
+   */
+  async createLoginCode(userId) {
+    const code = crypto.randomBytes(32).toString("hex");
 
-    for (const [code, entry] of this._loginCodes) {
-      if (entry.expiresAt <= now) {
-        this._loginCodes.delete(code);
-      }
-    }
-  }
-
-  _sweepPendingRequests() {
-    const now = Date.now();
-
-    for (const [requestId, entry] of this._pendingRequests) {
-      if (entry.expiresAt <= now) {
-        this._pendingRequests.delete(requestId);
-      }
-    }
-  }
-
-  createLoginCode(userId) {
-    this._sweepLoginCodes();
-
-    const code = crypto
-      .randomBytes(32)
-      .toString("hex");
-
-    this._loginCodes.set(code, {
+    await this.handoffs.put({
+      kind: "code",
+      key: code,
       userId,
-      expiresAt:
-        Date.now() + this.LOGIN_CODE_TTL_MS,
+      ttlMs: this.LOGIN_CODE_TTL_MS,
     });
 
     return code;
   }
 
-  createLoginRequest(requestId, userId) {
+  async createLoginRequest(requestId, userId) {
     if (
       typeof requestId !== "string" ||
       !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)
@@ -63,57 +38,36 @@ export class AuthenticateMaxUserUseCase {
       return false;
     }
 
-    this._sweepPendingRequests();
-
-    this._pendingRequests.set(requestId, {
+    await this.handoffs.put({
+      kind: "request",
+      key: requestId,
       userId,
-      expiresAt:
-        Date.now() + this.REQUEST_TTL_MS,
+      ttlMs: this.REQUEST_TTL_MS,
     });
 
     return true;
   }
 
-  async claimLoginRequest(
-    requestId,
-    deviceInfo = {},
-    rememberMe = false
-  ) {
+  async claimLoginRequest(requestId, deviceInfo = {}, rememberMe = false) {
     if (
       typeof requestId !== "string" ||
       !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)
     ) {
-      throw new AuthenticationError(
-        "Invalid MAX login request"
-      );
+      throw new AuthenticationError("Invalid MAX login request");
     }
 
-    const entry =
-      this._pendingRequests.get(requestId);
+    const userId = await this.handoffs.consume("request", requestId);
 
-    this._pendingRequests.delete(requestId);
-
-    if (!entry) {
+    if (!userId) {
       throw new AuthenticationError(
         "Login request not found or expired"
       );
     }
 
-    if (entry.expiresAt <= Date.now()) {
-      throw new AuthenticationError(
-        "Login request has expired"
-      );
-    }
-
-    const user =
-      await this.userRepository.findById(
-        entry.userId
-      );
+    const user = await this.userRepository.findById(userId);
 
     if (!user) {
-      throw new AuthenticationError(
-        "User not found"
-      );
+      throw new AuthenticationError("User not found");
     }
 
     logger.info("MAX login request claimed", {
@@ -121,64 +75,31 @@ export class AuthenticateMaxUserUseCase {
       requestId,
     });
 
-    return this.issueSession(
-      user,
-      deviceInfo,
-      rememberMe
-    );
+    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
-  async claimLoginCode(
-    code,
-    deviceInfo = {},
-    rememberMe = false
-  ) {
-    if (
-      typeof code !== "string" ||
-      code.length < 8
-    ) {
-      throw new AuthenticationError(
-        "Invalid MAX login code"
-      );
+  async claimLoginCode(code, deviceInfo = {}, rememberMe = false) {
+    if (typeof code !== "string" || code.length < 8) {
+      throw new AuthenticationError("Invalid MAX login code");
     }
 
-    const entry =
-      this._loginCodes.get(code);
+    const userId = await this.handoffs.consume("code", code);
 
-    this._loginCodes.delete(code);
-
-    if (!entry) {
-      throw new AuthenticationError(
-        "Login code is invalid or has expired"
-      );
+    if (!userId) {
+      throw new AuthenticationError("Login code is invalid or has expired");
     }
 
-    if (entry.expiresAt <= Date.now()) {
-      throw new AuthenticationError(
-        "Login code has expired"
-      );
-    }
-
-    const user =
-      await this.userRepository.findById(
-        entry.userId
-      );
+    const user = await this.userRepository.findById(userId);
 
     if (!user) {
-      throw new AuthenticationError(
-        "User not found"
-      );
+      throw new AuthenticationError("User not found");
     }
 
     logger.info("MAX login code claimed", {
       user_id: user.user_id,
     });
 
-    return this.issueSession(
-      user,
-      deviceInfo,
-      rememberMe
-    );
+    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
   _emptyVerify(reason) {
@@ -361,96 +282,16 @@ export class AuthenticateMaxUserUseCase {
     return age <= maxAgeSeconds;
   }
 
-  async issueSession(
-    user,
-    deviceInfo = {},
-    rememberMe = false
-  ) {
-    if (user.isBanned()) {
-      throw new AuthenticationError(
-        "User account is banned"
-      );
-    }
-
-    /**
-     * MAX login становится основной сессией:
-     * старые refresh tokens удаляем.
-     */
-    await this.refreshTokenRepository
-      .revokeAllForUser(
-        user.user_id
-      );
-
-    await this.userRepository
-      .clearRefreshToken(
-        user.user_id
-      );
-
-    const {
-      accessToken,
-      refreshToken,
-    } =
-      this.tokenService.generateTokenPair(
-        user,
-        deviceInfo,
-        rememberMe
-      );
-
-    const decodedRefresh =
-      this.tokenService.decodeToken(
-        refreshToken
-      );
-
-    if (
-      !decodedRefresh?.jti
-    ) {
-      throw new AuthenticationError(
-        "Failed to create refresh token"
-      );
-    }
-
-    const expirationSeconds =
-      this.tokenService
-        .getRefreshTokenExpiration(
-          rememberMe
-        );
-
-    const expiresAt =
-      new Date(
-        Date.now() +
-          expirationSeconds * 1000
-      );
-
-    await this.refreshTokenRepository.create({
-      user_id: user.user_id,
-      token: refreshToken,
-      jti: decodedRefresh.jti,
-
-      device_fingerprint:
-        deviceInfo &&
-        Object.keys(deviceInfo).length > 0
-          ? this.tokenService
-              ._hashDeviceInfo(
-                deviceInfo
-              )
-          : null,
-
-      ip_address:
-        deviceInfo.ip || null,
-
-      user_agent:
-        deviceInfo.userAgent || null,
-
-      device_info: deviceInfo,
-
-      expires_at: expiresAt,
+  /**
+   * Сессию выдаёт `SessionIssuer` — тот же код, что и для Telegram-логина и
+   * rotation refresh-токена (раньше это была третья копия).
+   */
+  async issueSession(user, deviceInfo = {}, rememberMe = false) {
+    return this.sessionIssuer.issue({
+      user,
+      deviceInfo,
+      rememberMe,
     });
-
-    return {
-      user: user.toJSON(),
-      accessToken,
-      refreshToken,
-    };
   }
 
   async findOrCreateMaxUser(maxUser) {
@@ -606,26 +447,15 @@ export class AuthenticateMaxUserUseCase {
         maxUser
       );
 
-    const session =
-      await this.issueSession(
-        user,
-        deviceInfo,
-        rememberMe
-      );
+    const session = await this.issueSession(user, deviceInfo, rememberMe);
 
     if (requestId) {
-      this.createLoginRequest(
-        requestId,
-        user.user_id
-      );
+      await this.createLoginRequest(requestId, user.user_id);
     }
 
     return {
       ...session,
-      loginCode:
-        this.createLoginCode(
-          user.user_id
-        ),
+      loginCode: await this.createLoginCode(user.user_id),
     };
   }
 }

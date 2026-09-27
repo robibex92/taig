@@ -14,9 +14,11 @@ import { RefreshTokenRepository } from "../repositories/RefreshTokenRepository.j
 import { TelegramChatRepository } from "../repositories/TelegramChatRepository.js";
 import { HouseCommentRepository } from "../repositories/HouseCommentRepository.js";
 import { EntranceCommentRepository } from "../repositories/EntranceCommentRepository.js";
+import { AuthHandoffRepository } from "../repositories/AuthHandoffRepository.js";
 
 // Services
 import { TokenService } from "../../application/services/TokenService.improved.js";
+import { SessionIssuer } from "../../application/services/SessionIssuer.js";
 import { telegramService } from "../../application/services/TelegramService.js";
 import { messageDeliveryService } from "../../application/services/MessageDeliveryService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
@@ -217,748 +219,304 @@ export class Container {
   }
 
   /**
+   * Пачка зависимостей по именам — для контроллеров с объектным конструктором.
+   * Порядок строк в списке больше не может молча подменить один кейс другим.
+   */
+  resolveAll(...names) {
+    return Object.fromEntries(names.map((name) => [name, this.resolve(name)]));
+  }
+
+  /**
+   * Пачка однотипных регистраций: «экземпляр класса с перечисленными
+   * зависимостями». Порядок аргументов стоит рядом с именем регистрации, а не
+   * тонет в семи строках переносов — ради этого весь файл и сворачивался.
+   */
+  registerMany(entries) {
+    for (const [name, Factory, dependencies = []] of entries) {
+      this.register(name, (container) =>
+        new Factory(...dependencies.map((dep) => container.resolve(dep)))
+      );
+    }
+  }
+
+  /**
    * Setup all dependencies
    */
   setupDependencies() {
     // Repositories
-    this.register("adRepository", () => new AdRepository());
-    this.register("userRepository", () => new UserRepository());
-    this.register("postRepository", () => new PostRepository());
-    this.register("categoryRepository", () => new CategoryRepository());
-    this.register("faqRepository", () => new FaqRepository());
-    this.register("floorRuleRepository", () => new FloorRuleRepository());
-    this.register("carRepository", () => new CarRepository());
-    this.register("carImageRepository", () => new CarImageRepository());
-    this.register("carAdminNoteRepository", () => new CarAdminNoteRepository());
-    this.register(
-      "parkingSpotNoteRepository",
-      () => new ParkingSpotNoteRepository()
-    );
-    this.register("adImageRepository", () => new AdImageRepository());
-    this.register("houseRepository", () => new HouseRepository());
-    this.register("refreshTokenRepository", () => new RefreshTokenRepository());
-    this.register("telegramChatRepository", () => new TelegramChatRepository());
-    this.register("houseCommentRepository", () => new HouseCommentRepository());
-    this.register(
-      "entranceCommentRepository",
-      () => new EntranceCommentRepository()
-    );
+    this.registerMany([
+      ["adRepository", AdRepository, []],
+      ["userRepository", UserRepository, []],
+      ["postRepository", PostRepository, []],
+      ["categoryRepository", CategoryRepository, []],
+      ["faqRepository", FaqRepository, []],
+      ["floorRuleRepository", FloorRuleRepository, []],
+      ["carRepository", CarRepository, []],
+      ["carImageRepository", CarImageRepository, []],
+      ["carAdminNoteRepository", CarAdminNoteRepository, []],
+      ["parkingSpotNoteRepository", ParkingSpotNoteRepository, []],
+      ["adImageRepository", AdImageRepository, []],
+      ["houseRepository", HouseRepository, []],
+      ["refreshTokenRepository", RefreshTokenRepository, []],
+      ["telegramChatRepository", TelegramChatRepository, []],
+      ["houseCommentRepository", HouseCommentRepository, []],
+      ["entranceCommentRepository", EntranceCommentRepository, []],
+      ["authHandoffRepository", AuthHandoffRepository, []],
+    ]);
 
     // Services
-    this.register("tokenService", () => new TokenService());
+    this.registerMany([
+      ["tokenService", TokenService, []],
+    ]);
+
     // Экземпляр из модуля, а не new: очередь pLimit и пауза 2с защищают один токен бота,
     // поэтому инстанс должен быть ровно один на процесс.
     this.register("telegramService", () => telegramService);
-    this.register("fileUploadService", () => new FileUploadService());
-    this.register("carImageUploadService", () => new CarImageUploadService());
+    this.registerMany([
+      ["fileUploadService", FileUploadService, []],
+      ["carImageUploadService", CarImageUploadService, []],
+    ]);
+
     // Один экземпляр: резолвер получателя + общий rate-limiter TelegramService.
     this.register("messageDeliveryService", () => messageDeliveryService);
 
     // Use Cases - Ad
-    this.register(
-      "getAdsUseCase",
-      (container) => new GetAdsUseCase(container.resolve("adRepository"))
-    );
-
-    this.register(
-      "getAdByIdUseCase",
-      (container) => new GetAdByIdUseCase(container.resolve("adRepository"))
-    );
-
-    this.register(
-      "createAdUseCase",
-      (container) =>
-        new CreateAdUseCase(
-          container.resolve("adRepository"),
-          container.resolve("userRepository"),
-          container.resolve("telegramChatRepository"),
-          container.resolve("telegramService")
-        )
-    );
-
-    this.register(
-      "updateAdUseCase",
-      (container) =>
-        new UpdateAdUseCase(
-          container.resolve("adRepository"),
-          container.resolve("telegramService"),
-          container.resolve("telegramChatRepository")
-        )
-    );
-
-    this.register(
-      "deleteAdUseCase",
-      (container) =>
-        new DeleteAdUseCase(
-          container.resolve("adRepository"),
-          container.resolve("telegramService")
-        )
-    );
+    this.registerMany([
+      ["getAdsUseCase", GetAdsUseCase, ["adRepository"]],
+      ["getAdByIdUseCase", GetAdByIdUseCase, ["adRepository"]],
+      ["createAdUseCase", CreateAdUseCase, ["adRepository", "userRepository", "telegramChatRepository", "telegramService"]],
+      ["updateAdUseCase", UpdateAdUseCase, ["adRepository", "telegramService", "telegramChatRepository"]],
+      ["deleteAdUseCase", DeleteAdUseCase, ["adRepository", "telegramService"]],
+    ]);
 
     // Use Cases - User
-    this.register(
-      "authenticateUserUseCase",
-      (container) =>
-        new AuthenticateUserUseCase(
-          container.resolve("userRepository"),
-          container.resolve("tokenService"),
-          container.resolve("refreshTokenRepository")
-        )
-    );
-
-    this.register(
-      "refreshTokenUseCase",
-      (container) =>
-        new RefreshTokenUseCase(
-          container.resolve("userRepository"),
-          container.resolve("tokenService"),
-          container.resolve("refreshTokenRepository")
-        )
-    );
-
-    this.register(
-      "updateUserUseCase",
-      (container) => new UpdateUserUseCase(container.resolve("userRepository"))
-    );
-
-    this.register(
-      "uploadAvatarUseCase",
-      (container) =>
-        new UploadAvatarUseCase(container.resolve("userRepository"))
-    );
-
-    this.register(
-      "logoutUseCase",
-      (container) =>
-        new LogoutUseCase(
-          container.resolve("refreshTokenRepository"),
-          container.resolve("tokenService")
-        )
-    );
+    this.registerMany([
+      // Один SessionIssuer на все способы войти: Telegram, MAX и rotation.
+      ["sessionIssuer", SessionIssuer, ["userRepository", "tokenService", "refreshTokenRepository"]],
+      ["authenticateUserUseCase", AuthenticateUserUseCase, ["userRepository", "refreshTokenRepository", "sessionIssuer"]],
+      ["refreshTokenUseCase", RefreshTokenUseCase, ["userRepository", "tokenService", "refreshTokenRepository", "sessionIssuer"]],
+      ["updateUserUseCase", UpdateUserUseCase, ["userRepository"]],
+      ["uploadAvatarUseCase", UploadAvatarUseCase, ["userRepository"]],
+      ["logoutUseCase", LogoutUseCase, ["refreshTokenRepository", "tokenService"]],
+    ]);
 
     // Use Cases - MAX
-    this.register(
-      "authenticateMaxUserUseCase",
-      (container) =>
-        new AuthenticateMaxUserUseCase(
-          container.resolve("userRepository"),
-          container.resolve("tokenService"),
-          container.resolve("refreshTokenRepository")
-        )
-    );
-
-    this.register(
-      "linkPlatformUseCase",
-      (container) =>
-        new LinkPlatformUseCase(
-          container.resolve("userRepository"),
-          container.resolve("authenticateUserUseCase"),
-          container.resolve("authenticateMaxUserUseCase")
-        )
-    );
+    this.registerMany([
+      ["authenticateMaxUserUseCase", AuthenticateMaxUserUseCase, ["userRepository", "sessionIssuer", "authHandoffRepository"]],
+      ["linkPlatformUseCase", LinkPlatformUseCase, ["userRepository", "authenticateUserUseCase", "authenticateMaxUserUseCase"]],
+    ]);
 
     // Use Cases - Session
-    this.register(
-      "getUserSessionsUseCase",
-      (container) =>
-        new GetUserSessionsUseCase(
-          container.resolve("refreshTokenRepository"),
-          container.resolve("tokenService")
-        )
-    );
-
-    this.register(
-      "revokeSessionUseCase",
-      (container) =>
-        new RevokeSessionUseCase(container.resolve("refreshTokenRepository"))
-    );
-
-    this.register(
-      "revokeAllSessionsUseCase",
-      (container) =>
-        new RevokeAllSessionsUseCase(
-          container.resolve("refreshTokenRepository")
-        )
-    );
+    this.registerMany([
+      ["getUserSessionsUseCase", GetUserSessionsUseCase, ["refreshTokenRepository", "tokenService"]],
+      ["revokeSessionUseCase", RevokeSessionUseCase, ["refreshTokenRepository"]],
+      ["revokeAllSessionsUseCase", RevokeAllSessionsUseCase, ["refreshTokenRepository"]],
+    ]);
 
     // Use Cases - Post
-    this.register(
-      "getPostsUseCase",
-      (container) => new GetPostsUseCase(container.resolve("postRepository"))
-    );
-
-    this.register(
-      "createPostUseCase",
-      (container) =>
-        new CreatePostUseCase(
-          container.resolve("postRepository"),
-          container.resolve("telegramService"),
-          container.resolve("telegramChatRepository")
-        )
-    );
-
-    this.register(
-      "updatePostUseCase",
-      (container) =>
-        new UpdatePostUseCase(
-          container.resolve("postRepository"),
-          container.resolve("telegramService")
-        )
-    );
-
-    this.register(
-      "deletePostUseCase",
-      (container) =>
-        new DeletePostUseCase(
-          container.resolve("postRepository"),
-          container.resolve("telegramService")
-        )
-    );
+    this.registerMany([
+      ["getPostsUseCase", GetPostsUseCase, ["postRepository"]],
+      ["createPostUseCase", CreatePostUseCase, ["postRepository", "telegramService", "telegramChatRepository"]],
+      ["updatePostUseCase", UpdatePostUseCase, ["postRepository", "telegramService"]],
+      ["deletePostUseCase", DeletePostUseCase, ["postRepository", "telegramService"]],
+    ]);
 
     // Controllers
-    this.register(
-      "adController",
-      (container) =>
-        new AdController(
-          container.resolve("getAdsUseCase"),
-          container.resolve("getAdByIdUseCase"),
-          container.resolve("createAdUseCase"),
-          container.resolve("updateAdUseCase"),
-          container.resolve("deleteAdUseCase"),
-          container.resolve("adRepository"),
-          container.resolve("telegramService")
-        )
-    );
-
+    this.registerMany([
+      ["adController", AdController, ["getAdsUseCase", "getAdByIdUseCase", "createAdUseCase", "updateAdUseCase", "deleteAdUseCase", "adRepository", "telegramService"]],
+    ]);
     this.register(
       "authController",
       (container) =>
         new AuthController(
-          container.resolve("authenticateUserUseCase"),
-          container.resolve("refreshTokenUseCase"),
-          container.resolve("logoutUseCase"),
-          container.resolve("getUserSessionsUseCase"),
-          container.resolve("revokeSessionUseCase"),
-          container.resolve("revokeAllSessionsUseCase"),
-          container.resolve("userRepository"),
-          container.resolve("tokenService"),
-          container.resolve("authenticateMaxUserUseCase"),
-          container.resolve("linkPlatformUseCase")
+          container.resolveAll(
+            "authenticateUserUseCase",
+            "refreshTokenUseCase",
+            "logoutUseCase",
+            "getUserSessionsUseCase",
+            "revokeSessionUseCase",
+            "revokeAllSessionsUseCase",
+            "userRepository",
+            "tokenService",
+            "authenticateMaxUserUseCase",
+            "linkPlatformUseCase"
+          )
         )
     );
 
-    this.register(
-      "userController",
-      (container) =>
-        new UserController(
-          container.resolve("updateUserUseCase"),
-          container.resolve("userRepository"),
-          container.resolve("adRepository"),
-          container.resolve("uploadAvatarUseCase")
-        )
-    );
-
-    this.register(
-      "postController",
-      (container) =>
-        new PostController(
-          container.resolve("getPostsUseCase"),
-          container.resolve("createPostUseCase"),
-          container.resolve("updatePostUseCase"),
-          container.resolve("deletePostUseCase")
-        )
-    );
+    this.registerMany([
+      ["userController", UserController, ["updateUserUseCase", "userRepository", "adRepository", "uploadAvatarUseCase"]],
+      ["postController", PostController, ["getPostsUseCase", "createPostUseCase", "updatePostUseCase", "deletePostUseCase"]],
+    ]);
 
     // Use Cases - Category
-    this.register(
-      "getCategoriesUseCase",
-      (container) =>
-        new GetCategoriesUseCase(container.resolve("categoryRepository"))
-    );
-
-    this.register(
-      "getCategoryByIdUseCase",
-      (container) =>
-        new GetCategoryByIdUseCase(container.resolve("categoryRepository"))
-    );
-
-    this.register(
-      "getSubcategoriesUseCase",
-      (container) =>
-        new GetSubcategoriesUseCase(container.resolve("categoryRepository"))
-    );
-
-    this.register(
-      "getAllSubcategoriesUseCase",
-      (container) =>
-        new GetAllSubcategoriesUseCase(container.resolve("categoryRepository"))
-    );
-
-    this.register(
-      "getSubcategoryByIdUseCase",
-      (container) =>
-        new GetSubcategoryByIdUseCase(container.resolve("categoryRepository"))
-    );
-
-    this.register(
-      "getCategoriesWithCountsUseCase",
-      (container) =>
-        new GetCategoriesWithCountsUseCase(
-          container.resolve("categoryRepository")
-        )
-    );
-
-    this.register(
-      "getSubcategoriesWithCountsUseCase",
-      (container) =>
-        new GetSubcategoriesWithCountsUseCase(
-          container.resolve("categoryRepository")
-        )
-    );
+    this.registerMany([
+      ["getCategoriesUseCase", GetCategoriesUseCase, ["categoryRepository"]],
+      ["getCategoryByIdUseCase", GetCategoryByIdUseCase, ["categoryRepository"]],
+      ["getSubcategoriesUseCase", GetSubcategoriesUseCase, ["categoryRepository"]],
+      ["getAllSubcategoriesUseCase", GetAllSubcategoriesUseCase, ["categoryRepository"]],
+      ["getSubcategoryByIdUseCase", GetSubcategoryByIdUseCase, ["categoryRepository"]],
+      ["getCategoriesWithCountsUseCase", GetCategoriesWithCountsUseCase, ["categoryRepository"]],
+      ["getSubcategoriesWithCountsUseCase", GetSubcategoriesWithCountsUseCase, ["categoryRepository"]],
+    ]);
 
     // Use Cases - House Comments
-    this.register(
-      "createHouseCommentUseCase",
-      (container) =>
-        new CreateHouseCommentUseCase(
-          container.resolve("houseCommentRepository")
-        )
-    );
-
-    this.register(
-      "getHouseCommentsUseCase",
-      (container) =>
-        new GetHouseCommentsUseCase(container.resolve("houseCommentRepository"))
-    );
-
-    this.register(
-      "updateHouseCommentUseCase",
-      (container) =>
-        new UpdateHouseCommentUseCase(
-          container.resolve("houseCommentRepository")
-        )
-    );
-
-    this.register(
-      "deleteHouseCommentUseCase",
-      (container) =>
-        new DeleteHouseCommentUseCase(
-          container.resolve("houseCommentRepository")
-        )
-    );
+    this.registerMany([
+      ["createHouseCommentUseCase", CreateHouseCommentUseCase, ["houseCommentRepository"]],
+      ["getHouseCommentsUseCase", GetHouseCommentsUseCase, ["houseCommentRepository"]],
+      ["updateHouseCommentUseCase", UpdateHouseCommentUseCase, ["houseCommentRepository"]],
+      ["deleteHouseCommentUseCase", DeleteHouseCommentUseCase, ["houseCommentRepository"]],
+    ]);
 
     // Use Cases - Entrance Comments
-    this.register(
-      "createEntranceCommentUseCase",
-      (container) =>
-        new CreateEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository"),
-          container.resolve("houseRepository")
-        )
-    );
-
-    this.register(
-      "getEntranceCommentUseCase",
-      (container) =>
-        new GetEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository"),
-          container.resolve("houseRepository")
-        )
-    );
-
-    this.register(
-      "updateEntranceCommentUseCase",
-      (container) =>
-        new UpdateEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository")
-        )
-    );
-
-    this.register(
-      "deleteEntranceCommentUseCase",
-      (container) =>
-        new DeleteEntranceCommentUseCase(
-          container.resolve("entranceCommentRepository")
-        )
-    );
+    this.registerMany([
+      ["createEntranceCommentUseCase", CreateEntranceCommentUseCase, ["entranceCommentRepository", "houseRepository"]],
+      ["getEntranceCommentUseCase", GetEntranceCommentUseCase, ["entranceCommentRepository", "houseRepository"]],
+      ["updateEntranceCommentUseCase", UpdateEntranceCommentUseCase, ["entranceCommentRepository"]],
+      ["deleteEntranceCommentUseCase", DeleteEntranceCommentUseCase, ["entranceCommentRepository"]],
+    ]);
 
     // Controllers - Category
-    this.register(
-      "categoryController",
-      (container) =>
-        new CategoryController(
-          container.resolve("getCategoriesUseCase"),
-          container.resolve("getCategoryByIdUseCase"),
-          container.resolve("getSubcategoriesUseCase"),
-          container.resolve("getAllSubcategoriesUseCase"),
-          container.resolve("getSubcategoryByIdUseCase"),
-          container.resolve("getCategoriesWithCountsUseCase"),
-          container.resolve("getSubcategoriesWithCountsUseCase")
-        )
-    );
+    this.registerMany([
+      ["categoryController", CategoryController, ["getCategoriesUseCase", "getCategoryByIdUseCase", "getSubcategoriesUseCase", "getAllSubcategoriesUseCase", "getSubcategoryByIdUseCase", "getCategoriesWithCountsUseCase", "getSubcategoriesWithCountsUseCase"]],
+    ]);
 
     // Use Cases - FAQ
-    this.register(
-      "getFaqsUseCase",
-      (container) => new GetFaqsUseCase(container.resolve("faqRepository"))
-    );
-
-    this.register(
-      "createFaqUseCase",
-      (container) => new CreateFaqUseCase(container.resolve("faqRepository"))
-    );
-
-    this.register(
-      "updateFaqUseCase",
-      (container) => new UpdateFaqUseCase(container.resolve("faqRepository"))
-    );
-
-    this.register(
-      "deleteFaqUseCase",
-      (container) => new DeleteFaqUseCase(container.resolve("faqRepository"))
-    );
+    this.registerMany([
+      ["getFaqsUseCase", GetFaqsUseCase, ["faqRepository"]],
+      ["createFaqUseCase", CreateFaqUseCase, ["faqRepository"]],
+      ["updateFaqUseCase", UpdateFaqUseCase, ["faqRepository"]],
+      ["deleteFaqUseCase", DeleteFaqUseCase, ["faqRepository"]],
+    ]);
 
     // Controllers - FAQ
-    this.register(
-      "faqController",
-      (container) =>
-        new FaqController(
-          container.resolve("getFaqsUseCase"),
-          container.resolve("createFaqUseCase"),
-          container.resolve("updateFaqUseCase"),
-          container.resolve("deleteFaqUseCase")
-        )
-    );
+    this.registerMany([
+      ["faqController", FaqController, ["getFaqsUseCase", "createFaqUseCase", "updateFaqUseCase", "deleteFaqUseCase"]],
+    ]);
 
     // Use Cases - FloorRule
-    this.register(
-      "getFloorRulesUseCase",
-      (container) =>
-        new GetFloorRulesUseCase(container.resolve("floorRuleRepository"))
-    );
-
-    this.register(
-      "upsertFloorRuleUseCase",
-      (container) =>
-        new UpsertFloorRuleUseCase(container.resolve("floorRuleRepository"))
-    );
+    this.registerMany([
+      ["getFloorRulesUseCase", GetFloorRulesUseCase, ["floorRuleRepository"]],
+      ["upsertFloorRuleUseCase", UpsertFloorRuleUseCase, ["floorRuleRepository"]],
+    ]);
 
     // Controllers - FloorRule
-    this.register(
-      "floorRuleController",
-      (container) =>
-        new FloorRuleController(
-          container.resolve("getFloorRulesUseCase"),
-          container.resolve("upsertFloorRuleUseCase")
-        )
-    );
+    this.registerMany([
+      ["floorRuleController", FloorRuleController, ["getFloorRulesUseCase", "upsertFloorRuleUseCase"]],
+    ]);
 
     // Use Cases - Car
-    this.register(
-      "getCarsUseCase",
-      (container) => new GetCarsUseCase(container.resolve("carRepository"))
-    );
-
-    this.register(
-      "getUserCarsUseCase",
-      (container) => new GetUserCarsUseCase(container.resolve("carRepository"))
-    );
-
-    this.register(
-      "getCarByIdUseCase",
-      (container) => new GetCarByIdUseCase(container.resolve("carRepository"))
-    );
-
-    this.register(
-      "createCarUseCase",
-      (container) => new CreateCarUseCase(container.resolve("carRepository"))
-    );
-
-    this.register(
-      "updateCarUseCase",
-      (container) => new UpdateCarUseCase(container.resolve("carRepository"))
-    );
-
-    this.register(
-      "deleteCarUseCase",
-      (container) => new DeleteCarUseCase(container.resolve("carRepository"))
-    );
+    this.registerMany([
+      ["getCarsUseCase", GetCarsUseCase, ["carRepository"]],
+      ["getUserCarsUseCase", GetUserCarsUseCase, ["carRepository"]],
+      ["getCarByIdUseCase", GetCarByIdUseCase, ["carRepository"]],
+      ["createCarUseCase", CreateCarUseCase, ["carRepository"]],
+      ["updateCarUseCase", UpdateCarUseCase, ["carRepository"]],
+      ["deleteCarUseCase", DeleteCarUseCase, ["carRepository"]],
+    ]);
 
     // Use Cases - Car Images
-    this.register(
-      "getCarImagesUseCase",
-      (container) =>
-        new GetCarImagesUseCase(
-          container.resolve("carImageRepository"),
-          container.resolve("carRepository")
-        )
-    );
-
-    this.register(
-      "addCarImageUseCase",
-      (container) =>
-        new AddCarImageUseCase(
-          container.resolve("carImageRepository"),
-          container.resolve("carRepository")
-        )
-    );
-
-    this.register(
-      "updateCarImageUseCase",
-      (container) =>
-        new UpdateCarImageUseCase(container.resolve("carImageRepository"))
-    );
-
-    this.register(
-      "deleteCarImageUseCase",
-      (container) =>
-        new DeleteCarImageUseCase(container.resolve("carImageRepository"))
-    );
+    this.registerMany([
+      ["getCarImagesUseCase", GetCarImagesUseCase, ["carImageRepository", "carRepository"]],
+      ["addCarImageUseCase", AddCarImageUseCase, ["carImageRepository", "carRepository"]],
+      ["updateCarImageUseCase", UpdateCarImageUseCase, ["carImageRepository"]],
+      ["deleteCarImageUseCase", DeleteCarImageUseCase, ["carImageRepository"]],
+    ]);
 
     // Use Cases - Car Admin Notes
-    this.register(
-      "getCarAdminNotesUseCase",
-      (container) =>
-        new GetCarAdminNotesUseCase(
-          container.resolve("carAdminNoteRepository"),
-          container.resolve("carRepository"),
-          container.resolve("userRepository")
-        )
-    );
-
-    this.register(
-      "addCarAdminNoteUseCase",
-      (container) =>
-        new AddCarAdminNoteUseCase(
-          container.resolve("carAdminNoteRepository"),
-          container.resolve("carRepository")
-        )
-    );
-
-    this.register(
-      "updateCarAdminNoteUseCase",
-      (container) =>
-        new UpdateCarAdminNoteUseCase(
-          container.resolve("carAdminNoteRepository")
-        )
-    );
-
-    this.register(
-      "deleteCarAdminNoteUseCase",
-      (container) =>
-        new DeleteCarAdminNoteUseCase(
-          container.resolve("carAdminNoteRepository")
-        )
-    );
+    this.registerMany([
+      ["getCarAdminNotesUseCase", GetCarAdminNotesUseCase, ["carAdminNoteRepository", "carRepository", "userRepository"]],
+      ["addCarAdminNoteUseCase", AddCarAdminNoteUseCase, ["carAdminNoteRepository", "carRepository"]],
+      ["updateCarAdminNoteUseCase", UpdateCarAdminNoteUseCase, ["carAdminNoteRepository"]],
+      ["deleteCarAdminNoteUseCase", DeleteCarAdminNoteUseCase, ["carAdminNoteRepository"]],
+    ]);
 
     // Use Cases - Car Management
-    this.register(
-      "mergeCarsUseCase",
-      (container) =>
-        new MergeCarsUseCase(
-          container.resolve("carRepository"),
-          container.resolve("carImageRepository"),
-          container.resolve("carAdminNoteRepository")
-        )
-    );
-
-    this.register(
-      "assignCarToUserUseCase",
-      (container) =>
-        new AssignCarToUserUseCase(container.resolve("carRepository"))
-    );
+    this.registerMany([
+      ["mergeCarsUseCase", MergeCarsUseCase, ["carRepository", "carImageRepository", "carAdminNoteRepository"]],
+      ["assignCarToUserUseCase", AssignCarToUserUseCase, ["carRepository"]],
+    ]);
 
     // Controllers - Car
+    // Контроллер получает зависимости по именам: порядок строк больше не может
+    // молча подменить соседний кейс (раньше — 17 позиционных аргументов).
     this.register(
       "carController",
       (container) =>
         new CarController(
-          container.resolve("getCarsUseCase"),
-          container.resolve("getUserCarsUseCase"),
-          container.resolve("getCarByIdUseCase"),
-          container.resolve("createCarUseCase"),
-          container.resolve("updateCarUseCase"),
-          container.resolve("deleteCarUseCase"),
-          container.resolve("getCarImagesUseCase"),
-          container.resolve("addCarImageUseCase"),
-          container.resolve("updateCarImageUseCase"),
-          container.resolve("deleteCarImageUseCase"),
-          container.resolve("getCarAdminNotesUseCase"),
-          container.resolve("addCarAdminNoteUseCase"),
-          container.resolve("updateCarAdminNoteUseCase"),
-          container.resolve("deleteCarAdminNoteUseCase"),
-          container.resolve("mergeCarsUseCase"),
-          container.resolve("assignCarToUserUseCase"),
-          container.resolve("carImageUploadService")
+          container.resolveAll(
+            "getCarsUseCase",
+            "getUserCarsUseCase",
+            "getCarByIdUseCase",
+            "createCarUseCase",
+            "updateCarUseCase",
+            "deleteCarUseCase",
+            "getCarImagesUseCase",
+            "addCarImageUseCase",
+            "updateCarImageUseCase",
+            "deleteCarImageUseCase",
+            "getCarAdminNotesUseCase",
+            "addCarAdminNoteUseCase",
+            "updateCarAdminNoteUseCase",
+            "deleteCarAdminNoteUseCase",
+            "mergeCarsUseCase",
+            "assignCarToUserUseCase",
+            "carImageUploadService"
+          )
         )
     );
 
     // Use Cases - AdImage
-    this.register(
-      "createAdImagesUseCase",
-      (container) =>
-        new CreateAdImagesUseCase(
-          container.resolve("adImageRepository"),
-          container.resolve("adRepository"),
-          container.resolve("postRepository")
-        )
-    );
-
-    this.register(
-      "getAdImagesUseCase",
-      (container) =>
-        new GetAdImagesUseCase(container.resolve("adImageRepository"))
-    );
-
-    this.register(
-      "getImagesByIdUseCase",
-      (container) =>
-        new GetImagesByIdUseCase(container.resolve("adImageRepository"))
-    );
-
-    this.register(
-      "deleteAdImageUseCase",
-      (container) =>
-        new DeleteAdImageUseCase(container.resolve("adImageRepository"))
-    );
-
-    this.register(
-      "deleteMultipleAdImagesUseCase",
-      (container) =>
-        new DeleteMultipleAdImagesUseCase(
-          container.resolve("adImageRepository")
-        )
-    );
-
-    this.register(
-      "setMainImageUseCase",
-      (container) =>
-        new SetMainImageUseCase(container.resolve("adImageRepository"))
-    );
+    this.registerMany([
+      ["createAdImagesUseCase", CreateAdImagesUseCase, ["adImageRepository", "adRepository", "postRepository"]],
+      ["getAdImagesUseCase", GetAdImagesUseCase, ["adImageRepository"]],
+      ["getImagesByIdUseCase", GetImagesByIdUseCase, ["adImageRepository"]],
+      ["deleteAdImageUseCase", DeleteAdImageUseCase, ["adImageRepository"]],
+      ["deleteMultipleAdImagesUseCase", DeleteMultipleAdImagesUseCase, ["adImageRepository"]],
+      ["setMainImageUseCase", SetMainImageUseCase, ["adImageRepository"]],
+    ]);
 
     // Controllers - AdImage
-    this.register(
-      "adImageController",
-      (container) =>
-        new AdImageController(
-          container.resolve("createAdImagesUseCase"),
-          container.resolve("getAdImagesUseCase"),
-          container.resolve("getImagesByIdUseCase"),
-          container.resolve("deleteAdImageUseCase"),
-          container.resolve("deleteMultipleAdImagesUseCase"),
-          container.resolve("setMainImageUseCase")
-        )
-    );
+    this.registerMany([
+      ["adImageController", AdImageController, ["createAdImagesUseCase", "getAdImagesUseCase", "getImagesByIdUseCase", "deleteAdImageUseCase", "deleteMultipleAdImagesUseCase", "setMainImageUseCase"]],
+    ]);
 
     // Controllers - Upload
-    this.register(
-      "uploadController",
-      (container) =>
-        new UploadController(container.resolve("fileUploadService"))
-    );
+    this.registerMany([
+      ["uploadController", UploadController, ["fileUploadService"]],
+    ]);
 
     // Use Cases - House
-    this.register(
-      "getUniqueHousesUseCase",
-      (container) =>
-        new GetUniqueHousesUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "getEntrancesByHouseUseCase",
-      (container) =>
-        new GetEntrancesByHouseUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "getHousesByFilterUseCase",
-      (container) =>
-        new GetHousesByFilterUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "getUserHousesUseCase",
-      (container) =>
-        new GetUserHousesUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "getHouseInfoUseCase",
-      (container) =>
-        new GetHouseInfoUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "linkUserToApartmentUseCase",
-      (container) =>
-        new LinkUserToApartmentUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "unlinkUserFromApartmentUseCase",
-      (container) =>
-        new UnlinkUserFromApartmentUseCase(container.resolve("houseRepository"))
-    );
-
-    this.register(
-      "updateHouseInfoUseCase",
-      (container) =>
-        new UpdateHouseInfoUseCase(container.resolve("houseRepository"))
-    );
+    this.registerMany([
+      ["getUniqueHousesUseCase", GetUniqueHousesUseCase, ["houseRepository"]],
+      ["getEntrancesByHouseUseCase", GetEntrancesByHouseUseCase, ["houseRepository"]],
+      ["getHousesByFilterUseCase", GetHousesByFilterUseCase, ["houseRepository"]],
+      ["getUserHousesUseCase", GetUserHousesUseCase, ["houseRepository"]],
+      ["getHouseInfoUseCase", GetHouseInfoUseCase, ["houseRepository"]],
+      ["linkUserToApartmentUseCase", LinkUserToApartmentUseCase, ["houseRepository"]],
+      ["unlinkUserFromApartmentUseCase", UnlinkUserFromApartmentUseCase, ["houseRepository"]],
+      ["updateHouseInfoUseCase", UpdateHouseInfoUseCase, ["houseRepository"]],
+    ]);
 
     // Use Cases - TelegramChat
-    this.register(
-      "getTelegramChatsUseCase",
-      (container) =>
-        new GetTelegramChatsUseCase(container.resolve("telegramChatRepository"))
-    );
-
-    this.register(
-      "createTelegramChatUseCase",
-      (container) =>
-        new CreateTelegramChatUseCase(
-          container.resolve("telegramChatRepository")
-        )
-    );
-
-    this.register(
-      "updateTelegramChatUseCase",
-      (container) =>
-        new UpdateTelegramChatUseCase(
-          container.resolve("telegramChatRepository")
-        )
-    );
-
-    this.register(
-      "deleteTelegramChatUseCase",
-      (container) =>
-        new DeleteTelegramChatUseCase(
-          container.resolve("telegramChatRepository")
-        )
-    );
-
-    this.register(
-      "toggleTelegramChatActiveUseCase",
-      (container) =>
-        new ToggleTelegramChatActiveUseCase(
-          container.resolve("telegramChatRepository")
-        )
-    );
+    this.registerMany([
+      ["getTelegramChatsUseCase", GetTelegramChatsUseCase, ["telegramChatRepository"]],
+      ["createTelegramChatUseCase", CreateTelegramChatUseCase, ["telegramChatRepository"]],
+      ["updateTelegramChatUseCase", UpdateTelegramChatUseCase, ["telegramChatRepository"]],
+      ["deleteTelegramChatUseCase", DeleteTelegramChatUseCase, ["telegramChatRepository"]],
+      ["toggleTelegramChatActiveUseCase", ToggleTelegramChatActiveUseCase, ["telegramChatRepository"]],
+    ]);
 
     // Use Cases - Event (Real)
-    this.register("getEventsUseCase", () => new GetEventsUseCase());
-    this.register("getEventByIdUseCase", () => new GetEventByIdUseCase());
-    this.register("createEventUseCase", () => new CreateEventUseCase());
-    this.register("updateEventUseCase", () => new UpdateEventUseCase());
-    this.register("deleteEventUseCase", () => new DeleteEventUseCase());
-    this.register(
-      "registerForEventUseCase",
-      () => new RegisterForEventUseCase()
-    );
-    this.register(
-      "unregisterFromEventUseCase",
-      () => new UnregisterFromEventUseCase()
-    );
+    this.registerMany([
+      ["getEventsUseCase", GetEventsUseCase, []],
+      ["getEventByIdUseCase", GetEventByIdUseCase, []],
+      ["createEventUseCase", CreateEventUseCase, []],
+      ["updateEventUseCase", UpdateEventUseCase, []],
+      ["deleteEventUseCase", DeleteEventUseCase, []],
+      ["registerForEventUseCase", RegisterForEventUseCase, []],
+      ["unregisterFromEventUseCase", UnregisterFromEventUseCase, []],
+    ]);
 
     // Use Cases - Parking (Real)
     this.register(
@@ -970,109 +528,60 @@ export class Container {
     );
 
     // Use Cases - Заметки администрации о парковочном месте
-    this.register(
-      "getSpotNotesUseCase",
-      (container) =>
-        new GetSpotNotesUseCase(
-          container.resolve("parkingSpotNoteRepository"),
-          container.resolve("userRepository")
-        )
-    );
-
-    this.register(
-      "addSpotNoteUseCase",
-      (container) =>
-        new AddSpotNoteUseCase(container.resolve("parkingSpotNoteRepository"))
-    );
-
-    this.register(
-      "deleteSpotNoteUseCase",
-      (container) =>
-        new DeleteSpotNoteUseCase(
-          container.resolve("parkingSpotNoteRepository")
-        )
-    );
+    this.registerMany([
+      ["getSpotNotesUseCase", GetSpotNotesUseCase, ["parkingSpotNoteRepository", "userRepository"]],
+      ["addSpotNoteUseCase", AddSpotNoteUseCase, ["parkingSpotNoteRepository"]],
+      ["deleteSpotNoteUseCase", DeleteSpotNoteUseCase, ["parkingSpotNoteRepository"]],
+    ]);
 
     // Controllers - TelegramChat
-    this.register(
-      "telegramChatController",
-      (container) =>
-        new TelegramChatController(
-          container.resolve("getTelegramChatsUseCase"),
-          container.resolve("createTelegramChatUseCase"),
-          container.resolve("updateTelegramChatUseCase"),
-          container.resolve("deleteTelegramChatUseCase"),
-          container.resolve("toggleTelegramChatActiveUseCase")
-        )
-    );
+    this.registerMany([
+      ["telegramChatController", TelegramChatController, ["getTelegramChatsUseCase", "createTelegramChatUseCase", "updateTelegramChatUseCase", "deleteTelegramChatUseCase", "toggleTelegramChatActiveUseCase"]],
+    ]);
 
     // Controllers - House
     this.register(
       "houseController",
       (container) =>
         new HouseController(
-          container.resolve("getUniqueHousesUseCase"),
-          container.resolve("getEntrancesByHouseUseCase"),
-          container.resolve("getHousesByFilterUseCase"),
-          container.resolve("getUserHousesUseCase"),
-          container.resolve("getHouseInfoUseCase"),
-          container.resolve("linkUserToApartmentUseCase"),
-          container.resolve("unlinkUserFromApartmentUseCase"),
-          container.resolve("updateHouseInfoUseCase"),
-          // Comment use cases
-          container.resolve("createHouseCommentUseCase"),
-          container.resolve("getHouseCommentsUseCase"),
-          container.resolve("updateHouseCommentUseCase"),
-          container.resolve("deleteHouseCommentUseCase"),
-          container.resolve("createEntranceCommentUseCase"),
-          container.resolve("getEntranceCommentUseCase"),
-          container.resolve("updateEntranceCommentUseCase"),
-          container.resolve("deleteEntranceCommentUseCase")
+          container.resolveAll(
+            "getUniqueHousesUseCase",
+            "getEntrancesByHouseUseCase",
+            "getHousesByFilterUseCase",
+            "getUserHousesUseCase",
+            "getHouseInfoUseCase",
+            "linkUserToApartmentUseCase",
+            "unlinkUserFromApartmentUseCase",
+            "updateHouseInfoUseCase",
+            "createHouseCommentUseCase",
+            "getHouseCommentsUseCase",
+            "updateHouseCommentUseCase",
+            "deleteHouseCommentUseCase",
+            "createEntranceCommentUseCase",
+            "getEntranceCommentUseCase",
+            "updateEntranceCommentUseCase",
+            "deleteEntranceCommentUseCase"
+          )
         )
     );
 
     // Use Cases - Admin
-    this.register(
-      "getAllUsersUseCase",
-      (container) => new GetAllUsersUseCase(container.resolve("userRepository"))
-    );
-
-    this.register(
-      "updateUserRolesUseCase",
-      (container) =>
-        new UpdateUserRolesUseCase(container.resolve("userRepository"))
-    );
-
-    this.register("getStatisticsUseCase", () => new GetStatisticsUseCase());
-
-    this.register("getRoleCatalogUseCase", () => new GetRoleCatalogUseCase());
+    this.registerMany([
+      ["getAllUsersUseCase", GetAllUsersUseCase, ["userRepository"]],
+      ["updateUserRolesUseCase", UpdateUserRolesUseCase, ["userRepository"]],
+      ["getStatisticsUseCase", GetStatisticsUseCase, []],
+      ["getRoleCatalogUseCase", GetRoleCatalogUseCase, []],
+    ]);
 
     // Controllers - Admin
-    this.register(
-      "adminController",
-      (container) =>
-        new AdminController(
-          container.resolve("getAllUsersUseCase"),
-          container.resolve("updateUserRolesUseCase"),
-          container.resolve("getStatisticsUseCase"),
-          container.resolve("getRoleCatalogUseCase")
-        )
-    );
+    this.registerMany([
+      ["adminController", AdminController, ["getAllUsersUseCase", "updateUserRolesUseCase", "getStatisticsUseCase", "getRoleCatalogUseCase"]],
+    ]);
 
     // Controllers - Event
-    this.register(
-      "eventController",
-      (container) =>
-        new EventController(
-          container.resolve("getEventsUseCase"),
-          container.resolve("getEventByIdUseCase"),
-          container.resolve("createEventUseCase"),
-          container.resolve("updateEventUseCase"),
-          container.resolve("deleteEventUseCase"),
-          container.resolve("registerForEventUseCase"),
-          container.resolve("unregisterFromEventUseCase")
-        )
-    );
+    this.registerMany([
+      ["eventController", EventController, ["getEventsUseCase", "getEventByIdUseCase", "createEventUseCase", "updateEventUseCase", "deleteEventUseCase", "registerForEventUseCase", "unregisterFromEventUseCase"]],
+    ]);
 
     // Controllers - Parking
     this.register(

@@ -10,7 +10,7 @@ import { ValidationError } from "../../core/errors/AppError.js";
  * - Comprehensive audit logging
  */
 export class AuthController {
-  constructor(
+  constructor({
     authenticateUserUseCase,
     refreshTokenUseCase,
     logoutUseCase,
@@ -20,8 +20,8 @@ export class AuthController {
     userRepository,
     tokenService,
     authenticateMaxUserUseCase,
-    linkPlatformUseCase
-  ) {
+    linkPlatformUseCase,
+  }) {
     this.authenticateUserUseCase = authenticateUserUseCase;
     this.refreshTokenUseCase = refreshTokenUseCase;
     this.logoutUseCase = logoutUseCase;

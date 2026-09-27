@@ -1,10 +1,14 @@
+// `dotenv/config` первой строкой: раньше `dotenv.config()` вызывался в теле этого
+// модуля, а тела модулей, которые он импортирует, выполняются раньше — все
+// `process.env.*` на уровне импортов (токен Telegram-бота, MAX_BOT_TOKEN,
+// FEEDBACK_CHAT_ID) получали `undefined`. На проде это маскировалось тем, что PM2
+// отдаёт переменные до старта Node; локально бот поднимался без токена.
+import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
-import { fileURLToPath } from "url";
-import cron from "node-cron";
 import swaggerUi from "swagger-ui-express";
 
 // Core
@@ -21,6 +25,7 @@ import { UPLOAD_ROOT, logUploadPaths } from "./core/constants/uploadPaths.js";
 
 // Database
 import { testConnection } from "./infrastructure/database/db.js";
+import { closePrismaConnection } from "./infrastructure/database/prisma.js";
 
 // Swagger
 import { swaggerSpec } from "./infrastructure/swagger/swagger.config.js";
@@ -58,16 +63,11 @@ import telegramBot from "./application/services/TelegramBot.js";
 // DI-контейнер (нужен для поллера MAX-бота)
 import { container } from "./infrastructure/container/Container.js";
 
-// Load environment variables
-dotenv.config();
-
-// Fix BigInt serialization for JSON
+// Фронт читает id как строки (`user_id`, `ad_id` — BigInt-колонки).
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const app = express();
 
 // Trust proxy (needed when behind nginx)
@@ -79,20 +79,14 @@ app.set("trust proxy", 1);
 // Security
 app.use(helmetMiddleware);
 
-// CORS
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3001",
-    credentials: true,
-  })
-);
-app.options(
-  "*",
-  cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3001",
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || "http://localhost:3001",
+  credentials: true,
+};
+
+// `cors()` сам отвечает на PREFLIGHT, поэтому отдельного `app.options("*")` не нужно.
+app.use(cors(corsOptions));
+
 // Body parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -114,51 +108,35 @@ app.use((req, res, next) => {
 
 // ================== Static Files ==================
 
-// Единый путь для всех загрузок
 const uploadRoot = UPLOAD_ROOT;
 
-// Логируем пути для отладки
+// Пути раздачи логов для отладки (см. core/constants/uploadPaths.js)
 logUploadPaths();
 
-// Раздаем статические файлы с правильными CORS заголовками
-app.use(
-  "/uploads",
-  express.static(uploadRoot, {
-    immutable: false,
-    maxAge: "1d",
-    fallthrough: true,
-    setHeaders: (res, filePath) => {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
-      );
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      res.setHeader("Cache-Control", "public, max-age=86400"); // 1 день
-    },
-  })
-);
+/** Картинки должны переживать переход между фронтендом и CDN-подобным кэшем. */
+const setUploadHeaders = (res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Cache-Control", "public, max-age=86400"); // 1 день
+};
 
-// Также раздаем через /api/uploads для консистентности с API
-app.use(
-  "/api/uploads",
+const uploadsMiddleware = () =>
   express.static(uploadRoot, {
     immutable: false,
     maxAge: "1d",
     fallthrough: true,
-    setHeaders: (res, filePath) => {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-      res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
-      );
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      res.setHeader("Cache-Control", "public, max-age=86400"); // 1 день
-    },
-  })
-);
+    setHeaders: setUploadHeaders,
+  });
+
+// Раздаём и как `/uploads`, и как `/api/uploads` — исторически ссылки на файлы
+// существуют в базе в обеих формах.
+app.use("/uploads", uploadsMiddleware());
+app.use("/api/uploads", uploadsMiddleware());
 
 logger.info("Static files serving", {
   path: uploadRoot,
@@ -174,43 +152,39 @@ if (process.env.TELEGRAM_WEBHOOK_URL) {
   logger.info("Telegram webhook middleware registered");
 }
 
-// ================== Clean Architecture Routes ==================
-// All routes use /api prefix
-app.use("/api", adsRoutes);
-app.use("/api", authRoutes);
-app.use("/api", postRoutes);
-app.use("/api", telegramRoutes);
-app.use("/api", contactRoutes);
-app.use("/api", categoryRoutes);
-app.use("/api", faqRoutes);
-app.use("/api", floorRuleRoutes);
-app.use("/api", carRoutes);
-app.use("/api", adImageRoutes);
-app.use("/api", uploadRoutes);
-app.use("/api", nearbyRoutes);
-app.use("/api", publicUserRoutes);
-app.use("/api", userRoutes);
+// Все маршруты говорят на `/api` (монтируются здесь единообразно).
+const apiRoutes = [
+  adsRoutes,
+  authRoutes,
+  postRoutes,
+  telegramRoutes,
+  contactRoutes,
+  categoryRoutes,
+  faqRoutes,
+  floorRuleRoutes,
+  carRoutes,
+  adImageRoutes,
+  uploadRoutes,
+  nearbyRoutes,
+  publicUserRoutes,
+  userRoutes,
+  bookingRoutes,
+  imageProxyRoutes,
+  parkingRoutes,
+];
+
+for (const router of apiRoutes) {
+  app.use("/api", router);
+}
+
+// Маршруты со своим префиксом
 app.use("/api/messages", messageRoutes);
-app.use("/api", bookingRoutes);
 app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 // Вкладка админки «MAX-бот»: рассылки, входящие от жителей, настройка webhook
 app.use("/api/admin/max-bot", maxBotRoutes);
-app.use("/api", imageProxyRoutes);
 app.use("/api/events", eventsRoutes);
-app.use("/api", parkingRoutes);
 app.use("/api/favorites", favoritesRoutes);
-
-// ================== Legacy Routes - ALL MIGRATED! 🎉 ==================
-// app.use(routerPosts); // MIGRATED ✅
-// app.use("/api/telegram", oldTelegramRoutes); // MIGRATED ✅
-// app.use(routerCategories); // MIGRATED ✅
-// app.use(routerFaqs); // MIGRATED ✅
-// app.use(routerFloorRules); // MIGRATED ✅
-// app.use(routerCars); // MIGRATED ✅
-// app.use(routerAdImages); // MIGRATED ✅
-// app.use("/api/upload", uploadRouter); // MIGRATED ✅
-// app.use(routerNearby); // MIGRATED ✅
 
 // Swagger API Documentation
 app.use(
@@ -238,15 +212,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Test route - NO AUTH
-app.get("/api/test-no-auth", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "This route works WITHOUT authentication!",
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // ================== Error Handling ==================
 
 // 404 handler
@@ -255,98 +220,109 @@ app.use(notFoundHandler);
 // Global error handler
 app.use(errorHandler);
 
-// ================== Cron Jobs ==================
-
-// Archive old ads every 12 hours
-cron.schedule("0 */12 * * *", async () => {
-  try {
-    const port = process.env.PORT || 4000;
-    const res = await fetch(`http://localhost:${port}/api/ads/archive-old`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await res.json();
-    logger.info("Cron job: Archive old ads", { message: data.message });
-  } catch (err) {
-    logger.error("Cron job: Archive old ads failed", { error: err.message });
-  }
-});
-
 // ================== Server Startup ==================
 
 const PORT = process.env.PORT || 4000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-// Test database connection before starting server
-// Temporarily disabled for MAX auth testing
-testConnection().then((connected) => {
-  if (!connected) {
-    logger.warn("Failed to connect to database. Starting server anyway for MAX auth testing...");
-    // Commented out exit for testing purposes
-    // process.exit(1);
+// Проверка БД не блокирует старт (так было заведено): при недоступной базе
+// сервис поднимается и отдаёт 500 на эндпоинтах, зато доступен `/api/health`
+// и мини-аппы не падают без ответа. Причина пишется в лог уровнем выше.
+const databaseConnected = await testConnection().catch(() => false);
+
+if (!databaseConnected) {
+  logger.error(
+    "Database connection failed — starting without it (API routes will fail)"
+  );
+}
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  logger.info("Server started", {
+    port: PORT,
+    environment: NODE_ENV,
+    nodeVersion: process.version,
+    databaseConnected,
+  });
+
+  // Start Telegram bot
+  telegramBot.launch().catch((err) => {
+    logger.error("Failed to start Telegram bot", { error: err.message });
+  });
+
+  // MAX Bot: сборщик входящих сообщений (long polling GET /updates).
+  // Отключается переменной MAX_BOT_POLLING=false — например при переходе на
+  // webhook (см. заголовку src/infrastructure/services/MaxBotUpdatePoller.js).
+  if (process.env.MAX_BOT_TOKEN && process.env.MAX_BOT_POLLING !== "false") {
+    try {
+      container.resolve("maxBotUpdatePoller").start();
+    } catch (err) {
+      logger.error("Failed to start MAX bot update poller", { error: err.message });
+    }
+  } else {
+    logger.info("MAX bot poller is not started", {
+      reason: process.env.MAX_BOT_TOKEN
+        ? "MAX_BOT_POLLING=false"
+        : "MAX_BOT_TOKEN missing",
+    });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    logger.info("Server started", {
-      port: PORT,
-      environment: NODE_ENV,
-      nodeVersion: process.version,
-      databaseConnected: connected,
-    });
-
-    // Start Telegram bot
-    telegramBot.launch().catch((err) => {
-      logger.error("Failed to start Telegram bot", { error: err.message });
-    });
-
-    // MAX Bot: сборщик входящих сообщений (long polling GET /updates).
-    // Отключается переменной MAX_BOT_POLLING=false — например при переходе на
-    // webhook (см. заголовку src/infrastructure/services/MaxBotUpdatePoller.js).
-    if (process.env.MAX_BOT_TOKEN && process.env.MAX_BOT_POLLING !== "false") {
-      try {
-        container.resolve("maxBotUpdatePoller").start();
-      } catch (err) {
-        logger.error("Failed to start MAX bot update poller", { error: err.message });
-      }
-    } else {
-      logger.info("MAX bot poller is not started", {
-        reason: process.env.MAX_BOT_TOKEN ? "MAX_BOT_POLLING=false" : "MAX_BOT_TOKEN missing",
-      });
-    }
-
-    // MAX Bot: рассылки, оставшиеся queued/running после перезапуска процесса,
-    // никто не отправляет — приводим журнал в честное состояние.
-    if (connected && process.env.MAX_BOT_TOKEN) {
-      container
-        .resolve("maxBotBroadcastUseCases")
-        .reconcileInterruptedBroadcasts()
-        .catch((err) =>
-          logger.error("Failed to reconcile MAX bot broadcasts", { error: err.message })
-        );
-    }
-  });
+  // MAX Bot: рассылки, оставшиеся queued/running после перезапуска процесса,
+  // никто не отправляет — приводим журнал в честное состояние.
+  if (databaseConnected && process.env.MAX_BOT_TOKEN) {
+    container
+      .resolve("maxBotBroadcastUseCases")
+      .reconcileInterruptedBroadcasts()
+      .catch((err) =>
+        logger.error("Failed to reconcile MAX bot broadcasts", {
+          error: err.message,
+        })
+      );
+  }
 });
 
 // ================== Graceful Shutdown ==================
 
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+/** Останавливаем сервис и только потом закрываем HTTP: иначе обрыв на живых запросах. */
+const stopStep = async (label, stop) => {
+  try {
+    await stop();
+  } catch (err) {
+    logger.error(`Error while stopping ${label}`, { error: err.message });
+  }
+};
+
+let shuttingDown = false;
+
 const gracefulShutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received. Starting graceful shutdown...`);
 
-  // Stop Telegram bot
-  try {
-    await telegramBot.stop();
-  } catch (err) {
-    logger.error("Error stopping Telegram bot", { error: err.message });
-  }
+  // Если дождаться тишины не получилось — уходим всё равно, иначе PM2 убьёт процесс жёстко.
+  const watchdog = setTimeout(() => {
+    logger.error("Graceful shutdown timed out, exiting");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  watchdog.unref();
 
-  // Stop MAX bot collector (long polling) — иначе процесс висит на удержанном запросе /updates
-  try {
-    await container.resolve("maxBotUpdatePoller").stop();
-  } catch (err) {
-    logger.error("Error stopping MAX bot poller", { error: err.message });
-  }
+  await stopStep("Telegram bot", () => telegramBot.stop());
+  // Поллер MAX держит long-polling-запрос /updates — без остановки процесс не завершится.
+  await stopStep("MAX bot poller", () =>
+    container.resolve("maxBotUpdatePoller").stop()
+  );
 
-  // Close server
+  await stopStep("HTTP server", () => {
+    return new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  });
+
+  await stopStep("database connection", () => closePrismaConnection());
+
+  clearTimeout(watchdog);
+  logger.info("Shutdown complete");
   process.exit(0);
 };
 

@@ -1,10 +1,13 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
+import { validate } from "../../core/validation/validator.js";
 import { ValidationError } from "../../core/errors/AppError.js";
-import { prisma } from "../../infrastructure/database/prisma.js";
 import { resolveApartmentSubject } from "../../application/use-cases/house/apartmentAccess.js";
 import {
   getEntrancesSchema,
   getHousesFilterSchema,
+  houseCommentBodySchema,
+  houseCommentByNumberSchema,
+  houseCommentQuerySchema,
   userIdParamSchema,
   houseIdParamSchema,
   linkUserToApartmentSchema,
@@ -13,10 +16,14 @@ import {
 
 /**
  * House Controller
- * Handles HTTP requests for house/apartment operations
+ * Handles HTTP requests for house/apartment operations.
+ *
+ * Зависимости передаются по именам: раньше их порядок в контейнере решал, какой
+ * кейс попадёт в какой слот (16 позиционных аргументов), а комментарии подъездов
+ * читались и писались прямым `prisma` отсюда, минуя репозиторий.
  */
 export class HouseController {
-  constructor(
+  constructor({
     getUniqueHousesUseCase,
     getEntrancesByHouseUseCase,
     getHousesByFilterUseCase,
@@ -25,16 +32,15 @@ export class HouseController {
     linkUserToApartmentUseCase,
     unlinkUserFromApartmentUseCase,
     updateHouseInfoUseCase,
-    // Comment use cases
     createHouseCommentUseCase,
     getHouseCommentsUseCase,
     updateHouseCommentUseCase,
     deleteHouseCommentUseCase,
     createEntranceCommentUseCase,
-    getEntranceCommentsUseCase,
+    getEntranceCommentUseCase,
     updateEntranceCommentUseCase,
-    deleteEntranceCommentUseCase
-  ) {
+    deleteEntranceCommentUseCase,
+  }) {
     this.getUniqueHousesUseCase = getUniqueHousesUseCase;
     this.getEntrancesByHouseUseCase = getEntrancesByHouseUseCase;
     this.getHousesByFilterUseCase = getHousesByFilterUseCase;
@@ -43,175 +49,101 @@ export class HouseController {
     this.linkUserToApartmentUseCase = linkUserToApartmentUseCase;
     this.unlinkUserFromApartmentUseCase = unlinkUserFromApartmentUseCase;
     this.updateHouseInfoUseCase = updateHouseInfoUseCase;
-
-    // Comment use cases
     this.createHouseCommentUseCase = createHouseCommentUseCase;
     this.getHouseCommentsUseCase = getHouseCommentsUseCase;
     this.updateHouseCommentUseCase = updateHouseCommentUseCase;
     this.deleteHouseCommentUseCase = deleteHouseCommentUseCase;
     this.createEntranceCommentUseCase = createEntranceCommentUseCase;
-    this.getEntranceCommentsUseCase = getEntranceCommentsUseCase;
+    this.getEntranceCommentUseCase = getEntranceCommentUseCase;
     this.updateEntranceCommentUseCase = updateEntranceCommentUseCase;
     this.deleteEntranceCommentUseCase = deleteEntranceCommentUseCase;
   }
 
-  /**
-   * GET /api-v1/nearby/houses
-   * Get all unique houses
-   */
+  // ================== ДОМА И КВАРТИРЫ ==================
+
+  /** GET /api-v1/nearby/houses */
   getUniqueHouses = asyncHandler(async (req, res) => {
     const houses = await this.getUniqueHousesUseCase.execute();
 
-    res.json({
-      data: houses,
-    });
+    res.json({ data: houses });
   });
 
-  /**
-   * GET /api-v1/nearby/entrances
-   * Get entrances for a specific house
-   */
+  /** GET /api-v1/nearby/entrances */
   getEntrances = asyncHandler(async (req, res) => {
-    const { error } = getEntrancesSchema.validate(req.query);
-
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { house } = req.query;
+    const { house } = validate(getEntrancesSchema, req.query);
     const entrances = await this.getEntrancesByHouseUseCase.execute(house);
 
-    res.json({
-      data: entrances,
-    });
+    res.json({ data: entrances });
   });
 
-  /**
-   * GET /api-v1/nearby
-   * Get houses by filter (house, entrance, position)
-   */
+  /** GET /api-v1/nearby */
   getHousesByFilter = asyncHandler(async (req, res) => {
-    const { error } = getHousesFilterSchema.validate(req.query);
+    const filters = validate(getHousesFilterSchema, req.query);
+    const houses = await this.getHousesByFilterUseCase.execute(filters);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { house, entrance, position } = req.query;
-    const houses = await this.getHousesByFilterUseCase.execute({
-      house,
-      entrance: entrance ? parseInt(entrance) : undefined,
-      position: position ? parseInt(position) : undefined,
-    });
-
-    res.json({
-      data: houses,
-    });
+    res.json({ data: houses });
   });
 
-  /**
-   * GET /api-v1/nearby/user/:id_telegram
-   * Get all houses for a user
-   */
+  /** GET /api-v1/nearby/user/:id_telegram */
   getUserHouses = asyncHandler(async (req, res) => {
-    const { error } = userIdParamSchema.validate({
-      id_telegram: parseInt(req.params.id_telegram),
-    });
+    const { id_telegram: idTelegram } = validate(userIdParamSchema, req.params);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const subject = resolveApartmentSubject(
-      req.user,
-      parseInt(req.params.id_telegram)
-    );
-
+    const subject = resolveApartmentSubject(req.user, idTelegram);
     const houses = await this.getUserHousesUseCase.execute(subject);
 
-    res.json({
-      data: houses,
-    });
+    res.json({ data: houses });
   });
 
-  /**
-   * GET /api-v1/nearby/:id/info
-   * Get info for a specific house
-   */
+  /** GET /api-v1/nearby/:id/info */
   getHouseInfo = asyncHandler(async (req, res) => {
-    const { error } = houseIdParamSchema.validate({
-      id: parseInt(req.params.id),
-    });
+    const { id } = validate(houseIdParamSchema, req.params);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
+    const info = await this.getHouseInfoUseCase.execute(id, req.user);
 
-    const info = await this.getHouseInfoUseCase.execute(parseInt(req.params.id), req.user);
-
-    res.json({
-      info,
-    });
+    res.json({ info });
   });
 
-  /**
-   * POST /api-v1/nearby
-   * Link user to apartment (create or update position)
-   */
+  /** POST /api-v1/nearby — привязка квартиры: обновляет позицию или создаёт новую. */
   linkUserToApartment = asyncHandler(async (req, res) => {
-    const { error } = linkUserToApartmentSchema.validate(req.body);
+    const { house, number, id_telegram: idTelegram } = validate(
+      linkUserToApartmentSchema,
+      req.body
+    );
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { house, number, id_telegram } = req.body;
     const result = await this.linkUserToApartmentUseCase.execute(
       house,
       number,
-      id_telegram,
+      idTelegram,
       req.user
     );
 
-    const statusCode = result.message.includes("Created") ? 201 : 200;
-
-    res.status(statusCode).json(result);
+    // Кейс сам говорит, создана ли новая позиция: код ответа больше не выводится
+    // из подстроки сообщения.
+    res.status(result.created ? 201 : 200).json(result);
   });
 
-  /**
-   * POST /api-v1/nearby/unlink
-   * Unlink user from apartment
-   */
+  /** POST /api-v1/nearby/unlink */
   unlinkUserFromApartment = asyncHandler(async (req, res) => {
-    const { error } = unlinkUserFromApartmentSchema.validate(req.body);
+    const { id, id_telegram: idTelegram } = validate(
+      unlinkUserFromApartmentSchema,
+      req.body
+    );
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { id, id_telegram } = req.body;
     const result = await this.unlinkUserFromApartmentUseCase.execute(
       id,
-      id_telegram,
+      idTelegram,
       req.user
     );
 
     res.json(result);
   });
 
-  /**
-   * PATCH /api-v1/nearby/:id/info
-   * Update house info (admin only)
-   */
+  /** PATCH /api-v1/nearby/:id/info */
   updateHouseInfo = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { info } = req.body;
-    const user = req.user;
-
     const updatedHouse = await this.updateHouseInfoUseCase.execute(
-      parseInt(id),
-      info,
-      user
+      parseInt(req.params.id),
+      req.body.info,
+      req.user
     );
 
     res.json({
@@ -221,311 +153,153 @@ export class HouseController {
     });
   });
 
-  // ================== HOUSE COMMENTS ==================
+  // ================== КОММЕНТАРИИ ДОМОВ ==================
 
-  /**
-   * POST /api-v1/nearby/:house_id/comments
-   * Create house comment (admin only)
-   */
+  /** POST /api-v1/nearby/:house_id/comments */
   createHouseComment = asyncHandler(async (req, res) => {
-    const { house_id } = req.params;
-    const { comment } = req.body;
-    const user = req.user;
-
     const newComment = await this.createHouseCommentUseCase.execute({
-      house_id: house_id, // Pass as string to support both house_id and house number
-      author_id: user.user_id,
-      comment,
+      // `house_id` из URL — это и id записи, и номер дома: кейс различает сам.
+      house_id: req.params.house_id,
+      author_id: req.user.user_id,
+      comment: validate(houseCommentBodySchema, req.body).comment,
     });
 
     res.status(201).json(newComment);
   });
 
-  /**
-   * POST /api-v1/nearby/comments
-   * Create house comment by house number (admin only)
-   */
+  /** POST /api-v1/nearby/comments — дом по номеру в теле */
   createHouseCommentByNumber = asyncHandler(async (req, res) => {
-    const { house, comment } = req.body;
-    const user = req.user;
-
-    if (!house) {
-      return res.status(400).json({ error: "House number is required" });
-    }
+    const { house, comment } = validate(houseCommentByNumberSchema, req.body);
 
     const newComment = await this.createHouseCommentUseCase.execute({
-      house_id: house, // Pass house number as string
-      author_id: user.user_id,
+      house_id: house,
+      author_id: req.user.user_id,
       comment,
     });
 
     res.status(201).json(newComment);
   });
 
-  /**
-   * GET /api-v1/nearby/:house_id/comments
-   * Get house comments
-   */
+  /** GET /api-v1/nearby/:house_id/comments */
   getHouseComments = asyncHandler(async (req, res) => {
-    const { house_id } = req.params;
-
-    const comments = await this.getHouseCommentsUseCase.execute(house_id);
+    const comments = await this.getHouseCommentsUseCase.execute(
+      req.params.house_id
+    );
 
     res.json(comments);
   });
 
-  /**
-   * GET /api-v1/nearby/:house_id/comment
-   * Get simplified house comment (only comment text)
-   */
-  getHouseComment = asyncHandler(async (req, res) => {
-    const { house_id } = req.params;
-
-    // Если это число, используем обычный метод
-    if (!isNaN(house_id)) {
-      const comments = await this.getHouseCommentsUseCase.execute(house_id);
-      if (comments && comments.length > 0 && comments[0].comment) {
-        res.json({ comment: comments[0].comment });
-      } else {
-        res.json(null);
-      }
-    } else {
-      // Если это строка (номер дома), используем упрощенный метод
-      const comment = await this.getHouseCommentsUseCase.executeSimple(
-        house_id
-      );
-      if (comment) {
-        res.json({ comment });
-      } else {
-        res.json(null);
-      }
-    }
-  });
-
-  /**
-   * GET /api-v1/nearby/comments?house=HOUSE_NUMBER
-   * Get house comments by house number (query param)
-   */
+  /** GET /api-v1/nearby/comments?house=HOUSE_NUMBER */
   getHouseCommentsByNumber = asyncHandler(async (req, res) => {
-    const { house } = req.query;
+    const { house } = validate(houseCommentQuerySchema, req.query);
+    const comments = await this.getHouseCommentsUseCase.execute(house);
 
-    console.log(`getHouseCommentsByNumber called with house: "${house}"`);
-
-    if (!house) {
-      return res.status(400).json({ error: "House number is required" });
-    }
-
-    try {
-      const comments = await this.getHouseCommentsUseCase.execute(house);
-      res.json(comments);
-    } catch (error) {
-      console.error("Error in getHouseCommentsByNumber:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    res.json(comments);
   });
 
-  /**
-   * GET /api-v1/nearby/comment?house=HOUSE_NUMBER
-   * Get simplified house comment by house number (query param)
-   */
+  /** GET /api-v1/nearby/:house_id/comment — только текст последнего комментария. */
+  getHouseComment = asyncHandler(async (req, res) => {
+    const comment = await this.#latestHouseComment(req.params.house_id);
+
+    res.json(comment ? { comment } : null);
+  });
+
+  /** GET /api-v1/nearby/comment?house=HOUSE_NUMBER */
   getHouseCommentByNumber = asyncHandler(async (req, res) => {
-    const { house } = req.query;
+    const { house } = validate(houseCommentQuerySchema, req.query);
+    const comment = await this.#latestHouseComment(house);
 
-    console.log(`Getting comment for house: "${house}"`);
-
-    if (!house) {
-      return res.status(400).json({ error: "House number is required" });
-    }
-
-    try {
-      // Используем упрощенный метод для получения только текста комментария
-      const comment = await this.getHouseCommentsUseCase.executeSimple(house);
-
-      console.log(`Comment found: ${comment ? `"${comment}"` : "null"}`);
-
-      if (comment) {
-        res.json({ comment });
-      } else {
-        res.json(null);
-      }
-    } catch (error) {
-      console.error("Error in getHouseCommentByNumber:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    res.json(comment ? { comment } : null);
   });
 
-  /**
-   * PUT /api-v1/nearby/comments/:comment_id
-   * Update house comment (admin only)
-   */
+  /** PUT /api-v1/nearby/comments/:comment_id */
   updateHouseComment = asyncHandler(async (req, res) => {
-    const { comment_id } = req.params;
-    const { comment } = req.body;
-    const user = req.user;
-
     const updatedComment = await this.updateHouseCommentUseCase.execute(
-      parseInt(comment_id),
-      comment,
-      user.user_id
+      parseInt(req.params.comment_id),
+      validate(houseCommentBodySchema, req.body).comment,
+      req.user.user_id
     );
 
     res.json(updatedComment);
   });
 
-  /**
-   * DELETE /api-v1/nearby/comments/:comment_id
-   * Delete house comment (admin only)
-   */
+  /** DELETE /api-v1/nearby/comments/:comment_id */
   deleteHouseComment = asyncHandler(async (req, res) => {
-    const { comment_id } = req.params;
-    const user = req.user;
-
     await this.deleteHouseCommentUseCase.execute(
-      parseInt(comment_id),
-      user.user_id
+      parseInt(req.params.comment_id),
+      req.user.user_id
     );
 
     res.status(204).send();
   });
 
-  // ================== ENTRANCE COMMENTS ==================
+  // ================== КОММЕНТАРИИ ПОДЪЕЗДОВ ==================
 
-  /**
-   * POST /api-v1/nearby/:house_id/entrances/:entrance/comments
-   * Create entrance comment (admin only)
-   */
-  createEntranceComment = async (req, res) => {
-    try {
-      let { house_id, entrance } = req.params;
-      const { comment } = req.body;
-      const author_id = req.user?.user_id ?? null;
+  /** POST /api-v1/nearby/:house_id/entrances/:entrance/comments */
+  createEntranceComment = asyncHandler(async (req, res) => {
+    const result = await this.createEntranceCommentUseCase.execute({
+      house_id: req.params.house_id,
+      entrance: req.params.entrance,
+      author_id: req.user?.user_id ?? null,
+      comment: req.body.comment,
+    });
 
-      entrance = parseInt(entrance);
+    res.status(201).json({
+      message: "Entrance comment created",
+      house: result.house,
+      entrance: result.entrance,
+      comment: result.comment,
+      id: result.id,
+    });
+  });
 
-      if (!comment || comment.trim().length === 0) {
-        return res.status(400).json({ error: "Comment text is required" });
-      }
+  /** GET /api-v1/nearby/:house_id/entrances/:entrance/comments */
+  getEntranceComment = asyncHandler(async (req, res) => {
+    const result = await this.getEntranceCommentUseCase.execute(
+      req.params.house_id,
+      req.params.entrance
+    );
 
-      if (!entrance || isNaN(entrance)) {
-        return res.status(400).json({ error: "Invalid entrance number" });
-      }
+    res.json(result);
+  });
 
-      // Определяем дом
-      // house_id из URL - это всегда строковый номер дома, ищем по нему.
-      let house = await prisma.house.findFirst({
-        where: { house: house_id },
-        select: { id: true, house: true }
-      });
-
-      if (!house) {
-        return res.status(404).json({ error: "House not found" });
-      }
-
-      // Создаём запись
-      const newComment = await prisma.entranceComment.create({
-        data: {
-          house_id: house.id,
-          entrance,
-          author_id: author_id ? BigInt(author_id) : null,
-          comment
-        }
-      });
-
-      return res.status(201).json({
-        message: "Entrance comment created",
-        house: house.house,
-        entrance,
-        comment: newComment.comment,
-        id: newComment.id
-      });
-
-    } catch (error) {
-      console.error("createEntranceComment error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  };
-
-  /**
-   * GET /api-v1/nearby/:house_id/entrances/:entrance/comments
-   * Get entrance comment
-   */
-  getEntranceComment = async (req, res) => {
-    try {
-      let { house_id, entrance } = req.params;
-  
-      entrance = parseInt(entrance);
-  
-      if (!entrance || isNaN(entrance)) {
-        return res.status(400).json({ error: "Invalid entrance number" });
-      }
-
-      house_id = String(house_id).trim();
-  
-      const house = await prisma.house.findFirst({
-        where: { house: house_id },
-        select: { id: true, house: true },
-      });
-
-      if (!house) {
-        return res.status(404).json({ error: "House not found" });
-      }
-
-      let comment = await prisma.entranceComment.findFirst({
-        where: { house_id: house.id, entrance },
-        orderBy: { created_at: "desc" },
-      });
-
-      // Fallback для старых данных (house_id как номер дома)
-      if (!comment && /^\d+$/.test(house_id)) {
-        comment = await prisma.entranceComment.findFirst({
-          where: { house_id: BigInt(house_id), entrance },
-          orderBy: { created_at: "desc" },
-        });
-      }
-  
-      return res.json({
-        house: house.house,
-        entrance,
-        comment: comment ? comment.comment : null
-      });
-  
-    } catch (error) {
-      console.error("getEntranceComment error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  };
-
-  /**
-   * PUT /api-v1/nearby/entrance-comments/:comment_id
-   * Update entrance comment (admin only)
-   */
+  /** PUT /api-v1/nearby/entrance-comments/:comment_id */
   updateEntranceComment = asyncHandler(async (req, res) => {
-    const { comment_id } = req.params;
-    const { comment } = req.body;
-    const user = req.user;
-
     const updatedComment = await this.updateEntranceCommentUseCase.execute(
-      parseInt(comment_id),
-      comment,
-      user.user_id
+      parseInt(req.params.comment_id),
+      validate(houseCommentBodySchema, req.body).comment,
+      req.user.user_id
     );
 
     res.json(updatedComment);
   });
 
-  /**
-   * DELETE /api-v1/nearby/entrance-comments/:comment_id
-   * Delete entrance comment (admin only)
-   */
+  /** DELETE /api-v1/nearby/entrance-comments/:comment_id */
   deleteEntranceComment = asyncHandler(async (req, res) => {
-    const { comment_id } = req.params;
-    const user = req.user;
-
     await this.deleteEntranceCommentUseCase.execute(
-      parseInt(comment_id),
-      user.user_id
+      parseInt(req.params.comment_id),
+      req.user.user_id
     );
 
     res.status(204).send();
   });
+
+  /**
+   * Последний текст комментария дома. Ключ может быть и id записи, и номером
+   * дома — фронт присылает и то, и другое с разных экранов; раньше эта ветка
+   * была скопирована в двух обработчиках.
+   */
+  async #latestHouseComment(houseKey) {
+    if (!houseKey) {
+      throw new ValidationError("House number is required");
+    }
+
+    if (isNaN(houseKey)) {
+      return this.getHouseCommentsUseCase.executeSimple(houseKey);
+    }
+
+    const comments = await this.getHouseCommentsUseCase.execute(houseKey);
+
+    return comments?.[0]?.comment ?? null;
+  }
 }

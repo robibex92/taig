@@ -1,6 +1,7 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
+import { buildServerUrl } from "../../core/utils/requestUrl.js";
 
 /**
  * Upload Controller
@@ -24,10 +25,7 @@ export class UploadController {
       throw new ValidationError("No files uploaded");
     }
 
-    // Используем API_URL из переменных окружения для правильного домена
-    const serverUrl = process.env.API_URL
-      ? process.env.API_URL.replace("/api-v1", "")
-      : req.protocol + "://" + req.get("host");
+    const serverUrl = buildServerUrl(req);
     const fileUrls = this.fileUploadService.getFileUrls(req.files, serverUrl);
 
     logger.info("Files uploaded successfully", {

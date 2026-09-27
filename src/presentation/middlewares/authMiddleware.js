@@ -37,10 +37,12 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     throw new AuthenticationError("Invalid token format");
   }
 
-  const decoded = tokenService.verifyToken(token, {
-    userAgent: req.headers["user-agent"] || "",
-    ip: req.ip || "",
-  });
+  // Отпечаток собирается тем же кодом, что и при логине, иначе сверка всегда
+  // «не совпадает» и каждый запрос пишет предупреждение в лог.
+  const decoded = tokenService.verifyToken(
+    token,
+    tokenService.extractDeviceInfo(req)
+  );
 
   if (!decoded || !decoded.id) {
     throw new AuthenticationError("Invalid token");
@@ -78,10 +80,10 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    const decoded = tokenService.verifyToken(token, {
-      userAgent: req.headers["user-agent"] || "",
-      ip: req.ip || "",
-    });
+    const decoded = tokenService.verifyToken(
+      token,
+      tokenService.extractDeviceInfo(req)
+    );
 
     if (decoded && decoded.id) {
       // Load full user data from database

@@ -1,9 +1,14 @@
-import { IEntranceCommentRepository } from "../../../domain/repositories/IEntranceCommentRepository.js";
-import { ValidationError } from "../../../core/errors/AppError.js";
+import {
+  NotFoundError,
+  ValidationError,
+} from "../../../core/errors/AppError.js";
 
 /**
  * Get Entrance Comment Use Case
- * Gets comment for a specific house entrance
+ *
+ * Отдаёт форму ответа `{house, entrance, comment}` — ровно ту, что читает
+ * `houseCommentsApi.getEntranceComment(Simple)`: `{comment: "текст"}` либо
+ * `{comment: null}`, если комментариев не было.
  */
 export class GetEntranceCommentUseCase {
   constructor(entranceCommentRepository, houseRepository) {
@@ -12,40 +17,36 @@ export class GetEntranceCommentUseCase {
   }
 
   async execute(house_id, entrance) {
-    try {
-      console.log(
-        `GetEntranceCommentUseCase.execute called with house_id=${house_id}, entrance=${entrance}`
-      );
+    const entranceNumber = Number(entrance);
 
-      if (!house_id || !entrance) {
-        throw new ValidationError("House ID and entrance are required");
-      }
-
-      const houses = await this.houseRepository.findByFilters({ house: house_id });
-      if (!houses || houses.length === 0) {
-        return null;
-      }
-      const house = houses[0];
-
-      const comment =
-        await this.entranceCommentRepository.findByHouseAndEntrance(
-          house.id,
-          entrance
-        );
-
-      console.log(
-        `GetEntranceCommentUseCase result:`,
-        comment ? "found" : "not found"
-      );
-      return comment; // Может быть null если комментарий не найден
-    } catch (error) {
-      console.error("Error getting entrance comment:", error);
-      // Если это ошибка "таблица не найдена", возвращаем null
-      if (error.code === "P2021" || error.message.includes("does not exist")) {
-        console.log("Table does not exist yet, returning null");
-        return null;
-      }
-      throw error;
+    if (!Number.isInteger(entranceNumber) || entranceNumber <= 0) {
+      throw new ValidationError("Invalid entrance number");
     }
+
+    const houseKey = String(house_id ?? "").trim();
+    const house = await this.houseRepository.findByHouseNumber(houseKey);
+
+    if (!house) {
+      throw new NotFoundError("House");
+    }
+
+    let comment = await this.entranceCommentRepository.findByHouseAndEntrance(
+      house.id,
+      entranceNumber
+    );
+
+    // Легаси: часть старых строк хранит в `house_id` номер дома вместо id записи.
+    if (!comment && /^\d+$/.test(houseKey)) {
+      comment = await this.entranceCommentRepository.findByHouseAndEntrance(
+        BigInt(houseKey),
+        entranceNumber
+      );
+    }
+
+    return {
+      house: house.house,
+      entrance: entranceNumber,
+      comment: comment ? comment.comment : null,
+    };
   }
 }

@@ -9,10 +9,15 @@ import { logger } from "../../../core/utils/logger.js";
  * - Audit logging
  */
 export class AuthenticateUserUseCase {
-  constructor(userRepository, tokenService, refreshTokenRepository) {
+  /**
+   * @param {object} sessionIssuer — выдача токенов и строки `refresh_tokens`
+   *   вынесены в `SessionIssuer`, чтобы этот же код не был скопирован в MAX-логине
+   *   и в rotation.
+   */
+  constructor(userRepository, refreshTokenRepository, sessionIssuer) {
     this.userRepository = userRepository;
-    this.tokenService = tokenService;
     this.refreshTokenRepository = refreshTokenRepository;
+    this.sessionIssuer = sessionIssuer;
   }
 
   /**
@@ -156,58 +161,25 @@ export class AuthenticateUserUseCase {
       // For now, we'll allow it but log the warning
     }
 
-    // Clear all existing refresh tokens for this user (force re-login)
-    await this.refreshTokenRepository.revokeAllForUser(user.user_id);
-
-    // Also clear any old refresh token from user table (legacy cleanup)
-    await this.userRepository.clearRefreshToken(user.user_id);
-
-    logger.info("Cleared existing refresh tokens for user", {
-      user_id: user.user_id,
-      ip: deviceInfo.ip,
-    });
-
-    // Generate tokens with device fingerprinting
-    const { accessToken, refreshToken } = this.tokenService.generateTokenPair(
+    // Сессия: старые refresh-токены отзываем (вход с телефона выбивает браузер —
+    // это известная политика, см. H4 в реестре рефакторинга), новую выдаёт SessionIssuer.
+    const session = await this.sessionIssuer.issue({
       user,
       deviceInfo,
-      rememberMe
-    );
-
-    // Decode refresh token to get JTI
-    const decodedRefresh = this.tokenService.decodeToken(refreshToken);
-
-    // Calculate expiration date
-    const expirationSeconds =
-      this.tokenService.getRefreshTokenExpiration(rememberMe);
-    const expiresAt = new Date(Date.now() + expirationSeconds * 1000);
-
-    // Store refresh token in database
-    await this.refreshTokenRepository.create({
-      user_id: user.user_id,
-      token: refreshToken,
-      jti: decodedRefresh.jti,
-      device_fingerprint:
-        deviceInfo && Object.keys(deviceInfo).length > 0
-          ? this.tokenService._hashDeviceInfo(deviceInfo)
-          : null,
-      ip_address: deviceInfo.ip || null,
-      user_agent: deviceInfo.userAgent || null,
-      device_info: deviceInfo,
-      expires_at: expiresAt,
+      rememberMe,
     });
 
     logger.info("Authentication successful", {
       user_id: user.user_id,
-      jti: decodedRefresh.jti,
+      jti: session.jti,
       remember_me: rememberMe,
-      expires_at: expiresAt,
+      expires_at: session.expiresAt,
     });
 
     return {
-      user: user.toJSON(),
-      accessToken,
-      refreshToken,
+      user: session.user,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
     };
   }
 }

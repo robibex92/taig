@@ -3,321 +3,161 @@ import crypto from "crypto";
 import { AuthenticationError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
 
+const ISSUER = "taiginsky-api";
+const AUDIENCE = "taiginsky-app";
+
+const EXPRESSION_UNITS = { s: 1, m: 60, h: 3600, d: 86400 };
+
+/**
+ * Centralized Token Service
+ *
+ * Подпись токена: `{id, type, device}` для access и `{id, type, jti, device}`
+ * для refresh; `device` — sha256 от `userAgent|acceptLanguage`. IP в отпечаток
+ * намеренно не входит: он меняется между запросами одного пользователя
+ * (мобильный интернет, NAT дома), а `jti` уже делает refresh-токен уникальным.
+ */
 export class TokenService {
   constructor() {
     this.accessTokenSecret =
-      process.env.JWT_ACCESS_SECRET ||
-      process.env.JWT_SECRET;
-
+      process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
     this.refreshTokenSecret =
-      process.env.JWT_REFRESH_SECRET ||
-      process.env.JWT_SECRET;
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 
-    this.accessTokenExpiration =
-      process.env.JWT_ACCESS_EXPIRATION ||
-      "15m";
-
-    this.refreshTokenExpiration =
-      process.env.JWT_REFRESH_EXPIRATION ||
-      "7d";
-
+    this.accessTokenExpiration = process.env.JWT_ACCESS_EXPIRATION || "15m";
+    this.refreshTokenExpiration = process.env.JWT_REFRESH_EXPIRATION || "7d";
     this.refreshTokenLongExpiration =
-      process.env.JWT_REFRESH_LONG_EXPIRATION ||
-      "30d";
+      process.env.JWT_REFRESH_LONG_EXPIRATION || "30d";
 
-    if (
-      !this.accessTokenSecret ||
-      !this.refreshTokenSecret
-    ) {
-      throw new Error(
-        "JWT secrets are not defined"
-      );
+    if (!this.accessTokenSecret || !this.refreshTokenSecret) {
+      throw new Error("JWT secrets are not defined");
     }
 
-    if (
-      this.accessTokenSecret ===
-      this.refreshTokenSecret
-    ) {
-      logger.warn(
-        "Using same secret for access and refresh tokens"
-      );
+    if (this.accessTokenSecret === this.refreshTokenSecret) {
+      logger.warn("Using same secret for access and refresh tokens");
     }
 
+    /**
+     * Отозванные access-токены. Живёт в памяти процесса: на втором инстансе PM2
+     * (или после рестарта) отзыв не виден, и токен доживает до своего 15 минут.
+     * Честный отзыв требует таблицы или Redis — это H0.4/E в реестре рефакторинга.
+     */
     this.blacklist = new Set();
   }
 
-  generateAccessToken(
-    user,
-    deviceInfo = {}
-  ) {
-    const payload = {
-      id: user.user_id,
-      type: "access",
-
-      device:
-        this._hashDeviceInfo(
-          deviceInfo
-        ),
-    };
-
+  generateAccessToken(user, deviceInfo = {}) {
     return jwt.sign(
-      payload,
+      { id: user.user_id, type: "access", device: this.hashDeviceInfo(deviceInfo) },
       this.accessTokenSecret,
-      {
-        expiresIn:
-          this.accessTokenExpiration,
-
-        issuer:
-          "taiginsky-api",
-
-        audience:
-          "taiginsky-app",
-      }
+      { expiresIn: this.accessTokenExpiration, issuer: ISSUER, audience: AUDIENCE }
     );
   }
 
-  generateRefreshToken(
-    user,
-    deviceInfo = {},
-    rememberMe = false
-  ) {
-    const payload = {
-      id: user.user_id,
-      type: "refresh",
-
-      jti: crypto.randomUUID(),
-
-      device:
-        this._hashDeviceInfo(
-          deviceInfo
-        ),
-    };
-
-    const expiration =
-      rememberMe
-        ? this.refreshTokenLongExpiration
-        : this.refreshTokenExpiration;
-
+  generateRefreshToken(user, deviceInfo = {}, rememberMe = false) {
     return jwt.sign(
-      payload,
+      {
+        id: user.user_id,
+        type: "refresh",
+        jti: crypto.randomUUID(),
+        device: this.hashDeviceInfo(deviceInfo),
+      },
       this.refreshTokenSecret,
       {
-        expiresIn: expiration,
-
-        issuer:
-          "taiginsky-api",
-
-        audience:
-          "taiginsky-app",
+        expiresIn: rememberMe
+          ? this.refreshTokenLongExpiration
+          : this.refreshTokenExpiration,
+        issuer: ISSUER,
+        audience: AUDIENCE,
       }
     );
   }
 
-  generateTokenPair(
-    user,
-    deviceInfo = {},
-    rememberMe = false
-  ) {
+  generateTokenPair(user, deviceInfo = {}, rememberMe = false) {
     return {
-      accessToken:
-        this.generateAccessToken(
-          user,
-          deviceInfo
-        ),
-
-      refreshToken:
-        this.generateRefreshToken(
-          user,
-          deviceInfo,
-          rememberMe
-        ),
+      accessToken: this.generateAccessToken(user, deviceInfo),
+      refreshToken: this.generateRefreshToken(user, deviceInfo, rememberMe),
     };
   }
 
-  verifyAccessToken(
-    token,
-    deviceInfo = {}
-  ) {
+  verifyAccessToken(token, deviceInfo = {}) {
+    return this._verify({
+      token,
+      secret: this.accessTokenSecret,
+      expectedType: "access",
+      deviceInfo,
+      kind: "Access",
+    });
+  }
+
+  verifyRefreshToken(token, deviceInfo = {}) {
+    return this._verify({
+      token,
+      secret: this.refreshTokenSecret,
+      expectedType: "refresh",
+      deviceInfo,
+      kind: "Refresh",
+    });
+  }
+
+  _verify({ token, secret, expectedType, deviceInfo, kind }) {
+    const revokedMessage =
+      expectedType === "access"
+        ? "Token has been revoked"
+        : "Refresh token has been revoked";
+
     try {
       if (this.blacklist.has(token)) {
-        throw new AuthenticationError(
-          "Token has been revoked"
-        );
+        throw new AuthenticationError(revokedMessage);
       }
 
-      const decoded =
-        jwt.verify(
-          token,
-          this.accessTokenSecret,
-          {
-            issuer:
-              "taiginsky-api",
+      const decoded = jwt.verify(token, secret, {
+        issuer: ISSUER,
+        audience: AUDIENCE,
+      });
 
-            audience:
-              "taiginsky-app",
-          }
-        );
-
-      if (
-        decoded.type !== "access"
-      ) {
-        throw new AuthenticationError(
-          "Invalid token type"
-        );
+      if (decoded.type !== expectedType) {
+        throw new AuthenticationError("Invalid token type");
       }
 
-      this._checkDevice(
-        decoded,
-        deviceInfo
-      );
+      this.noteDeviceMismatch(decoded, deviceInfo);
 
       return decoded;
     } catch (error) {
-      if (
-        error instanceof
-        AuthenticationError
-      ) {
-        throw error;
+      if (error instanceof AuthenticationError) throw error;
+      if (error.name === "TokenExpiredError") {
+        throw new AuthenticationError(`${kind} token expired`);
       }
-
-      if (
-        error.name ===
-        "TokenExpiredError"
-      ) {
-        throw new AuthenticationError(
-          "Access token expired"
-        );
+      if (error.name === "JsonWebTokenError") {
+        throw new AuthenticationError(`Invalid ${kind.toLowerCase()} token`);
       }
-
-      if (
-        error.name ===
-        "JsonWebTokenError"
-      ) {
-        throw new AuthenticationError(
-          "Invalid access token"
-        );
-      }
-
-      throw new AuthenticationError(
-        "Access token verification failed"
-      );
+      throw new AuthenticationError(`${kind} token verification failed`);
     }
   }
 
-  verifyRefreshToken(
-    token,
-    deviceInfo = {}
-  ) {
-    try {
-      if (this.blacklist.has(token)) {
-        throw new AuthenticationError(
-          "Refresh token has been revoked"
-        );
-      }
-
-      const decoded =
-        jwt.verify(
-          token,
-          this.refreshTokenSecret,
-          {
-            issuer:
-              "taiginsky-api",
-
-            audience:
-              "taiginsky-app",
-          }
-        );
-
-      if (
-        decoded.type !== "refresh"
-      ) {
-        throw new AuthenticationError(
-          "Invalid token type"
-        );
-      }
-
-      this._checkDevice(
-        decoded,
-        deviceInfo
-      );
-
-      return decoded;
-    } catch (error) {
-      if (
-        error instanceof
-        AuthenticationError
-      ) {
-        throw error;
-      }
-
-      if (
-        error.name ===
-        "TokenExpiredError"
-      ) {
-        throw new AuthenticationError(
-          "Refresh token expired"
-        );
-      }
-
-      if (
-        error.name ===
-        "JsonWebTokenError"
-      ) {
-        throw new AuthenticationError(
-          "Invalid refresh token"
-        );
-      }
-
-      throw new AuthenticationError(
-        "Refresh token verification failed"
-      );
-    }
-  }
-
-  _checkDevice(
-    decoded,
-    deviceInfo
-  ) {
-    if (
-      !decoded?.device ||
-      !deviceInfo ||
-      Object.keys(deviceInfo).length === 0
-    ) {
+  /**
+   * Сверка отпечатка устройства — телеметрия, а не проверка: несовпадение
+   * пишется в лог, токен принимается. Делать её блокирующей — отдельное
+   * решение (H4.2): текущие сессии живут на двух устройствах и во встроенном
+   * браузере мессенджера, где заголовок `Accept-Language` меняется между
+   * запросами.
+   */
+  noteDeviceMismatch(decoded, deviceInfo) {
+    if (!decoded?.device || !deviceInfo || Object.keys(deviceInfo).length === 0) {
       return;
     }
 
-    const currentDevice =
-      this._hashDeviceInfo(
-        deviceInfo
-      );
+    if (decoded.device === this.hashDeviceInfo(deviceInfo)) return;
 
-    if (
-      decoded.device !== currentDevice
-    ) {
-      logger.warn(
-        "Device fingerprint mismatch",
-        {
-          user_id: decoded.id,
-        }
-      );
-
-      /**
-       * Пока только мониторим.
-       *
-       * Не блокируем пользователя,
-       * потому что IP может меняться.
-       */
-    }
+    logger.warn("Device fingerprint mismatch", {
+      user_id: decoded.id,
+      jti: decoded.jti ?? null,
+    });
   }
 
-  verifyToken(
-    token,
-    deviceInfo = {}
-  ) {
-    return this.verifyAccessToken(
-      token,
-      deviceInfo
-    );
+  /**
+   * Алиас для verifyAccessToken: middleware авторизации исторически зовёт его.
+   */
+  verifyToken(token, deviceInfo = {}) {
+    return this.verifyAccessToken(token, deviceInfo);
   }
 
   decodeToken(token) {
@@ -327,121 +167,60 @@ export class TokenService {
   revokeToken(token) {
     this.blacklist.add(token);
 
-    logger.info(
-      "Token revoked",
-      {
-        token_hash:
-          this._hashToken(token),
-      }
-    );
+    logger.info("Token revoked", { token_hash: this.hashToken(token) });
   }
 
   isTokenRevoked(token) {
     return this.blacklist.has(token);
   }
 
-  cleanupBlacklist() {
-    /**
-     * Для production лучше Redis.
-     */
-  }
-
   extractDeviceInfo(req) {
     return {
-      userAgent:
-        req.headers["user-agent"] || "",
-
-      /**
-       * IP намеренно не включаем
-       * в fingerprint.
-       */
+      userAgent: req.headers["user-agent"] || "",
       ip:
         req.headers["x-forwarded-for"] ||
         req.headers["x-real-ip"] ||
         req.socket?.remoteAddress ||
         "",
-
-      acceptLanguage:
-        req.headers["accept-language"] ||
-        "",
+      acceptLanguage: req.headers["accept-language"] || "",
     };
   }
 
-  _hashDeviceInfo(deviceInfo) {
-    if (
-      !deviceInfo ||
-      Object.keys(deviceInfo).length === 0
-    ) {
-      return null;
-    }
+  hashDeviceInfo(deviceInfo) {
+    if (!deviceInfo || Object.keys(deviceInfo).length === 0) return null;
 
     const fingerprint = [
       deviceInfo.userAgent || "",
       deviceInfo.acceptLanguage || "",
     ].join("|");
 
-    return crypto
-      .createHash("sha256")
-      .update(fingerprint)
-      .digest("hex");
+    return crypto.createHash("sha256").update(fingerprint).digest("hex");
   }
 
-  _hashToken(token) {
-    return crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex")
-      .slice(0, 16);
+  /** В лог попадает только префикс хеша: по токену можно было войти. */
+  hashToken(token) {
+    return crypto.createHash("sha256").update(token).digest("hex").slice(0, 16);
   }
 
   getAccessTokenExpiration() {
+    return this._parseExpiration(this.accessTokenExpiration);
+  }
+
+  getRefreshTokenExpiration(rememberMe = false) {
     return this._parseExpiration(
-      this.accessTokenExpiration
+      rememberMe ? this.refreshTokenLongExpiration : this.refreshTokenExpiration
     );
   }
 
-  getRefreshTokenExpiration(
-    rememberMe = false
-  ) {
-    const expiration =
-      rememberMe
-        ? this.refreshTokenLongExpiration
-        : this.refreshTokenExpiration;
+  /** `15m` → 900 сек; неразборчивое значение — те же 900, что и у access-токена. */
+  _parseExpiration(expiration) {
+    if (typeof expiration === "number") return expiration;
 
-    return this._parseExpiration(
-      expiration
-    );
-  }
+    const match = String(expiration).match(/^(\d+)([smhd])$/);
+    if (!match) return 900;
 
-  _parseExpiration(exp) {
-    if (
-      typeof exp === "number"
-    ) {
-      return exp;
-    }
-
-    const match =
-      String(exp).match(
-        /^(\d+)([smhd])$/
-      );
-
-    if (!match) {
-      return 900;
-    }
-
-    const [, value, unit] =
-      match;
-
-    const multipliers = {
-      s: 1,
-      m: 60,
-      h: 3600,
-      d: 86400,
-    };
-
-    return (
-      Number(value) *
-      multipliers[unit]
-    );
+    return Number(match[1]) * EXPRESSION_UNITS[match[2]];
   }
 }
+
+export default TokenService;

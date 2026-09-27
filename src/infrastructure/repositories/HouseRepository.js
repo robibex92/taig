@@ -41,6 +41,20 @@ export class HouseRepository extends IHouseRepository {
   }
 
   /**
+   * Первый запись дома по его номеру — без фильтра по `position`.
+   *
+   * Нужно комментариям подъездов: они привязаны к дому как к зданию, а не к
+   * конкретной квартире, поэтому «position = 1» из `findByFilters` здесь ни при чём.
+   */
+  async findByHouseNumber(house_number) {
+    const house = await prisma.house.findFirst({
+      where: { house: house_number },
+    });
+
+    return house ? House.fromDatabase(house) : null;
+  }
+
+  /**
    * Find houses with filters
    */
   async findByFilters({ house, entrance, position }) {

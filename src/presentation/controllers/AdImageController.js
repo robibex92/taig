@@ -1,5 +1,6 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { ValidationError } from "../../core/errors/AppError.js";
+import { buildServerUrl } from "../../core/utils/requestUrl.js";
 import {
   createAdImagesSchema,
   getAdImagesSchema,
@@ -42,10 +43,7 @@ export class AdImageController {
     }
 
     const { ad_id, post_id, images } = req.body;
-    // Используем API_URL из переменных окружения для правильного домена
-    const serverUrl = process.env.API_URL
-      ? process.env.API_URL.replace("/api-v1", "")
-      : req.protocol + "://" + req.get("host");
+    const serverUrl = buildServerUrl(req);
 
     const createdImages = await this.createAdImagesUseCase.execute(
       ad_id,

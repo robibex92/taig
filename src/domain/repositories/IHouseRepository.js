@@ -30,6 +30,15 @@ export class IHouseRepository {
   }
 
   /**
+   * First house row by house number, regardless of apartment position
+   * @param {string} house_number
+   * @returns {Promise<House|null>}
+   */
+  async findByHouseNumber(house_number) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
    * Find all houses by user telegram ID
    * @param {number} telegramId
    * @returns {Promise<House[]>}

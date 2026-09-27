@@ -2,6 +2,20 @@ import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
+import { validateRequest } from "../../core/validation/validator.js";
+import {
+  addCarImageSchema,
+  assignCarSchema,
+  carIdParamSchema,
+  carNoteSchema,
+  createCarSchema,
+  imageIdParamSchema,
+  mergeCarsSchema,
+  noteIdParamSchema,
+  updateCarImageSchema,
+  updateCarSchema,
+  userIdParamSchema,
+} from "../../core/validation/schemas/car.schema.js";
 import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
 
 const carImageUploadService = container.resolve("carImageUploadService");
@@ -33,35 +47,59 @@ router.get("/cars", carController.getAll);
  * @desc    Get cars by user ID
  * @access  Public
  */
-router.get("/cars/user/:user_id", carController.getUserCars);
+router.get(
+  "/cars/user/:user_id",
+  validateRequest(userIdParamSchema, "params"),
+  carController.getUserCars
+);
 
 /**
  * @route   GET /cars/:id
  * @desc    Get car by ID
  * @access  Public
  */
-router.get("/cars/:id", carController.getById);
+router.get(
+  "/cars/:id",
+  validateRequest(carIdParamSchema, "params"),
+  carController.getById
+);
 
 /**
  * @route   PATCH /cars/:id
  * @desc    Update car by ID (residents edit their own car, admins any car)
  * @access  Private
  */
-router.patch("/cars/:id", authenticateJWT, carController.update);
+router.patch(
+  "/cars/:id",
+  authenticateJWT,
+  validateRequest(carIdParamSchema, "params"),
+  validateRequest(updateCarSchema),
+  carController.update
+);
 
 /**
  * @route   POST /cars
  * @desc    Create new car (residents register their own car)
  * @access  Private
  */
-router.post("/cars", authenticateJWT, carController.create);
+router.post(
+  "/cars",
+  authenticateJWT,
+  validateRequest(createCarSchema),
+  carController.create
+);
 
 /**
  * @route   DELETE /cars/:id
  * @desc    Soft delete car
  * @access  Private
  */
-router.delete("/cars/:id", authenticateJWT, carController.delete);
+router.delete(
+  "/cars/:id",
+  authenticateJWT,
+  validateRequest(carIdParamSchema, "params"),
+  carController.delete
+);
 
 // ============================================
 // CAR IMAGES (Gallery — cars:admin, plus the car owner on GET)
@@ -72,7 +110,12 @@ router.delete("/cars/:id", authenticateJWT, carController.delete);
  * @desc    Get all images for a specific car
  * @access  Private (cars:admin, or the owner of this car)
  */
-router.get("/cars/:id/images", authenticateJWT, carController.getCarImages);
+router.get(
+  "/cars/:id/images",
+  authenticateJWT,
+  validateRequest(carIdParamSchema, "params"),
+  carController.getCarImages
+);
 
 /**
  * @route   POST /cars/:id/images
@@ -84,6 +127,8 @@ router.post(
   authenticateJWT,
   carsAdmin,
   upload.single("image"),
+  validateRequest(carIdParamSchema, "params"),
+  validateRequest(addCarImageSchema),
   carController.addCarImage
 );
 
@@ -92,14 +137,27 @@ router.post(
  * @desc    Update car image (mainly for comments)
  * @access  Private (cars:admin)
  */
-router.patch("/cars/images/:imageId", authenticateJWT, carsAdmin, carController.updateCarImage);
+router.patch(
+  "/cars/images/:imageId",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(imageIdParamSchema, "params"),
+  validateRequest(updateCarImageSchema),
+  carController.updateCarImage
+);
 
 /**
  * @route   DELETE /cars/images/:imageId
  * @desc    Delete car image
  * @access  Private (cars:admin)
  */
-router.delete("/cars/images/:imageId", authenticateJWT, carsAdmin, carController.deleteCarImage);
+router.delete(
+  "/cars/images/:imageId",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(imageIdParamSchema, "params"),
+  carController.deleteCarImage
+);
 
 // ============================================
 // CAR ADMIN NOTES (cars:admin)
@@ -110,21 +168,41 @@ router.delete("/cars/images/:imageId", authenticateJWT, carsAdmin, carController
  * @desc    Get admin notes for a specific car
  * @access  Private (cars:admin)
  */
-router.get("/cars/:id/admin-notes", authenticateJWT, carsAdmin, carController.getCarAdminNotes);
+router.get(
+  "/cars/:id/admin-notes",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(carIdParamSchema, "params"),
+  carController.getCarAdminNotes
+);
 
 /**
  * @route   POST /cars/:id/admin-notes
  * @desc    Add admin note to car
  * @access  Private (cars:admin)
  */
-router.post("/cars/:id/admin-notes", authenticateJWT, carsAdmin, carController.addCarAdminNote);
+router.post(
+  "/cars/:id/admin-notes",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(carIdParamSchema, "params"),
+  validateRequest(carNoteSchema),
+  carController.addCarAdminNote
+);
 
 /**
  * @route   PATCH /cars/admin-notes/:noteId
  * @desc    Update admin note
  * @access  Private (cars:admin)
  */
-router.patch("/cars/admin-notes/:noteId", authenticateJWT, carsAdmin, carController.updateCarAdminNote);
+router.patch(
+  "/cars/admin-notes/:noteId",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(noteIdParamSchema, "params"),
+  validateRequest(carNoteSchema),
+  carController.updateCarAdminNote
+);
 
 /**
  * @route   DELETE /cars/admin-notes/:noteId
@@ -135,6 +213,7 @@ router.delete(
   "/cars/admin-notes/:noteId",
   authenticateJWT,
   carsAdmin,
+  validateRequest(noteIdParamSchema, "params"),
   carController.deleteCarAdminNote
 );
 
@@ -147,13 +226,26 @@ router.delete(
  * @desc    Merge two cars with the same number
  * @access  Private (cars:admin)
  */
-router.post("/cars/merge", authenticateJWT, carsAdmin, carController.mergeCars);
+router.post(
+  "/cars/merge",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(mergeCarsSchema),
+  carController.mergeCars
+);
 
 /**
  * @route   POST /cars/:id/assign
  * @desc    Assign car to user
  * @access  Private (cars:admin)
  */
-router.post("/cars/:id/assign", authenticateJWT, carsAdmin, carController.assignCarToUser);
+router.post(
+  "/cars/:id/assign",
+  authenticateJWT,
+  carsAdmin,
+  validateRequest(carIdParamSchema, "params"),
+  validateRequest(assignCarSchema),
+  carController.assignCarToUser
+);
 
 export default router;

@@ -1,182 +1,93 @@
 import { AuthenticationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 
+/**
+ * Rotation refresh-токена.
+ *
+ * Пару токенов и строку в `refresh_tokens` создаёт `SessionIssuer` — как в
+ * Telegram- и MAX-логине; здесь к этому добавляется только проверка старого
+ * токена и отзыв его `jti`.
+ */
 export class RefreshTokenUseCase {
-  constructor(
-    userRepository,
-    tokenService,
-    refreshTokenRepository
-  ) {
+  constructor(userRepository, tokenService, refreshTokenRepository, sessionIssuer) {
     this.userRepository = userRepository;
     this.tokenService = tokenService;
-    this.refreshTokenRepository =
-      refreshTokenRepository;
+    this.refreshTokenRepository = refreshTokenRepository;
+    this.sessionIssuer = sessionIssuer;
   }
 
-  async execute(
-    refreshToken,
-    deviceInfo = {}
-  ) {
+  async execute(refreshToken, deviceInfo = {}) {
     if (!refreshToken) {
-      throw new AuthenticationError(
-        "Refresh token is required"
-      );
+      throw new AuthenticationError("Refresh token is required");
     }
 
-    const decoded =
-      this.tokenService.verifyRefreshToken(
-        refreshToken,
-        deviceInfo
-      );
+    const decoded = this.tokenService.verifyRefreshToken(refreshToken, deviceInfo);
 
-    if (
-      !decoded ||
-      !decoded.id ||
-      !decoded.jti
-    ) {
-      throw new AuthenticationError(
-        "Invalid refresh token"
-      );
+    if (!decoded?.id || !decoded?.jti) {
+      throw new AuthenticationError("Invalid refresh token");
     }
 
-    const storedToken =
-      await this.refreshTokenRepository
-        .findByToken(refreshToken);
+    const storedToken = await this.refreshTokenRepository.findByToken(
+      refreshToken
+    );
 
     if (!storedToken) {
-      throw new AuthenticationError(
-        "Invalid refresh token"
-      );
+      throw new AuthenticationError("Invalid refresh token");
     }
 
     if (storedToken.isRevoked()) {
-      logger.warn(
-        "Attempt to use revoked refresh token",
-        {
-          jti: decoded.jti,
-          user_id: decoded.id,
-        }
-      );
-
-      throw new AuthenticationError(
-        "Refresh token has been revoked"
-      );
+      logger.warn("Attempt to use revoked refresh token", {
+        jti: decoded.jti,
+        user_id: decoded.id,
+      });
+      throw new AuthenticationError("Refresh token has been revoked");
     }
 
     if (storedToken.isExpired()) {
-      throw new AuthenticationError(
-        "Refresh token has expired"
-      );
+      throw new AuthenticationError("Refresh token has expired");
     }
 
-    const user =
-      await this.userRepository.findById(
-        decoded.id
-      );
+    const user = await this.userRepository.findById(decoded.id);
 
     if (!user) {
-      throw new AuthenticationError(
-        "User not found"
-      );
-    }
-
-    if (user.isBanned()) {
-      throw new AuthenticationError(
-        "User account is banned"
-      );
+      throw new AuthenticationError("User not found");
     }
 
     /**
-     * Сохраняем исходный срок refresh token.
-     *
-     * Если старый токен был long-lived,
-     * новый тоже должен быть long-lived.
+     * Срок нового токена наследуется от старого: long-lived сессия («запомнить
+     * меня») не должна после rotation превращаться в недельную.
      */
-    const remainingMs =
-      new Date(
-        storedToken.expires_at
-      ).getTime() - Date.now();
+    const rememberMe = this._wasLongLived(storedToken);
 
-    const normalLifetimeMs =
-      this.tokenService
-        .getRefreshTokenExpiration() *
-      1000;
+    await this.refreshTokenRepository.revokeByJti(decoded.jti);
 
-    const rememberMe =
-      remainingMs > normalLifetimeMs * 1.5;
-
-    const newTokens =
-      this.tokenService.generateTokenPair(
-        user,
-        deviceInfo,
-        rememberMe
-      );
-
-    const decodedNewRefresh =
-      this.tokenService.decodeToken(
-        newTokens.refreshToken
-      );
-
-    if (
-      !decodedNewRefresh?.jti
-    ) {
-      throw new AuthenticationError(
-        "Failed to create refresh token"
-      );
-    }
-
-    const expirationSeconds =
-      this.tokenService
-        .getRefreshTokenExpiration(
-          rememberMe
-        );
-
-    const expiresAt =
-      new Date(
-        Date.now() +
-          expirationSeconds * 1000
-      );
-
-    /**
-     * Rotation.
-     */
-    await this.refreshTokenRepository
-      .revokeByJti(decoded.jti);
-
-    await this.refreshTokenRepository.create({
-      user_id: user.user_id,
-      token: newTokens.refreshToken,
-      jti: decodedNewRefresh.jti,
-
-      device_fingerprint:
-        deviceInfo &&
-        Object.keys(deviceInfo).length > 0
-          ? this.tokenService
-              ._hashDeviceInfo(deviceInfo)
-          : null,
-
-      ip_address:
-        deviceInfo.ip || null,
-
-      user_agent:
-        deviceInfo.userAgent || null,
-
-      device_info: deviceInfo,
-
-      expires_at: expiresAt,
+    const tokens = await this.sessionIssuer.issue({
+      user,
+      deviceInfo,
+      rememberMe,
+      // Старый jti уже отозван выше; остальные сессии не трогаем.
+      revokePreviousSessions: false,
     });
 
-    logger.info(
-      "Access token refreshed",
-      {
-        user_id: user.user_id,
-        old_jti: decoded.jti,
-        new_jti:
-          decodedNewRefresh.jti,
-        remember_me: rememberMe,
-      }
-    );
+    logger.info("Access token refreshed", {
+      user_id: user.user_id,
+      old_jti: decoded.jti,
+      new_jti: tokens.jti,
+      remember_me: rememberMe,
+    });
 
-    return newTokens;
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+  }
+
+  _wasLongLived(storedToken) {
+    const tokenService = this.sessionIssuer.tokenService;
+    const remainingMs =
+      new Date(storedToken.expires_at).getTime() - Date.now();
+    const normalLifetimeMs = tokenService.getRefreshTokenExpiration() * 1000;
+
+    return remainingMs > normalLifetimeMs * 1.5;
   }
 }

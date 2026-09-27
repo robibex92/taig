@@ -43,6 +43,8 @@ export class LinkUserToApartmentUseCase {
 
       return {
         message: "Updated existing position 1",
+        // Контроллер по этому флагу отдаёт 200, а не разбирает текст сообщения.
+        created: false,
         data: updated,
       };
     }
@@ -90,6 +92,7 @@ export class LinkUserToApartmentUseCase {
 
     return {
       message: `Created new position ${newPosition}`,
+      created: true,
       data: newRecord,
     };
   }
