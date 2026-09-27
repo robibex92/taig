@@ -1,8 +1,11 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
-import { ValidationError } from "../../core/errors/AppError.js";
+import { ForbiddenError } from "../../core/errors/AppError.js";
+import { canManageHouse } from "../../core/utils/roles.js";
+import { validate } from "../../core/validation/validator.js";
 import {
   getFloorRulesSchema,
   upsertFloorRuleSchema,
+  floorOffsetsSchema,
 } from "../../core/validation/schemas/floorRule.schema.js";
 
 /**
@@ -10,9 +13,10 @@ import {
  * Handles HTTP requests for floor rule operations
  */
 export class FloorRuleController {
-  constructor(getFloorRulesUseCase, upsertFloorRuleUseCase) {
+  constructor({ getFloorRulesUseCase, upsertFloorRuleUseCase, setFloorOffsetsUseCase }) {
     this.getFloorRulesUseCase = getFloorRulesUseCase;
     this.upsertFloorRuleUseCase = upsertFloorRuleUseCase;
+    this.setFloorOffsetsUseCase = setFloorOffsetsUseCase;
   }
 
   /**
@@ -20,13 +24,8 @@ export class FloorRuleController {
    * Get floor rules by house and entrance
    */
   getAll = asyncHandler(async (req, res) => {
-    const { error } = getFloorRulesSchema.validate(req.query);
+    const { house, entrance } = validate(getFloorRulesSchema, req.query);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
-    }
-
-    const { house, entrance } = req.query;
     const floorRules = await this.getFloorRulesUseCase.execute(
       house,
       parseInt(entrance)
@@ -40,20 +39,40 @@ export class FloorRuleController {
 
   /**
    * POST /api-v1/floor-rules
-   * Create or update floor rule (upsert)
+   * Создать или обновить отступ одного этажа. Право — роль управляющего домом.
    */
   upsert = asyncHandler(async (req, res) => {
-    const { error } = upsertFloorRuleSchema.validate(req.body);
+    const rule = validate(upsertFloorRuleSchema, req.body);
 
-    if (error) {
-      throw new ValidationError(error.details[0].message);
+    if (!canManageHouse(req.user, rule.house)) {
+      throw new ForbiddenError("Только управляющие домом могут менять отступ ряда");
     }
 
-    const floorRule = await this.upsertFloorRuleUseCase.execute(req.body);
+    const floorRule = await this.upsertFloorRuleUseCase.execute(rule);
 
     res.status(200).json({
       success: true,
       data: floorRule,
     });
   });
+
+  /**
+   * PATCH /api-v1/floor-rules/offsets
+   * Отступ ряда сразу для списка этажей подъезда — одним запросом.
+   */
+  setOffsets = asyncHandler(async (req, res) => {
+    const { house, entrance, floors, position } = validate(floorOffsetsSchema, req.body);
+
+    const updated = await this.setFloorOffsetsUseCase.execute(
+      { house, entrance, floors, position },
+      req.user
+    );
+
+    res.status(200).json({
+      success: true,
+      data: updated,
+    });
+  });
 }
+
+export default FloorRuleController;

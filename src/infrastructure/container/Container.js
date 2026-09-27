@@ -92,6 +92,7 @@ import { DeleteFaqUseCase } from "../../application/use-cases/faq/DeleteFaqUseCa
 // Use Cases - FloorRule
 import { GetFloorRulesUseCase } from "../../application/use-cases/floorRule/GetFloorRulesUseCase.js";
 import { UpsertFloorRuleUseCase } from "../../application/use-cases/floorRule/UpsertFloorRuleUseCase.js";
+import { SetFloorOffsetsUseCase } from "../../application/use-cases/floorRule/SetFloorOffsetsUseCase.js";
 
 // Use Cases - Car
 import { GetCarsUseCase } from "../../application/use-cases/car/GetCarsUseCase.js";
@@ -421,12 +422,21 @@ export class Container {
     this.registerMany([
       ["getFloorRulesUseCase", GetFloorRulesUseCase, ["floorRuleRepository"]],
       ["upsertFloorRuleUseCase", UpsertFloorRuleUseCase, ["floorRuleRepository"]],
+      ["setFloorOffsetsUseCase", SetFloorOffsetsUseCase, ["floorRuleRepository"]],
     ]);
 
     // Controllers - FloorRule
-    this.registerMany([
-      ["floorRuleController", FloorRuleController, ["getFloorRulesUseCase", "upsertFloorRuleUseCase"]],
-    ]);
+    this.register(
+      "floorRuleController",
+      (container) =>
+        new FloorRuleController(
+          container.resolveAll(
+            "getFloorRulesUseCase",
+            "upsertFloorRuleUseCase",
+            "setFloorOffsetsUseCase"
+          )
+        )
+    );
 
     // Use Cases - Car
     this.registerMany([

@@ -1,5 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 const floorRuleController = container.resolve("floorRuleController");
@@ -13,9 +14,16 @@ router.get("/floor-rules", floorRuleController.getAll);
 
 /**
  * @route   POST /floor-rules
- * @desc    Create or update floor rule (upsert)
- * @access  Private (add auth middleware if needed)
+ * @desc    Создать или обновить отступ одного этажа
+ * @access  Private (управляющий домом)
  */
-router.post("/floor-rules", floorRuleController.upsert);
+router.post("/floor-rules", authenticateJWT, floorRuleController.upsert);
+
+/**
+ * @route   PATCH /floor-rules/offsets
+ * @desc    Отступ ряда сразу для списка этажей подъезда
+ * @access  Private (управляющий домом)
+ */
+router.patch("/floor-rules/offsets", authenticateJWT, floorRuleController.setOffsets);
 
 export default router;

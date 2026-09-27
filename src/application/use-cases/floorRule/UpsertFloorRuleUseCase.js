@@ -1,3 +1,4 @@
+import { ValidationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 
 /**
@@ -9,31 +10,25 @@ export class UpsertFloorRuleUseCase {
   }
 
   async execute(ruleData) {
-    const { house, entrance, floor, position } = ruleData;
+    const { house, entrance, floor, position } = ruleData ?? {};
 
-    // Check if rule already exists
-    const existing = await this.floorRuleRepository.findByHouseEntranceFloor(
+    if (!house || !Number.isInteger(entrance) || !Number.isInteger(floor)) {
+      throw new ValidationError("house, entrance and floor are required");
+    }
+
+    // `position` — это номер ячейки, с которой начинается ряд (1 = без сдвига).
+    if (!Number.isInteger(position) || position < 1) {
+      throw new ValidationError("position must be a positive integer");
+    }
+
+    const result = await this.floorRuleRepository.upsert({
       house,
       entrance,
-      floor
-    );
+      floor,
+      position,
+    });
 
-    let result;
-
-    if (existing) {
-      // Update existing rule
-      result = await this.floorRuleRepository.update(
-        house,
-        entrance,
-        floor,
-        position
-      );
-      logger.info("Floor rule updated", { house, entrance, floor, position });
-    } else {
-      // Create new rule
-      result = await this.floorRuleRepository.create(ruleData);
-      logger.info("Floor rule created", { house, entrance, floor, position });
-    }
+    logger.info("Floor rule upserted", { house, entrance, floor, position });
 
     return result;
   }

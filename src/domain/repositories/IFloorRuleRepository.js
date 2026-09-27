@@ -14,34 +14,14 @@ export class IFloorRuleRepository {
   }
 
   /**
-   * Find existing rule
-   * @param {string} house
-   * @param {number} entrance
-   * @param {number} floor
-   * @returns {Promise<FloorRule|null>}
+   * Create or update the rule of one floor.
+   *
+   * Реализация делает это одним `prisma.floorRule.upsert`; отдельных
+   * `findByHouseEntranceFloor`/`create`/`update` в контракте больше нет — их
+   * вызывал `UpsertFloorRuleUseCase`, у репозитория таких методов не существует,
+   * и любой POST /floor-rules падал с TypeError.
    */
-  async findByHouseEntranceFloor(house, entrance, floor) {
-    throw new Error("Method 'findByHouseEntranceFloor()' must be implemented");
-  }
-
-  /**
-   * Create new floor rule
-   * @param {Object} ruleData
-   * @returns {Promise<FloorRule>}
-   */
-  async create(ruleData) {
-    throw new Error("Method 'create()' must be implemented");
-  }
-
-  /**
-   * Update floor rule
-   * @param {string} house
-   * @param {number} entrance
-   * @param {number} floor
-   * @param {number} position
-   * @returns {Promise<FloorRule>}
-   */
-  async update(house, entrance, floor, position) {
-    throw new Error("Method 'update()' must be implemented");
+  async upsert(ruleData) {
+    throw new Error("Method 'upsert()' must be implemented");
   }
 }

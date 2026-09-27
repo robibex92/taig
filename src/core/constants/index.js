@@ -68,6 +68,13 @@ export const HOUSE_CELL_INDEX_MAX = 60;
 /** Потолок этажа при правке раскладки — страховка от мусора в запросе. */
 export const HOUSE_FLOOR_MAX = 99;
 
+/**
+ * Max отступ ряда слева (`floor_rules.position`).
+ * На единицу больше потолка колонки: `position` — это ячейка начала ряда с 1,
+ * а `cell_index` — колонка с 0.
+ */
+export const HOUSE_ROW_OFFSET_MAX = HOUSE_CELL_INDEX_MAX + 1;
+
 /** Длина текста информации о квартире в реестре. */
 export const HOUSE_INFO_MAX_LENGTH = 5000;
 
