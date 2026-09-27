@@ -32,6 +32,7 @@ export class HouseController {
     linkUserToApartmentUseCase,
     unlinkUserFromApartmentUseCase,
     updateHouseInfoUseCase,
+    updateApartmentLayoutUseCase,
     createHouseCommentUseCase,
     getHouseCommentsUseCase,
     updateHouseCommentUseCase,
@@ -49,6 +50,7 @@ export class HouseController {
     this.linkUserToApartmentUseCase = linkUserToApartmentUseCase;
     this.unlinkUserFromApartmentUseCase = unlinkUserFromApartmentUseCase;
     this.updateHouseInfoUseCase = updateHouseInfoUseCase;
+    this.updateApartmentLayoutUseCase = updateApartmentLayoutUseCase;
     this.createHouseCommentUseCase = createHouseCommentUseCase;
     this.getHouseCommentsUseCase = getHouseCommentsUseCase;
     this.updateHouseCommentUseCase = updateHouseCommentUseCase;
@@ -138,10 +140,10 @@ export class HouseController {
     res.json(result);
   });
 
-  /** PATCH /api-v1/nearby/:id/info */
+  /** PATCH /api-v1/nearby/:id/info — текст информации о квартире. */
   updateHouseInfo = asyncHandler(async (req, res) => {
     const updatedHouse = await this.updateHouseInfoUseCase.execute(
-      parseInt(req.params.id),
+      req.params.id,
       req.body.info,
       req.user
     );
@@ -150,6 +152,22 @@ export class HouseController {
       success: true,
       data: updatedHouse.toJSON(),
       message: "House info updated successfully",
+    });
+  });
+
+  /** PATCH /api-v1/nearby/:id/layout — раскладка: этаж, колонка, ширина ячейки. */
+  updateApartmentLayout = asyncHandler(async (req, res) => {
+    const { floor, cellIndex, cellSpan } = req.body;
+
+    const updatedHouse = await this.updateApartmentLayoutUseCase.execute(
+      req.params.id,
+      { floor, cellIndex, cellSpan },
+      req.user
+    );
+
+    res.json({
+      success: true,
+      data: updatedHouse.toFilteredJSON(),
     });
   });
 
@@ -162,6 +180,7 @@ export class HouseController {
       house_id: req.params.house_id,
       author_id: req.user.user_id,
       comment: validate(houseCommentBodySchema, req.body).comment,
+      user: req.user,
     });
 
     res.status(201).json(newComment);
@@ -175,6 +194,7 @@ export class HouseController {
       house_id: house,
       author_id: req.user.user_id,
       comment,
+      user: req.user,
     });
 
     res.status(201).json(newComment);
@@ -240,8 +260,9 @@ export class HouseController {
     const result = await this.createEntranceCommentUseCase.execute({
       house_id: req.params.house_id,
       entrance: req.params.entrance,
-      author_id: req.user?.user_id ?? null,
+      author_id: req.user.user_id,
       comment: req.body.comment,
+      user: req.user,
     });
 
     res.status(201).json({

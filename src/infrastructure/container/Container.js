@@ -34,9 +34,12 @@ import { GetAdByIdUseCase } from "../../application/use-cases/ad/GetAdByIdUseCas
 import { CreateAdUseCase } from "../../application/use-cases/ad/CreateAdUseCase.js";
 import { UpdateAdUseCase } from "../../application/use-cases/ad/UpdateAdUseCase.js";
 import { DeleteAdUseCase } from "../../application/use-cases/ad/DeleteAdUseCase.js";
+import { MarkAdRelevantUseCase } from "../../application/use-cases/ad/MarkAdRelevantUseCase.js";
+import { ArchiveOldAdsUseCase } from "../../application/use-cases/ad/ArchiveOldAdsUseCase.js";
 
 // Use Cases - User
 import { AuthenticateUserUseCase } from "../../application/use-cases/user/AuthenticateUserUseCase.improved.js";
+import { LoginHandoffUseCase } from "../../application/use-cases/user/LoginHandoffUseCase.js";
 import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.improved.js";
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
 import { UploadAvatarUseCase } from "../../application/use-cases/user/UploadAvatarUseCase.js";
@@ -131,6 +134,7 @@ import { GetHouseInfoUseCase } from "../../application/use-cases/house/GetHouseI
 import { LinkUserToApartmentUseCase } from "../../application/use-cases/house/LinkUserToApartmentUseCase.js";
 import { UnlinkUserFromApartmentUseCase } from "../../application/use-cases/house/UnlinkUserFromApartmentUseCase.js";
 import { UpdateHouseInfoUseCase } from "../../application/use-cases/house/UpdateHouseInfoUseCase.js";
+import { UpdateApartmentLayoutUseCase } from "../../application/use-cases/house/UpdateApartmentLayoutUseCase.js";
 
 // Use Cases - TelegramChat
 import { GetTelegramChatsUseCase } from "../../application/use-cases/telegramChat/GetTelegramChatsUseCase.js";
@@ -287,13 +291,18 @@ export class Container {
       ["createAdUseCase", CreateAdUseCase, ["adRepository", "userRepository", "telegramChatRepository", "telegramService"]],
       ["updateAdUseCase", UpdateAdUseCase, ["adRepository", "telegramService", "telegramChatRepository"]],
       ["deleteAdUseCase", DeleteAdUseCase, ["adRepository", "telegramService"]],
+      ["markAdRelevantUseCase", MarkAdRelevantUseCase, ["adRepository"]],
+      // Авто-архив: дёргается крон-задачей из server.js, не через HTTP в самого себя.
+      ["archiveOldAdsUseCase", ArchiveOldAdsUseCase, ["adRepository"]],
     ]);
 
     // Use Cases - User
     this.registerMany([
       // Один SessionIssuer на все способы войти: Telegram, MAX и rotation.
-      ["sessionIssuer", SessionIssuer, ["userRepository", "tokenService", "refreshTokenRepository"]],
-      ["authenticateUserUseCase", AuthenticateUserUseCase, ["userRepository", "refreshTokenRepository", "sessionIssuer"]],
+      ["sessionIssuer", SessionIssuer, ["tokenService", "refreshTokenRepository"]],
+      ["authenticateUserUseCase", AuthenticateUserUseCase, ["userRepository", "sessionIssuer"]],
+      // Вход из Telegram-бота в браузер (`/start login_…` → claim), схема как у MAX.
+      ["loginHandoffUseCase", LoginHandoffUseCase, ["userRepository", "authenticateUserUseCase", "sessionIssuer", "authHandoffRepository"]],
       ["refreshTokenUseCase", RefreshTokenUseCase, ["userRepository", "tokenService", "refreshTokenRepository", "sessionIssuer"]],
       ["updateUserUseCase", UpdateUserUseCase, ["userRepository"]],
       ["uploadAvatarUseCase", UploadAvatarUseCase, ["userRepository"]],
@@ -322,9 +331,22 @@ export class Container {
     ]);
 
     // Controllers
-    this.registerMany([
-      ["adController", AdController, ["getAdsUseCase", "getAdByIdUseCase", "createAdUseCase", "updateAdUseCase", "deleteAdUseCase", "adRepository", "telegramService"]],
-    ]);
+    this.register(
+      "adController",
+      (container) =>
+        new AdController(
+          container.resolveAll(
+            "getAdsUseCase",
+            "getAdByIdUseCase",
+            "createAdUseCase",
+            "updateAdUseCase",
+            "deleteAdUseCase",
+            "markAdRelevantUseCase",
+            "adRepository",
+            "telegramService"
+          )
+        )
+    );
     this.register(
       "authController",
       (container) =>
@@ -339,7 +361,8 @@ export class Container {
             "userRepository",
             "tokenService",
             "authenticateMaxUserUseCase",
-            "linkPlatformUseCase"
+            "linkPlatformUseCase",
+            "loginHandoffUseCase"
           )
         )
     );
@@ -496,6 +519,7 @@ export class Container {
       ["linkUserToApartmentUseCase", LinkUserToApartmentUseCase, ["houseRepository"]],
       ["unlinkUserFromApartmentUseCase", UnlinkUserFromApartmentUseCase, ["houseRepository"]],
       ["updateHouseInfoUseCase", UpdateHouseInfoUseCase, ["houseRepository"]],
+      ["updateApartmentLayoutUseCase", UpdateApartmentLayoutUseCase, ["houseRepository"]],
     ]);
 
     // Use Cases - TelegramChat
@@ -553,6 +577,7 @@ export class Container {
             "linkUserToApartmentUseCase",
             "unlinkUserFromApartmentUseCase",
             "updateHouseInfoUseCase",
+            "updateApartmentLayoutUseCase",
             "createHouseCommentUseCase",
             "getHouseCommentsUseCase",
             "updateHouseCommentUseCase",

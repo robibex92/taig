@@ -222,21 +222,6 @@ export class RefreshTokenRepository extends IRefreshTokenRepository {
   }
 
   /**
-   * Get count of active sessions for a user
-   */
-  async countActiveForUser(userId) {
-    return await prisma.refreshToken.count({
-      where: {
-        user_id: BigInt(userId),
-        is_revoked: false,
-        expires_at: {
-          gte: new Date(),
-        },
-      },
-    });
-  }
-
-  /**
    * Get all sessions (active and revoked) for a user
    */
   async getAllForUser(userId) {

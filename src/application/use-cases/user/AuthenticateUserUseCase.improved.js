@@ -14,9 +14,8 @@ export class AuthenticateUserUseCase {
    *   вынесены в `SessionIssuer`, чтобы этот же код не был скопирован в MAX-логине
    *   и в rotation.
    */
-  constructor(userRepository, refreshTokenRepository, sessionIssuer) {
+  constructor(userRepository, sessionIssuer) {
     this.userRepository = userRepository;
-    this.refreshTokenRepository = refreshTokenRepository;
     this.sessionIssuer = sessionIssuer;
   }
 
@@ -97,48 +96,8 @@ export class AuthenticateUserUseCase {
       throw new AuthenticationError("Authentication data expired");
     }
 
-    const { id, username, first_name, last_name, photo_url } = telegramAuthData;
+    const user = await this.findOrCreateTelegramUser(telegramAuthData, deviceInfo);
 
-    // Find or create user
-    let user = await this.userRepository.findByTelegramId(id);
-
-    if (!user) {
-      // Create new user
-      user = await this.userRepository.create({
-        user_id: id,
-        telegram_id: id,
-        username: username || null,
-        first_name,
-        last_name: last_name || null,
-        avatar: photo_url || null,
-      });
-
-      logger.info("New user registered", {
-        user_id: user.user_id,
-        username: user.username,
-        ip: deviceInfo.ip,
-      });
-    } else {
-      // Update user data if not manually updated
-      if (!user.is_manually_updated || user.is_manually_updated !== "true") {
-        await this.userRepository.update(id, {
-          username: username || user.username,
-          telegram_first_name: first_name,
-          telegram_last_name: last_name || null,
-          avatar: photo_url || user.avatar,
-        });
-
-        user = await this.userRepository.findByTelegramId(id);
-      }
-
-      logger.info("User logged in", {
-        user_id: user.user_id,
-        username: user.username,
-        ip: deviceInfo.ip,
-      });
-    }
-
-    // Check if user is banned
     if (user.isBanned()) {
       logger.warn("Banned user login attempt", {
         user_id: user.user_id,
@@ -147,22 +106,8 @@ export class AuthenticateUserUseCase {
       throw new AuthenticationError("User account is banned");
     }
 
-    // Check maximum active sessions (optional, for security)
-    const activeSessionsCount =
-      await this.refreshTokenRepository.countActiveForUser(user.user_id);
-    const maxSessions = parseInt(process.env.MAX_ACTIVE_SESSIONS || "10");
-
-    if (activeSessionsCount >= maxSessions) {
-      logger.warn("Max active sessions reached", {
-        user_id: user.user_id,
-        active_sessions: activeSessionsCount,
-      });
-      // Optionally: revoke oldest session or throw error
-      // For now, we'll allow it but log the warning
-    }
-
-    // Сессия: старые refresh-токены отзываем (вход с телефона выбивает браузер —
-    // это известная политика, см. H4 в реестре рефакторинга), новую выдаёт SessionIssuer.
+    // Сессии не ограничиваем: вход на одном устройстве не выбивает остальные.
+    // Завершение — только руками пользователя (/auth/sessions) или logout.
     const session = await this.sessionIssuer.issue({
       user,
       deviceInfo,
@@ -181,5 +126,57 @@ export class AuthenticateUserUseCase {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
     };
+  }
+
+  /**
+   * Найти пользователя по Telegram-id или завести его.
+   *
+   * Вынесено из `execute`, потому что личность по Telegram-idu подтверждает не
+   * только виджет входа на сайте: `/start login_…` в боте приходит уже от
+   * Telegram, и пользователю незачем заходить вторично.
+   */
+  async findOrCreateTelegramUser(telegramAuthData, deviceInfo = {}) {
+    const { id, username, first_name, last_name, photo_url } = telegramAuthData;
+
+    let user = await this.userRepository.findByTelegramId(id);
+
+    if (!user) {
+      user = await this.userRepository.create({
+        user_id: id,
+        telegram_id: id,
+        username: username || null,
+        first_name,
+        last_name: last_name || null,
+        avatar: photo_url || null,
+      });
+
+      logger.info("New user registered", {
+        user_id: user.user_id,
+        username: user.username,
+        ip: deviceInfo.ip,
+      });
+
+      return user;
+    }
+
+    // Обновляем данные, если их не правили вручную
+    if (!user.is_manually_updated || user.is_manually_updated !== "true") {
+      await this.userRepository.update(id, {
+        username: username || user.username,
+        telegram_first_name: first_name,
+        telegram_last_name: last_name || null,
+        avatar: photo_url || user.avatar,
+      });
+
+      user = await this.userRepository.findByTelegramId(id);
+    }
+
+    logger.info("User logged in", {
+      user_id: user.user_id,
+      username: user.username,
+      ip: deviceInfo.ip,
+    });
+
+    return user;
   }
 }

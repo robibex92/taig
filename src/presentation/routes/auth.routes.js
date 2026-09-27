@@ -6,6 +6,7 @@ import {
   telegramAuthSchema,
   maxAuthSchema,
   maxClaimCodeSchema,
+  telegramClaimSchema,
   sessionIdSchema,
 } from "../../core/validation/schemas/auth.schema.js";
 import { authLimiter } from "../middlewares/securityMiddleware.js";
@@ -34,6 +35,13 @@ router.post(
   "/auth/max/claim",
   validateRequest(maxClaimCodeSchema, "body"),
   authController.claimMax
+);
+
+// Тот же хендовер для Telegram-бота: `/start login_<requestId>` → claim.
+router.post(
+  "/auth/telegram/claim",
+  validateRequest(telegramClaimSchema, "body"),
+  authController.claimTelegram
 );
 
 // Refresh token - no rate limit (handled by general limiter)

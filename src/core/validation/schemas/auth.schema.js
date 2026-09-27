@@ -76,9 +76,24 @@ export const maxClaimCodeSchema = Joi.object({
 });
 
 /**
- * Refresh token schema
+ * Обмен одноразового кода/запроса Telegram-бота на сессию браузера.
+ * Как `maxClaimCodeSchema`, но ключи хендовера другие (`tg-*`).
  */
-export const refreshTokenSchema = Joi.object({
+export const telegramClaimSchema = Joi.object({
+  code: Joi.string().trim().min(8).max(128),
+  requestId: Joi.string()
+    .pattern(/^[A-Za-z0-9_-]{8,64}$/)
+    .messages({
+      "string.pattern.base": "requestId must be 8-64 alphanumeric chars",
+    }),
+  remember_me: Joi.boolean().default(false),
+}).xor("code", "requestId").messages({
+  "object.xor": "Provide either code or requestId",
+});
+
+/**
+ * Refresh token schema
+ */export const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().trim().required().messages({
     "any.required": "Refresh token is required",
     "string.empty": "Refresh token cannot be empty",

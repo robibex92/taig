@@ -1,4 +1,10 @@
 import Joi from "joi";
+import {
+  HOUSE_CELL_INDEX_MAX,
+  HOUSE_CELL_SPAN_MAX,
+  HOUSE_FLOOR_MAX,
+  HOUSE_INFO_MAX_LENGTH,
+} from "../../constants/index.js";
 
 /**
  * Validation schemas for House operations
@@ -61,3 +67,43 @@ export const unlinkUserFromApartmentSchema = Joi.object({
   id: Joi.number().integer().positive().required(),
   id_telegram: Joi.number().integer().positive().required(),
 });
+
+/**
+ * `PATCH /nearby/:id/info` — текст информации о квартире (пустая строка очищает).
+ */
+export const updateHouseInfoSchema = Joi.object({
+  info: Joi.string().trim().max(HOUSE_INFO_MAX_LENGTH).allow("").required().messages({
+    "any.required": "Info is required",
+    "string.empty": "Info is required",
+    "string.max": `Info text cannot exceed ${HOUSE_INFO_MAX_LENGTH} characters`,
+  }),
+});
+
+/**
+ * `PATCH /nearby/:id/layout` — раскладка квартиры в сетке витрины.
+ * `cellIndex: null` возвращает квартиру в автоматическую расстановку.
+ */
+export const apartmentLayoutSchema = Joi.object({
+  floor: Joi.number().integer().min(1).max(HOUSE_FLOOR_MAX).optional().messages({
+    "number.base": "Floor must be a number",
+    "number.integer": "Floor must be a whole number",
+    "number.min": "Floor must be at least 1",
+    "number.max": `Floor cannot exceed ${HOUSE_FLOOR_MAX}`,
+  }),
+  cellIndex: Joi.number().integer().min(0).max(HOUSE_CELL_INDEX_MAX).allow(null).optional().messages({
+    "number.base": "Cell index must be a number",
+    "number.integer": "Cell index must be a whole number",
+    "number.min": "Cell index starts at 0",
+    "number.max": `Cell index cannot exceed ${HOUSE_CELL_INDEX_MAX}`,
+  }),
+  cellSpan: Joi.number().integer().min(1).max(HOUSE_CELL_SPAN_MAX).optional().messages({
+    "number.base": "Cell span must be a number",
+    "number.integer": "Cell span must be a whole number",
+    "number.min": "Cell span must be at least 1",
+    "number.max": `Cell span cannot exceed ${HOUSE_CELL_SPAN_MAX}`,
+  }),
+})
+  .or("floor", "cellIndex", "cellSpan")
+  .messages({
+    "object.missing": "Нужно указать хотя бы один параметр раскладки",
+  });

@@ -108,3 +108,8 @@ export const getAdsQuerySchema = Joi.object({
   // Search
   search: Joi.string().trim().max(200),
 });
+
+/** `/:id` в маршрутах объявлений. */
+export const adIdParamSchema = Joi.object({
+  id: Joi.number().integer().positive().required(),
+});

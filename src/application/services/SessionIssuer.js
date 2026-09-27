@@ -7,12 +7,14 @@ import { logger } from "../../core/utils/logger.js";
  *
  * До этого код жил в трёх копиях (`AuthenticateUserUseCase`,
  * `AuthenticateMaxUserUseCase.issueSession`, `RefreshTokenUseCase`), и любое
- * изменение политики сессий — например «вход на телефоне не должен выбивать
- * браузер» — требовало правки всех трёх.
+ * изменение политики сессий требовало правки всех трёх.
+ *
+ * Политика: вход на одном устройстве НЕ выбивает остальные. Каждая сессия —
+ * своя строка `refresh_tokens`; завершает их только сам пользователь
+ * (`/auth/sessions`) или logout.
  */
 export class SessionIssuer {
-  constructor(userRepository, tokenService, refreshTokenRepository) {
-    this.userRepository = userRepository;
+  constructor(tokenService, refreshTokenRepository) {
     this.tokenService = tokenService;
     this.refreshTokenRepository = refreshTokenRepository;
   }
@@ -21,24 +23,11 @@ export class SessionIssuer {
    * @param {object} user       entity пользователя
    * @param {object} deviceInfo из `tokenService.extractDeviceInfo(req)`
    * @param {boolean} rememberMe
-   * @param {boolean} revokePreviousSessions — при логине старые refresh-токены
-   *   отзывались во всех трёх копиях; при rotation этого не нужно (старый jti
-   *   отзывает вызывающий), поэтому флаг оставлен явным.
    * @returns {Promise<{user: object, accessToken: string, refreshToken: string, jti: string, expiresAt: Date}>}
    */
-  async issue({
-    user,
-    deviceInfo = {},
-    rememberMe = false,
-    revokePreviousSessions = true,
-  }) {
+  async issue({ user, deviceInfo = {}, rememberMe = false }) {
     if (user.isBanned()) {
       throw new AuthenticationError("User account is banned");
-    }
-
-    if (revokePreviousSessions) {
-      await this.refreshTokenRepository.revokeAllForUser(user.user_id);
-      await this.userRepository.clearRefreshToken(user.user_id);
     }
 
     const { accessToken, refreshToken } = this.tokenService.generateTokenPair(
@@ -76,7 +65,6 @@ export class SessionIssuer {
       user_id: user.user_id,
       jti: decodedRefresh.jti,
       remember_me: rememberMe,
-      replaced_previous: revokePreviousSessions,
     });
 
     return {

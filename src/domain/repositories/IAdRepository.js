@@ -64,18 +64,27 @@ export class IAdRepository {
   /**
    * Increment view count
    * @param {number} id - Ad ID
-   * @returns {Promise<number>}
+   * @returns {Promise<boolean>}
    */
   async incrementViewCount(id) {
     throw new Error("Method not implemented");
   }
 
   /**
-   * Archive old ads
-   * @param {number} hours - Number of hours
-   * @returns {Promise<AdEntity[]>}
+   * Сдвинуть якорь устаревания на текущий момент («объявление актуально»)
+   * @param {number} id - Ad ID
+   * @returns {Promise<{id: bigint, updatedAt: Date}>}
    */
-  async archiveOldAds(hours) {
+  async markRelevant(id) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Archive ads that stopped being relevant
+   * @param {number} days - Срок устаревания в днях
+   * @returns {Promise<number>} число переведённых в архив
+   */
+  async archiveOldAds(days) {
     throw new Error("Method not implemented");
   }
 }

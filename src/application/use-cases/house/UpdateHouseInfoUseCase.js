@@ -3,13 +3,14 @@ import {
   ForbiddenError,
   ValidationError,
 } from "../../../domain/errors/index.js";
-import { canManageHouse } from "../../../core/utils/roles.js";
+import { requireManagedApartment } from "./apartmentAccess.js";
+import { HOUSE_INFO_MAX_LENGTH } from "../../../core/constants/index.js";
 import logger from "../../../infrastructure/logger/index.js";
 
 /**
  * UpdateHouseInfoUseCase
- * Updates the info field for a specific apartment/house
- * Allowed for administrators and holders of the `house:<n>:manage` role
+ * Текст информации о квартире в реестре «Сосед, привет».
+ * Раскладка (этаж, колонка, ширина) — отдельный кейс `UpdateApartmentLayoutUseCase`.
  */
 export class UpdateHouseInfoUseCase {
   constructor(houseRepository) {
@@ -17,50 +18,43 @@ export class UpdateHouseInfoUseCase {
   }
 
   /**
-   * Execute use case
    * @param {number} houseId - House ID
-   * @param {string} info - New info text
+   * @param {string} info — новый текст (пустая строка очищает информацию)
    * @param {object} user - Current user
-   * @returns {Promise<object>} Updated house
    */
   async execute(houseId, info, user) {
-    // Validate info content
     if (info === undefined || info === null) {
       throw new ValidationError("Info field is required");
     }
 
-    // Trim and validate length
     const trimmedInfo = String(info).trim();
-    if (trimmedInfo.length > 5000) {
-      throw new ValidationError("Info text cannot exceed 5000 characters");
-    }
 
-    // Check if house exists
-    const house = await this.houseRepository.findById(houseId);
-    if (!house) {
-      throw new NotFoundError("House not found");
-    }
-
-    // Check permission for this building
-    if (!canManageHouse(user, house.house)) {
-      logger.warn("Unauthorized attempt to update house info", {
-        userId: user?.user_id,
-        houseId,
-        house: house.house,
-      });
-      throw new ForbiddenError(
-        "Only administrators and building managers can update house information"
+    if (trimmedInfo.length > HOUSE_INFO_MAX_LENGTH) {
+      throw new ValidationError(
+        `Info text cannot exceed ${HOUSE_INFO_MAX_LENGTH} characters`
       );
     }
 
-    // Update house info
-    const updatedHouse = await this.houseRepository.updateInfo(
-      houseId,
-      trimmedInfo
-    );
+    let house;
+
+    try {
+      house = await requireManagedApartment(this.houseRepository, houseId, user);
+    } catch (error) {
+      if (error instanceof ForbiddenError) {
+        logger.warn("Unauthorized attempt to update house info", {
+          userId: user?.user_id,
+          houseId,
+        });
+      }
+
+      throw error;
+    }
+
+    const updatedHouse = await this.houseRepository.updateInfo(houseId, trimmedInfo);
 
     logger.info("House info updated", {
       houseId,
+      house: house.house,
       userId: user.user_id,
       infoLength: trimmedInfo.length,
     });

@@ -58,11 +58,4 @@ export class IRefreshTokenRepository {
   async deleteExpired() {
     throw new Error("deleteExpired() must be implemented");
   }
-
-  /**
-   * Get count of active sessions for a user
-   */
-  async countActiveForUser(userId) {
-    throw new Error("countActiveForUser() must be implemented");
-  }
 }

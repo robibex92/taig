@@ -4,8 +4,13 @@ import { logger } from "../../core/utils/logger.js";
 import adRepository from "../../infrastructure/repositories/AdRepository.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 import messageRepository from "../../infrastructure/repositories/MessageRepository.js";
-import { telegramService } from "./TelegramService.js";
+import { container } from "../../infrastructure/container/Container.js";
+import { telegramService, frontendEntry } from "./TelegramService.js";
 import { messageDeliveryService } from "./MessageDeliveryService.js";
+
+/** Запрос входа с сайта: `t.me/<bot>?start=login_<requestId>`. */
+const LOGIN_PAYLOAD_PREFIX = "login_";
+const LOGIN_REQUEST_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
 // Утилита для форматирования имени отправителя
 function formatSenderName(sender) {
@@ -46,6 +51,55 @@ export class TelegramBot {
    * Setup bot message handlers
    */
   setupHandlers() {
+    // Вход на сайт по ссылке `?start=login_<requestId>` — схема как у MAX.
+    // Личность подтверждает сам Telegram: `ctx.from` пришёл из бот-апдейта,
+    // поэтому верифицировать initData или просить пароль не нужно.
+    this.bot.start(async (ctx) => {
+      const payload = ctx.payload ?? "";
+
+      if (!payload.startsWith(LOGIN_PAYLOAD_PREFIX)) {
+        return;
+      }
+
+      const requestId = payload.slice(LOGIN_PAYLOAD_PREFIX.length);
+
+      try {
+        if (!LOGIN_REQUEST_RE.test(requestId)) {
+          await ctx.reply(
+            "Ссылка входа испорчена или устарела. Начните вход на сайте заново."
+          );
+          return;
+        }
+
+        const { code } = await container
+          .resolve("loginHandoffUseCase")
+          .issueForTelegramUser(ctx.from, { requestId });
+
+        await ctx.reply(
+          "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.",
+          {
+            reply_markup: {
+              inline_keyboard: [[{ text: "Открыть сайт", url: frontendEntry(`tg_login=${code}`) }]],
+            },
+          }
+        );
+
+        logger.info("Telegram login handoff accepted", {
+          telegram_id: ctx.from.id,
+          chat_id: ctx.chat?.id,
+        });
+      } catch (error) {
+        logger.error("Failed to process Telegram login handoff", {
+          error: error.message,
+          telegram_id: ctx.from?.id,
+        });
+
+        await ctx
+          .reply("Не удалось подтвердить вход. Попробуйте ещё раз с сайта.")
+          .catch(() => {});
+      }
+    });
+
     // Handle replies to bot messages
     this.bot.on(message("text"), async (ctx) => {
       try {

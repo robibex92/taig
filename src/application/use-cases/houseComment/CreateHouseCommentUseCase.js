@@ -3,17 +3,21 @@ import {
   ValidationError,
   ForbiddenError,
 } from "../../../core/errors/AppError.js";
+import { canManageHouse } from "../../../core/utils/roles.js";
 
 /**
  * Create House Comment Use Case
- * Creates a new comment for a house (admin only)
+ * Создаёт (или заменяет) комментарий дома — видно всем, пишет тот, у кого
+ * роль `house:<номер>:manage` или `global:admin`. Тот же предикат, что и у
+ * кнопки на фронте (`HouseEntranceSelector`), иначе достаточно было POST'а
+ * с чужим номером дома.
  */
 export class CreateHouseCommentUseCase {
   constructor(houseCommentRepository) {
     this.houseCommentRepository = houseCommentRepository;
   }
 
-  async execute({ house_id, author_id, comment }) {
+  async execute({ house_id, author_id, comment, user }) {
     try {
       // Validate input
       if (!house_id || !author_id || !comment?.trim()) {
@@ -28,6 +32,12 @@ export class CreateHouseCommentUseCase {
 
       // Теперь house_id - это номер дома как строка (например, "39" или "39/1")
       const houseNumber = String(house_id);
+
+      if (!canManageHouse(user, houseNumber)) {
+        throw new ForbiddenError(
+          "You don't have permission to manage comments of this house"
+        );
+      }
 
       // Проверяем, существует ли уже комментарий для этого дома
       const existingComments = await this.houseCommentRepository.findByHouseNumber(houseNumber);

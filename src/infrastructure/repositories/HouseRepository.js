@@ -238,14 +238,32 @@ export class HouseRepository extends IHouseRepository {
   }
 
   /**
-   * Update house info field
+   * Текст информации о квартире (правит управляющий домом).
    */
   async updateInfo(id, info) {
     const house = await prisma.house.update({
       where: { id: BigInt(id) },
-      data: {
-        info: info || "",
-      },
+      data: { info: info || "" },
+    });
+
+    return House.fromDatabase(house);
+  }
+
+  /**
+   * Раскладка квартиры в сетке витрины: этаж, колонка ряда, ширина.
+   * Меняются только переданные поля; `cellIndex: null` возвращает квартиру в
+   * автоматическую расстановку по номеру.
+   */
+  async updateLayout(id, { floor, cellIndex, cellSpan }) {
+    const data = {};
+
+    if (floor !== undefined) data.floor = floor;
+    if (cellIndex !== undefined) data.cell_index = cellIndex;
+    if (cellSpan !== undefined) data.cell_span = cellSpan;
+
+    const house = await prisma.house.update({
+      where: { id: BigInt(id) },
+      data,
     });
 
     return House.fromDatabase(house);

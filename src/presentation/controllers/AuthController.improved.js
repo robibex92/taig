@@ -21,6 +21,7 @@ export class AuthController {
     tokenService,
     authenticateMaxUserUseCase,
     linkPlatformUseCase,
+    loginHandoffUseCase,
   }) {
     this.authenticateUserUseCase = authenticateUserUseCase;
     this.refreshTokenUseCase = refreshTokenUseCase;
@@ -32,6 +33,7 @@ export class AuthController {
     this.tokenService = tokenService;
     this.authenticateMaxUserUseCase = authenticateMaxUserUseCase;
     this.linkPlatformUseCase = linkPlatformUseCase;
+    this.loginHandoffUseCase = loginHandoffUseCase;
   }
 
   /**
@@ -100,6 +102,37 @@ export class AuthController {
           deviceInfo,
           rememberMe
         );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: this.tokenService.getAccessTokenExpiration(),
+      },
+    });
+  });
+
+  /**
+   * Забрать сессию, заработанную в Telegram-боте: по requestId или по code
+   * POST /api/auth/telegram/claim
+   */
+  claimTelegram = asyncHandler(async (req, res) => {
+    const { requestId, code } = req.body ?? {};
+
+    if (!requestId && !code) {
+      throw new ValidationError("Нужен login code или requestId");
+    }
+
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const rememberMe = Boolean(req.body?.remember_me);
+
+    const result = await this.loginHandoffUseCase.claim(
+      { requestId, code },
+      deviceInfo,
+      rememberMe
+    );
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

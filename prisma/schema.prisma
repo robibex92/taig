@@ -134,6 +134,11 @@ model House {
   facade_color String?
   info         String?
   position     Int?
+  /// Номер колонки в сетке «Сосед, привет» (0 — первая). null — расставить автоматически.
+  cell_index   Int?
+  /// Сколько ячеек сетки занимает квартира (null = 1).
+  /// Не путать с `position` — это индекс совладельца (1, 2, …), а не колонка.
+  cell_span    Int?
   status       Boolean?
   created_at   DateTime? @db.Timestamptz(6)
   id_telegram  Int?

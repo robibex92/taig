@@ -7,20 +7,22 @@ import { isAdmin } from "../../core/utils/roles.js";
  * Ad Controller - handles HTTP requests for ads
  */
 export class AdController {
-  constructor(
+  constructor({
     getAdsUseCase,
     getAdByIdUseCase,
     createAdUseCase,
     updateAdUseCase,
     deleteAdUseCase,
+    markAdRelevantUseCase,
     adRepository,
-    telegramService
-  ) {
+    telegramService,
+  }) {
     this.getAdsUseCase = getAdsUseCase;
     this.getAdByIdUseCase = getAdByIdUseCase;
     this.createAdUseCase = createAdUseCase;
     this.updateAdUseCase = updateAdUseCase;
     this.deleteAdUseCase = deleteAdUseCase;
+    this.markAdRelevantUseCase = markAdRelevantUseCase;
     this.adRepository = adRepository;
     this.telegramService = telegramService;
   }
@@ -154,6 +156,18 @@ export class AdController {
       success: true,
       message: "Ad deleted successfully",
     });
+  });
+
+  /**
+   * «Отметить актуальность» — продлевает срок авто-архива
+   */
+  markRelevant = asyncHandler(async (req, res) => {
+    const result = await this.markAdRelevantUseCase.execute(
+      Number(req.params.id),
+      req.user
+    );
+
+    res.json({ success: true, data: result });
   });
 
   /**

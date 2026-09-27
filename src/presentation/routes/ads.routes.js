@@ -6,6 +6,7 @@ import {
   createAdSchema,
   updateAdSchema,
   getAdsQuerySchema,
+  adIdParamSchema,
 } from "../../core/validation/schemas/ad.schema.js";
 import { createAdLimiter } from "../middlewares/securityMiddleware.js";
 const router = express.Router();
@@ -52,6 +53,14 @@ router.patch(
 );
 
 router.delete(`${BASE_PATH}/:id`, authenticateJWT, adController.deleteAd);
+
+// «Отметить актуальность»: сдвигает срок авто-архива (владелец или модератор)
+router.post(
+  `${BASE_PATH}/:id/relevant`,
+  authenticateJWT,
+  validateRequest(adIdParamSchema, "params"),
+  adController.markRelevant
+);
 
 // Permanently delete ad (only for already deleted ads)
 router.delete(

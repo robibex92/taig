@@ -65,8 +65,6 @@ export class RefreshTokenUseCase {
       user,
       deviceInfo,
       rememberMe,
-      // Старый jti уже отозван выше; остальные сессии не трогаем.
-      revokePreviousSessions: false,
     });
 
     logger.info("Access token refreshed", {

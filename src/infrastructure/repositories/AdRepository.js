@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma.js";
 import { AdEntity } from "../../domain/entities/Ad.entity.js";
 import { IAdRepository } from "../../domain/repositories/IAdRepository.js";
 import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
+import { AD_STATUS } from "../../core/constants/index.js";
 import { logger } from "../../core/utils/logger.js";
 
 /** Порядок картинок одного объявления: главное фото первым. */
@@ -413,17 +414,19 @@ export class AdRepository extends IAdRepository {
 
   /**
    * Increment view count
+   *
+   * Сырым запросом, а не `ad.update`: `updated_at` помечен `@updatedAt`, и
+   * инкремент на каждом просмотре сдвигал бы время правки. А он же — якорь
+   * авто-архива (`archiveOldAds`), так что популярное объявление не устаревало бы никогда.
    */
   async incrementViewCount(id) {
     try {
-      await prisma.ad.update({
-        where: { id: BigInt(id) },
-        data: {
-          view_count: {
-            increment: 1,
-          },
-        },
-      });
+      await prisma.$executeRaw`
+        UPDATE ads
+        SET view_count = COALESCE(view_count, 0) + 1
+        WHERE id = ${BigInt(id)}
+      `;
+
       return true;
     } catch (error) {
       logger.error("Error incrementing view count", {
@@ -431,6 +434,58 @@ export class AdRepository extends IAdRepository {
         id,
       });
       return false;
+    }
+  }
+
+  /**
+   * «Отметить актуальность»: сдвигает якорь устаревания на текущий момент.
+   * Только `updated_at` — статус и остальные поля не трогаем.
+   */
+  async markRelevant(id) {
+    try {
+      const updated = await prisma.ad.update({
+        where: { id: BigInt(id) },
+        data: { updated_at: new Date() },
+        select: { id: true, updated_at: true },
+      });
+
+      return { id: updated.id, updatedAt: updated.updated_at };
+    } catch (error) {
+      if (error.code === "P2025") {
+        throw new NotFoundError("Ad");
+      }
+      logger.error("Error marking ad relevant", { error: error.message, id });
+      throw new DatabaseError("Failed to mark ad relevant", error);
+    }
+  }
+
+  /**
+   * Авто-архив устаревших объявлений.
+   *
+   * Срок отсчитывается от последней правки (`updated_at`), а у строки без
+   * правок — от `created_at`. Возвращает число переведённых в архив.
+   */
+  async archiveOldAds(days) {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    try {
+      const result = await prisma.ad.updateMany({
+        where: {
+          status: AD_STATUS.ACTIVE,
+          OR: [
+            { updated_at: { lt: cutoff } },
+            { updated_at: null, created_at: { lt: cutoff } },
+          ],
+        },
+        data: { status: AD_STATUS.ARCHIVE },
+      });
+
+      logger.info("Old ads archived", { count: result.count, cutoff });
+
+      return result.count;
+    } catch (error) {
+      logger.error("Error archiving old ads", { error: error.message });
+      throw new DatabaseError("Failed to archive old ads", error);
     }
   }
 

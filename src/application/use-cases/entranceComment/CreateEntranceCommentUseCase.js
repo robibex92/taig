@@ -1,14 +1,15 @@
 import {
+  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from "../../../core/errors/AppError.js";
+import { canManageHouse } from "../../../core/utils/roles.js";
 
 /**
  * Create Entrance Comment Use Case
- * Creates a new comment for a house entrance
  *
- * Права на запись здесь не проверяются — как и раньше, это открыто любому
- * вошедшему (гэйт по `house:<n>:manage` — отдельное решение, см. H6.2).
+ * Право на запись — `house:<номер>:manage` (или `global:admin`), тот же
+ * предикат, что фильтрует кнопку на фронте.
  */
 export class CreateEntranceCommentUseCase {
   constructor(entranceCommentRepository, houseRepository) {
@@ -16,7 +17,7 @@ export class CreateEntranceCommentUseCase {
     this.houseRepository = houseRepository;
   }
 
-  async execute({ house_id, entrance, author_id, comment }) {
+  async execute({ house_id, entrance, author_id, comment, user }) {
     const text = String(comment ?? "").trim();
     const entranceNumber = Number(entrance);
 
@@ -34,6 +35,12 @@ export class CreateEntranceCommentUseCase {
 
     if (text.length > 1000) {
       throw new ValidationError("Comment cannot exceed 1000 characters");
+    }
+
+    if (!canManageHouse(user, house_id)) {
+      throw new ForbiddenError(
+        "You don't have permission to manage comments of this house"
+      );
     }
 
     const house = await this.houseRepository.findByHouseNumber(house_id);

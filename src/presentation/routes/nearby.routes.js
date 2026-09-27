@@ -4,6 +4,12 @@ import {
   authenticateJWT,
   authenticateOptional,
 } from "../middlewares/authMiddleware.js";
+import { validateRequest } from "../../core/validation/validator.js";
+import {
+  apartmentLayoutSchema,
+  houseIdParamSchema,
+  updateHouseInfoSchema,
+} from "../../core/validation/schemas/house.schema.js";
 
 const router = express.Router();
 const houseController = container.resolve("houseController");
@@ -71,13 +77,28 @@ router.post(
 
 /**
  * @route   PATCH /nearby/:id/info
- * @desc    Update house info (admin only)
- * @access  Private (Admin only)
+ * @desc    Текст информации о квартире
+ * @access  Private (управляющий домом)
  */
 router.patch(
   "/nearby/:id/info",
   authenticateJWT,
+  validateRequest(houseIdParamSchema, "params"),
+  validateRequest(updateHouseInfoSchema, "body"),
   houseController.updateHouseInfo
+);
+
+/**
+ * @route   PATCH /nearby/:id/layout
+ * @desc    Раскладка квартиры в сетке: этаж, колонка ряда, ширина ячейки
+ * @access  Private (управляющий домом)
+ */
+router.patch(
+  "/nearby/:id/layout",
+  authenticateJWT,
+  validateRequest(houseIdParamSchema, "params"),
+  validateRequest(apartmentLayoutSchema, "body"),
+  houseController.updateApartmentLayout
 );
 
 // ================== HOUSE COMMENTS ==================

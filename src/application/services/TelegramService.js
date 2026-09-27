@@ -20,6 +20,14 @@ const frontendBase = () =>
 export const frontendLink = (page) => `${frontendBase()}/#${page}`;
 
 /**
+ * Вход на сайт с query-параметром: `?tg_login=<код>`.
+ *
+ * Не через `/#/…`: код читается до монтирования роутера (HashRouter положил бы
+ * его внутрь хэша, и маршрутизация перестала бы совпадать с путём).
+ */
+export const frontendEntry = (query) => `${frontendBase()}/?${query}`;
+
+/**
  * Centralized Telegram Service
  * Handles all Telegram API interactions with queue management
  */

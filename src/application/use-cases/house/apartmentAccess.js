@@ -1,5 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../../core/errors/AppError.js";
-import { isAdmin } from "../../../core/utils/roles.js";
+import { canManageHouse, isAdmin } from "../../../core/utils/roles.js";
 
 const toNumber = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -60,4 +60,25 @@ export function assertApartmentBelongsTo(houseRow, subjectIdTelegram, user) {
   }
 
   return current;
+}
+
+/**
+ * Право управляющего над конкретной квартирой реестра.
+ *
+ * Запись должна существовать, а пользователю нужна роль `house:<номер>:manage`
+ * (или `global:admin`) — тот же предикат, что гейтит кнопки на фронте. Возвращает
+ * найденную запись, чтобы вызывающему не пришлось искать её второй раз.
+ */
+export async function requireManagedApartment(houseRepository, houseId, user) {
+  const house = await houseRepository.findById(houseId);
+
+  if (!house) {
+    throw new NotFoundError("Квартира не найдена");
+  }
+
+  if (!canManageHouse(user, house.house)) {
+    throw new ForbiddenError("Только управляющие домом могут это менять");
+  }
+
+  return house;
 }

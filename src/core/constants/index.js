@@ -33,10 +33,43 @@ export const AD_STATUS = {
   DELETED: "deleted",
 };
 
+/** Срок, после которого объявление считается устаревшим, если не задан env. */
+export const AD_LIFETIME_DEFAULT_DAYS = 30;
+
+/**
+ * Срок устаревания объявления в днях (`AD_LIFETIME_DAYS`).
+ *
+ * Отсчёт идёт от последней правки (`ads.updated_at`), а у объявления без правок —
+ * от `created_at`. «Отметить актуальность» на фронте просто сдвигает этот якорь.
+ */
+export const adLifetimeDays = () => {
+  const configured = Number(process.env.AD_LIFETIME_DAYS);
+
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : AD_LIFETIME_DEFAULT_DAYS;
+};
+
+/** Момент, когда объявление устареет, если его «актуальность» отсчитывается от `from`. */
+export const adExpiresAt = (from = new Date(), days = adLifetimeDays()) =>
+  new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+
 export const TOKEN_TYPES = {
   ACCESS: "access",
   REFRESH: "refresh",
 };
+
+/** Максимум ячеек, который может занять квартира в сетке «Сосед, привет». */
+export const HOUSE_CELL_SPAN_MAX = 6;
+
+/** Потолок номера колонки в ряду — страховка от мусора в запросе, не смысл витрины. */
+export const HOUSE_CELL_INDEX_MAX = 60;
+
+/** Потолок этажа при правке раскладки — страховка от мусора в запросе. */
+export const HOUSE_FLOOR_MAX = 99;
+
+/** Длина текста информации о квартире в реестре. */
+export const HOUSE_INFO_MAX_LENGTH = 5000;
 
 export const PAGINATION = {
   DEFAULT_PAGE: 1,

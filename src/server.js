@@ -9,6 +9,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
+import cron from "node-cron";
 import swaggerUi from "swagger-ui-express";
 
 // Core
@@ -280,10 +281,33 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   }
 });
 
+// ================== Cron Jobs ==================
+
+/**
+ * Авто-архив устаревших объявлений — дважды в сутки.
+ *
+ * Прежняя задача обращалась по HTTP к `/api/ads/archive-old`, которого в
+ * маршрутах никогда не было, поэтому авто-архив не работал никогда. Теперь
+ * кейс вызывается напрямую. `updateMany` идемпотентен, так что несколько
+ * инстансов PM2 в один момент времени не испортят данные.
+ */
+const archiveOldAdsJob = databaseConnected
+  ? cron.schedule("0 */12 * * *", async () => {
+      try {
+        const { archived, days } = await container
+          .resolve("archiveOldAdsUseCase")
+          .execute();
+
+        logger.info("Cron: outdated ads archived", { archived, days });
+      } catch (err) {
+        logger.error("Cron: auto-archive failed", { error: err.message });
+      }
+    })
+  : null;
+
 // ================== Graceful Shutdown ==================
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
-
 /** Останавливаем сервис и только потом закрываем HTTP: иначе обрыв на живых запросах. */
 const stopStep = async (label, stop) => {
   try {
@@ -308,6 +332,7 @@ const gracefulShutdown = async (signal) => {
   watchdog.unref();
 
   await stopStep("Telegram bot", () => telegramBot.stop());
+  await stopStep("cron jobs", async () => archiveOldAdsJob?.stop());
   // Поллер MAX держит long-polling-запрос /updates — без остановки процесс не завершится.
   await stopStep("MAX bot poller", () =>
     container.resolve("maxBotUpdatePoller").stop()
