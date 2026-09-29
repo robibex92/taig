@@ -12,6 +12,7 @@ import {
   resolveChatTargets,
   sleep,
 } from "./adPublishing.js";
+import { publishToMaxChats, removeAdFromMaxChats } from "./maxAdPublishing.js";
 
 /** Telegram не даёт править сообщение старше двух суток — такое только переопубликовывается. */
 const MAX_EDITABLE_AGE_HOURS = 48;
@@ -19,14 +20,23 @@ const MAX_EDITABLE_AGE_HOURS = 48;
 /**
  * Use case for updating an ad
  *
- * Публикацией и снятием сообщений занимается `adPublishing.js`; здесь остаётся
- * решение «что сделать» по статусу и по выбранному режиму обновления.
+ * Публикацией и снятием сообщений занимается `adPublishing.js` (Telegram) и
+ * `maxAdPublishing.js` (MAX); здесь остаётся решение «что сделать» по статусу и
+ * по выбранному режиму обновления.
  */
 export class UpdateAdUseCase {
-  constructor(adRepository, telegramService, telegramChatRepository) {
+  constructor(
+    adRepository,
+    telegramService,
+    telegramChatRepository,
+    maxService,
+    maxChatRepository
+  ) {
     this.adRepository = adRepository;
     this.telegramService = telegramService;
     this.telegramChatRepository = telegramChatRepository;
+    this.maxService = maxService;
+    this.maxChatRepository = maxChatRepository;
   }
 
   async execute(
@@ -34,7 +44,8 @@ export class UpdateAdUseCase {
     updateData,
     authenticatedUserId,
     telegramUpdateType = null,
-    selectedChats = []
+    selectedChats = [],
+    selectedMaxChats = []
   ) {
     const ad = await this.adRepository.findById(adId);
 
@@ -76,16 +87,34 @@ export class UpdateAdUseCase {
           reason: newStatus,
         });
       });
+
+      await this.#tryMax(newStatus, adId, async () => {
+        const messages = await this.adRepository.getMaxMessagesByAdId(adId);
+
+        if (!messages.length) return;
+
+        await removeAdFromMaxChats({
+          messages,
+          maxService: this.maxService,
+          adRepository: this.adRepository,
+          adId,
+          reason: newStatus,
+        });
+      });
     }
 
     if (telegramUpdateType === "delete_and_repost") {
       await this.#tryTelegram("delete_and_repost", adId, () =>
         this.#repost(adId, selectedChats)
       );
+      await this.#tryMax("max repost", adId, () => this.#repostMax(adId, selectedMaxChats));
     } else if (telegramUpdateType === "update_text") {
       await this.#tryTelegram("update_text", adId, () =>
         this.#editOrRepost(adId, updatedAd, selectedChats)
       );
+      // Правки текста у MAX не проверяли живьём, поэтому обновление текста —
+      // всегда снял старое и опубликовал заново.
+      await this.#tryMax("max update_text", adId, () => this.#repostMax(adId, selectedMaxChats));
     }
 
     return updatedAd;
@@ -214,5 +243,70 @@ export class UpdateAdUseCase {
       // Не пробрасываем: объявление уже сохранено, и сбой Telegram не должен
       // выглядеть для пользователя как несохранившаяся правка.
     }
+  }
+
+  /** То же правило для MAX: сбой бота не превращает сохранённую правку в ошибку. */
+  async #tryMax(step, adId, operation) {
+    try {
+      await operation();
+    } catch (err) {
+      logger.error("Failed to handle MAX updates", {
+        ad_id: adId,
+        step,
+        error: err.message,
+        stack: err.stack,
+      });
+    }
+  }
+
+  /**
+   * Repost в MAX: снимаем прежние сообщения и публикуем заново — в выбранные
+   * чаты, а если пользователь ничего не выбрал, в те же, где объявление уже
+   * лежало (их даёт журнал).
+   */
+  async #repostMax(adId, selectedMaxChats) {
+    const messages = await this.adRepository.getMaxMessagesByAdId(adId);
+    const chats = await this.#resolveMaxTargets(adId, selectedMaxChats, messages);
+
+    if (chats.length === 0) {
+      logger.info("No MAX chats to update, skipping", { ad_id: adId });
+      return;
+    }
+
+    if (messages.length > 0) {
+      await removeAdFromMaxChats({
+        messages,
+        maxService: this.maxService,
+        adRepository: this.adRepository,
+        adId,
+        reason: "repost",
+      });
+    }
+
+    const refreshedAd = await this.adRepository.findById(adId);
+
+    if (!refreshedAd) {
+      throw new Error("Failed to load refreshed ad");
+    }
+
+    await publishToMaxChats({
+      ad: refreshedAd,
+      chats,
+      maxService: this.maxService,
+      adRepository: this.adRepository,
+    });
+  }
+
+  async #resolveMaxTargets(adId, selectedMaxChats, messages) {
+    if (selectedMaxChats?.length > 0) {
+      const active = await this.maxChatRepository.getActiveChats("ads", false);
+      const chosen = new Set(selectedMaxChats.map(String));
+
+      return active
+        .filter((chat) => chosen.has(String(chat.id)))
+        .map((chat) => ({ chat_id: chat.chat_id }));
+    }
+
+    return messages.map((message) => ({ chat_id: message.chat_id }));
   }
 }

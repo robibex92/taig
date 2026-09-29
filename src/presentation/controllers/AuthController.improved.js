@@ -20,6 +20,7 @@ export class AuthController {
     userRepository,
     tokenService,
     authenticateMaxUserUseCase,
+    authenticateTelegramWebAppUseCase,
     linkPlatformUseCase,
     loginHandoffUseCase,
   }) {
@@ -32,6 +33,7 @@ export class AuthController {
     this.userRepository = userRepository;
     this.tokenService = tokenService;
     this.authenticateMaxUserUseCase = authenticateMaxUserUseCase;
+    this.authenticateTelegramWebAppUseCase = authenticateTelegramWebAppUseCase;
     this.linkPlatformUseCase = linkPlatformUseCase;
     this.loginHandoffUseCase = loginHandoffUseCase;
   }
@@ -74,6 +76,45 @@ export class AuthController {
     };
 
     res.status(HTTP_STATUS.OK).json(responseData);
+  });
+
+  /**
+   * Вход из Telegram Mini App (подпись `tgWebAppData`)
+   * POST /api/auth/telegram/webapp
+   */
+  authenticateTelegramWebApp = asyncHandler(async (req, res) => {
+    const initData = req.body?.initData;
+
+    if (!initData) {
+      throw new ValidationError("Telegram Mini App initData is required");
+    }
+
+    const deviceInfo = this.tokenService.extractDeviceInfo(req);
+    const rememberMe = Boolean(req.body?.remember_me);
+
+    const requestId =
+      typeof req.body?.requestId === "string" &&
+      /^[A-Za-z0-9_-]{8,64}$/.test(req.body.requestId)
+        ? req.body.requestId
+        : null;
+
+    const result = await this.authenticateTelegramWebAppUseCase.execute(
+      initData,
+      { requestId },
+      deviceInfo,
+      rememberMe
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        loginCode: result.loginCode || null,
+        expiresIn: this.tokenService.getAccessTokenExpiration(),
+      },
+    });
   });
 
   /**

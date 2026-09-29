@@ -619,6 +619,32 @@ export class AdRepository extends IAdRepository {
   }
 
   /**
+   * Журнал публикации в MAX (`max_ad_messages`): одна строка на чат.
+   * Нужен, чтобы repost и архивация снимали именно те сообщения, которые бот
+   * оставлял, а не угадывали их.
+   */
+  async createMaxMessage({ ad_id, chat_id, message_id }) {
+    return await prisma.maxAdMessage.create({
+      data: {
+        ad_id: BigInt(ad_id),
+        chat_id: BigInt(chat_id),
+        message_id: String(message_id),
+      },
+    });
+  }
+
+  async getMaxMessagesByAdId(adId) {
+    return await prisma.maxAdMessage.findMany({
+      where: { ad_id: BigInt(adId) },
+      orderBy: { created_at: "asc" },
+    });
+  }
+
+  async deleteMaxMessagesByAdId(adId) {
+    await prisma.maxAdMessage.deleteMany({ where: { ad_id: BigInt(adId) } });
+  }
+
+  /**
    * Permanently delete an ad (hard delete)
    */
   async permanentDelete(id) {
@@ -630,6 +656,9 @@ export class AdRepository extends IAdRepository {
 
       // Delete all telegram messages
       await this.deleteTelegramMessagesByAdId(id);
+
+      // Messages the ad left in MAX chats
+      await this.deleteMaxMessagesByAdId(id);
 
       // Delete the ad
       await prisma.ad.delete({

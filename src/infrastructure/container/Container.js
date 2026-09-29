@@ -26,6 +26,7 @@ import { CarImageUploadService } from "../../application/services/CarImageUpload
 
 // Services - MAX Bot (инфраструктурный HTTP-клиент + сборщик входящих)
 import { maxBotService } from "../services/MaxBotService.js";
+import { MaxChatRepository } from "../repositories/MaxChatRepository.js";
 import { MaxBotUpdatePoller } from "../services/MaxBotUpdatePoller.js";
 
 // Use Cases - Ad
@@ -39,6 +40,15 @@ import { ArchiveOldAdsUseCase } from "../../application/use-cases/ad/ArchiveOldA
 
 // Use Cases - User
 import { AuthenticateUserUseCase } from "../../application/use-cases/user/AuthenticateUserUseCase.improved.js";
+import {
+  GetMaxChatsUseCase,
+  CreateMaxChatUseCase,
+  UpdateMaxChatUseCase,
+  DeleteMaxChatUseCase,
+  LookupMaxChatUseCase,
+} from "../../application/use-cases/maxChat/MaxChatAdminUseCases.js";
+import { MaxChatController } from "../../presentation/controllers/MaxChatController.js";
+import { AuthenticateTelegramWebAppUseCase } from "../../application/use-cases/user/AuthenticateTelegramWebAppUseCase.js";
 import { LoginHandoffUseCase } from "../../application/use-cases/user/LoginHandoffUseCase.js";
 import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.improved.js";
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
@@ -264,6 +274,8 @@ export class Container {
       ["houseRepository", HouseRepository, []],
       ["refreshTokenRepository", RefreshTokenRepository, []],
       ["telegramChatRepository", TelegramChatRepository, []],
+      // Реестр MAX-чатов (K4): по той же схеме, что telegram_chats.
+      ["maxChatRepository", MaxChatRepository, []],
       ["houseCommentRepository", HouseCommentRepository, []],
       ["entranceCommentRepository", EntranceCommentRepository, []],
       ["authHandoffRepository", AuthHandoffRepository, []],
@@ -289,8 +301,8 @@ export class Container {
     this.registerMany([
       ["getAdsUseCase", GetAdsUseCase, ["adRepository"]],
       ["getAdByIdUseCase", GetAdByIdUseCase, ["adRepository"]],
-      ["createAdUseCase", CreateAdUseCase, ["adRepository", "userRepository", "telegramChatRepository", "telegramService"]],
-      ["updateAdUseCase", UpdateAdUseCase, ["adRepository", "telegramService", "telegramChatRepository"]],
+      ["createAdUseCase", CreateAdUseCase, ["adRepository", "userRepository", "telegramChatRepository", "telegramService", "maxChatRepository", "maxBotService"]],
+      ["updateAdUseCase", UpdateAdUseCase, ["adRepository", "telegramService", "telegramChatRepository", "maxBotService", "maxChatRepository"]],
       ["deleteAdUseCase", DeleteAdUseCase, ["adRepository", "telegramService"]],
       ["markAdRelevantUseCase", MarkAdRelevantUseCase, ["adRepository"]],
       // Авто-архив: дёргается крон-задачей из server.js, не через HTTP в самого себя.
@@ -302,6 +314,12 @@ export class Container {
       // Один SessionIssuer на все способы войти: Telegram, MAX и rotation.
       ["sessionIssuer", SessionIssuer, ["tokenService", "refreshTokenRepository"]],
       ["authenticateUserUseCase", AuthenticateUserUseCase, ["userRepository", "sessionIssuer"]],
+      // Вход из Telegram Mini App: подпись `tgWebAppData`, проверка токеном этого бота.
+      [
+        "authenticateTelegramWebAppUseCase",
+        AuthenticateTelegramWebAppUseCase,
+        ["authenticateUserUseCase", "sessionIssuer", "authHandoffRepository"],
+      ],
       // Вход из Telegram-бота в браузер (`/start login_…` → claim), схема как у MAX.
       ["loginHandoffUseCase", LoginHandoffUseCase, ["userRepository", "authenticateUserUseCase", "sessionIssuer", "authHandoffRepository"]],
       ["refreshTokenUseCase", RefreshTokenUseCase, ["userRepository", "tokenService", "refreshTokenRepository", "sessionIssuer"]],
@@ -362,6 +380,7 @@ export class Container {
             "userRepository",
             "tokenService",
             "authenticateMaxUserUseCase",
+            "authenticateTelegramWebAppUseCase",
             "linkPlatformUseCase",
             "loginHandoffUseCase"
           )
@@ -570,6 +589,12 @@ export class Container {
 
     // Controllers - TelegramChat
     this.registerMany([
+      // Реестр MAX-чатов: CRUD админки + проверка чата по id в MAX.
+      ["getMaxChatsUseCase", GetMaxChatsUseCase, ["maxChatRepository"]],
+      ["createMaxChatUseCase", CreateMaxChatUseCase, ["maxChatRepository"]],
+      ["updateMaxChatUseCase", UpdateMaxChatUseCase, ["maxChatRepository"]],
+      ["deleteMaxChatUseCase", DeleteMaxChatUseCase, ["maxChatRepository"]],
+      ["lookupMaxChatUseCase", LookupMaxChatUseCase, ["maxChatRepository", "maxBotService"]],
       ["telegramChatController", TelegramChatController, ["getTelegramChatsUseCase", "createTelegramChatUseCase", "updateTelegramChatUseCase", "deleteTelegramChatUseCase", "toggleTelegramChatActiveUseCase"]],
     ]);
 
@@ -632,6 +657,22 @@ export class Container {
 
     // Services - MAX Bot
     this.register("maxBotService", () => maxBotService);
+
+    // Реестр MAX-чатов: контроллер собирается объектом зависимостей (как authController),
+    // поэтому отдельно от registerMany — тот вызывает `new Factory(...)`.
+    this.register(
+      "maxChatController",
+      (container) =>
+        new MaxChatController(
+          container.resolveAll(
+            "getMaxChatsUseCase",
+            "createMaxChatUseCase",
+            "updateMaxChatUseCase",
+            "deleteMaxChatUseCase",
+            "lookupMaxChatUseCase"
+          )
+        )
+    );
 
     // Сборщик входящих сообщений (long polling /updates). Стартуется из server.js,
     // Singleton — чтобы статус polling в админке показывал реальный цикл.

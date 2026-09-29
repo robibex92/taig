@@ -1,6 +1,7 @@
 import { AuthorizationError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/utils/logger.js";
 import { publishToChats } from "./adPublishing.js";
+import { publishToMaxChats } from "./maxAdPublishing.js";
 
 /**
  * Use case for creating a new ad
@@ -10,15 +11,19 @@ export class CreateAdUseCase {
     adRepository,
     userRepository,
     telegramChatRepository,
-    telegramService
+    telegramService,
+    maxChatRepository,
+    maxService
   ) {
     this.adRepository = adRepository;
     this.userRepository = userRepository;
     this.telegramChatRepository = telegramChatRepository;
     this.telegramService = telegramService;
+    this.maxChatRepository = maxChatRepository;
+    this.maxService = maxService;
   }
 
-  async execute(adData, authenticatedUserId, selectedChats = []) {
+  async execute(adData, authenticatedUserId, selectedChats = [], selectedMaxChats = []) {
     // Verify user exists and is active
     const user = await this.userRepository.findById(adData.user_id);
 
@@ -55,7 +60,51 @@ export class CreateAdUseCase {
       await this.#publishToSelectedChats(ad, selectedChats);
     }
 
+    if (selectedMaxChats && selectedMaxChats.length > 0) {
+      await this.#publishToSelectedMaxChats(ad, selectedMaxChats);
+    }
+
     return ad;
+  }
+
+  /**
+   * MAX-часть дублирования: те же выбранные автором чаты, но список другой
+   * таблицы. Пустой список — ничего не пробуем отправить (MAX может быть совсем
+   * не настроен). Сбой MAX, как и сбой Telegram, объявление не отменяет.
+   */
+  async #publishToSelectedMaxChats(ad, selectedMaxChats) {
+    try {
+      const allAdsChats = await this.maxChatRepository.getActiveChats("ads", false);
+      const chosen = new Set(selectedMaxChats.map(String));
+      const chats = allAdsChats
+        .filter((chat) => chosen.has(String(chat.id)))
+        .map((chat) => ({ chat_id: chat.chat_id }));
+
+      if (!chats.length) {
+        logger.warn("No matching MAX chats for publication", {
+          ad_id: ad.id,
+          selected_max_chats: selectedMaxChats,
+          available_chats: allAdsChats.map((chat) => ({
+            id: chat.id,
+            chat_id: chat.chat_id,
+            name: chat.name,
+          })),
+        });
+        return;
+      }
+
+      await publishToMaxChats({
+        ad,
+        chats,
+        maxService: this.maxService,
+        adRepository: this.adRepository,
+      });
+    } catch (err) {
+      logger.error("Error publishing ad to MAX", {
+        ad_id: ad.id,
+        error: err.message,
+      });
+    }
   }
 
   /**

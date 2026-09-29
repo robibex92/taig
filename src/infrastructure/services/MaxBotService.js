@@ -256,29 +256,21 @@ export class MaxBotService {
   }
 
   /**
-   * Отправка текста пользователю.
-   * @returns {Promise<{ok: true, message_id: string|null} | {ok: false, skipped: boolean, error: string, code: string|null}>}
-   *   `skipped: true` — у пользователя нет диалога с ботом (норма для большинства жителей).
+   * Один ответ `/messages` и для личного диалога, и для чата: MAX возвращает id
+   * сообщения в `payload.message_ids[0].message_id`, исторически встречались и
+   * `{ result: ... }`, и плоский JSON — разбираем все три варианта.
+   *
+   * @param {{user_id?: string, chat_id?: string}} query
+   * @param {string} text
    */
-  async sendMessage(maxUserId, text) {
-    const userId = String(maxUserId ?? "").trim();
-
-    if (!userId) {
-      return { ok: false, skipped: true, error: "У пользователя нет MAX ID", code: "no.max_id" };
-    }
-    if (typeof text !== "string" || !text.trim()) {
-      return { ok: false, skipped: false, error: "Пустой текст сообщения", code: "empty.text" };
-    }
-
+  async _postMessage(query, text) {
     try {
       const payload = await this.request("/messages", {
         method: "POST",
-        query: { user_id: userId },
+        query,
         body: { text },
       });
 
-      // MAX заворачивает ответы в `{ payload: ... }`, исторически встречались и
-      // `{ result: ... }`, и плоский JSON — разбираем все три варианта.
       const result = payload?.result ?? payload?.payload ?? payload ?? {};
       const messageId =
         result.message_ids?.[0]?.message_id ??
@@ -308,6 +300,94 @@ export class MaxBotService {
         code: err?.code ?? null,
       };
     }
+  }
+
+  /**
+   * Отправка текста в чат (`POST /messages?chat_id=`).
+   *
+   * В отличие от личного диалога отсутствие чата — это не норма, а ошибка
+   * конфига реестра: бот либо выведен из чата, либо id введан неверно.
+   */
+  async sendChatMessage(chatId, text) {
+    const id = String(chatId ?? "").trim();
+
+    if (!id) {
+      return { ok: false, skipped: false, error: "Не указан chat_id", code: "no.chat_id" };
+    }
+
+    if (typeof text !== "string" || !text.trim()) {
+      return { ok: false, skipped: false, error: "Пустой текст сообщения", code: "empty.text" };
+    }
+
+    return this._postMessage({ chat_id: id }, text);
+  }
+
+  /**
+   * Справка о чате по id — используется админкой, чтобы добавить чат не вслепую,
+   * а с проверкой: `GET /chats/{chat_id}` отвечает `chat.not.found`, если id
+   * ошибочен или бот в чат не добавлен.
+   */
+  async getChat(chatId) {
+    const id = String(chatId ?? "").trim();
+
+    if (!id) {
+      throw new MaxBotApiError("Не указан chat_id");
+    }
+
+    const payload = await this.request(`/chats/${id}`);
+    const chat = payload?.payload ?? payload?.result ?? payload ?? {};
+
+    return {
+      chat_id: String(chat.chat_id ?? id),
+      title: chat.title ?? chat.name ?? null,
+      type: chat.type ?? chat.chat_type ?? null,
+      members_count: chat.members_count ?? chat.members ?? null,
+      link: chat.link ?? null,
+    };
+  }
+
+  /**
+   * Удаление сообщения (снятие публикации при архивации и repost'е).
+   *
+   * ВАЖНО: `message_id` — это query-параметр (`DELETE /messages?message_id=…`),
+   * а не часть пути: путь `/messages/{id}` у MAX не описан.
+   */
+  async deleteMessage(messageId) {
+    const id = String(messageId ?? "").trim();
+
+    if (!id) {
+      return { ok: false, error: "Не указан message_id", code: "no.message_id" };
+    }
+
+    try {
+      await this.request("/messages", { method: "DELETE", query: { message_id: id } });
+
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err?.message || "Ошибка MAX API",
+        code: err?.code ?? null,
+      };
+    }
+  }
+
+  /**
+   * Отправка текста пользователю.
+   * @returns {Promise<{ok: true, message_id: string|null} | {ok: false, skipped: boolean, error: string, code: string|null}>}
+   *   `skipped: true` — у пользователя нет диалога с ботом (норма для большинства жителей).
+   */
+  async sendMessage(maxUserId, text) {
+    const userId = String(maxUserId ?? "").trim();
+
+    if (!userId) {
+      return { ok: false, skipped: true, error: "У пользователя нет MAX ID", code: "no.max_id" };
+    }
+    if (typeof text !== "string" || !text.trim()) {
+      return { ok: false, skipped: false, error: "Пустой текст сообщения", code: "empty.text" };
+    }
+
+    return this._postMessage({ user_id: userId }, text);
   }
 
   /**

@@ -57,6 +57,7 @@ import eventsRoutes from "./presentation/routes/events.routes.js";
 import parkingRoutes from "./presentation/routes/parking.routes.js";
 import favoritesRoutes from "./presentation/routes/favorites.routes.js";
 import maxBotRoutes from "./presentation/routes/maxBot.routes.js";
+import maxChatRoutes from "./presentation/routes/maxChatRoutes.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
@@ -184,6 +185,8 @@ app.use("/api/telegram-chats", telegramChatRoutes);
 app.use("/api/admin", adminRoutes);
 // Вкладка админки «MAX-бот»: рассылки, входящие от жителей, настройка webhook
 app.use("/api/admin/max-bot", maxBotRoutes);
+// Реестр MAX-чатов, в которые бот дублирует объявления (K4).
+app.use("/api/max-chats", maxChatRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/favorites", favoritesRoutes);
 

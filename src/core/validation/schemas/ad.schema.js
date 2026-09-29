@@ -57,6 +57,10 @@ export const createAdSchema = Joi.object({
   selectedChats: Joi.array()
     .items(Joi.number().integer().positive())
     .default([]),
+  // Внутренние id записей реестра `max_chats`, не chat_id чата.
+  selectedMaxChats: Joi.array()
+    .items(Joi.number().integer().positive())
+    .default([]),
 });
 
 export const updateAdSchema = Joi.object({
@@ -80,6 +84,9 @@ export const updateAdSchema = Joi.object({
     .optional(),
   isTelegram: Joi.boolean().optional(),
   selectedChats: Joi.array()
+    .items(Joi.number().integer().positive())
+    .optional(),
+  selectedMaxChats: Joi.array()
     .items(Joi.number().integer().positive())
     .optional(),
   telegramUpdateType: Joi.string()
