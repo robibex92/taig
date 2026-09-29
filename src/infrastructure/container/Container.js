@@ -48,7 +48,6 @@ import {
   LookupMaxChatUseCase,
 } from "../../application/use-cases/maxChat/MaxChatAdminUseCases.js";
 import { MaxChatController } from "../../presentation/controllers/MaxChatController.js";
-import { AuthenticateTelegramWebAppUseCase } from "../../application/use-cases/user/AuthenticateTelegramWebAppUseCase.js";
 import { LoginHandoffUseCase } from "../../application/use-cases/user/LoginHandoffUseCase.js";
 import { RefreshTokenUseCase } from "../../application/use-cases/user/RefreshTokenUseCase.improved.js";
 import { UpdateUserUseCase } from "../../application/use-cases/user/UpdateUserUseCase.js";
@@ -314,12 +313,6 @@ export class Container {
       // Один SessionIssuer на все способы войти: Telegram, MAX и rotation.
       ["sessionIssuer", SessionIssuer, ["tokenService", "refreshTokenRepository"]],
       ["authenticateUserUseCase", AuthenticateUserUseCase, ["userRepository", "sessionIssuer"]],
-      // Вход из Telegram Mini App: подпись `tgWebAppData`, проверка токеном этого бота.
-      [
-        "authenticateTelegramWebAppUseCase",
-        AuthenticateTelegramWebAppUseCase,
-        ["authenticateUserUseCase", "sessionIssuer", "authHandoffRepository"],
-      ],
       // Вход из Telegram-бота в браузер (`/start login_…` → claim), схема как у MAX.
       ["loginHandoffUseCase", LoginHandoffUseCase, ["userRepository", "authenticateUserUseCase", "sessionIssuer", "authHandoffRepository"]],
       ["refreshTokenUseCase", RefreshTokenUseCase, ["userRepository", "tokenService", "refreshTokenRepository", "sessionIssuer"]],
@@ -380,7 +373,6 @@ export class Container {
             "userRepository",
             "tokenService",
             "authenticateMaxUserUseCase",
-            "authenticateTelegramWebAppUseCase",
             "linkPlatformUseCase",
             "loginHandoffUseCase"
           )

@@ -59,25 +59,6 @@ export const maxAuthSchema = Joi.object({
     }),
 });
 
-/**
- * Вход из Telegram Mini App: подпись `tgWebAppData` приходит как есть,
- * обрезать и нормализовать её нельзя — тот же HMAC, что и у MAX.
- */
-export const telegramWebAppAuthSchema = Joi.object({
-  initData: Joi.string().required().messages({
-    "any.required": "Telegram Mini App initData is required",
-    "string.empty": "Telegram Mini App initData cannot be empty",
-  }),
-  remember_me: Joi.boolean().default(false),
-  requestId: Joi.string()
-    .pattern(/^[A-Za-z0-9_-]{8,64}$/)
-    .optional()
-    .allow("", null)
-    .messages({
-      "string.pattern.base": "requestId must be 8-64 alphanumeric chars",
-    }),
-});
-
 export const maxClaimCodeSchema = Joi.object({
   code: Joi.string().trim().min(8).max(128)
     .messages({

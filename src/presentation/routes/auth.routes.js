@@ -5,7 +5,6 @@ import { validateRequest } from "../../core/validation/validator.js";
 import {
   telegramAuthSchema,
   maxAuthSchema,
-  telegramWebAppAuthSchema,
   maxClaimCodeSchema,
   telegramClaimSchema,
   sessionIdSchema,
@@ -28,15 +27,6 @@ router.post(
   authLimiter,
   validateRequest(maxAuthSchema, "body"),
   authController.authenticateMax
-);
-
-// Вход из Telegram Mini App: клиент кладёт подпись `tgWebAppData` в URL запуска,
-// сервер проверяет её токеном Telegram-бота (не MAX-овским).
-router.post(
-  "/auth/telegram/webapp",
-  authLimiter,
-  validateRequest(telegramWebAppAuthSchema, "body"),
-  authController.authenticateTelegramWebApp
 );
 
 // Без authLimiter: сайт опрашивает этот эндпоинт пару минут (поллинг входа),
