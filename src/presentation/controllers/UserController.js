@@ -1,5 +1,6 @@
-import { HTTP_STATUS } from "../../core/constants/index.js";
+import { AD_STATUS, HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
+import { isModerator } from "../../core/utils/roles.js";
 
 /**
  * User Controller - handles user-related requests
@@ -93,18 +94,54 @@ export class UserController {
   });
 
   /**
-   * Get user's ads
+   * Список объявлений пользователя.
+   *
+   * `status` без значения по умолчанию: страница «Мои объявления» просит либо
+   * все состояния разом, либо одну вкладку — а разбивку по состояниям и сумму
+   * просмотров отдаёт `summary`, потому что посчитать их по одной странице
+   * нельзя.
+   *
+   * Маршрут публичный (страница продавца), поэтому чужие «архив» и «удалённые»
+   * наружу не отдаются: не-владелец видит только активные.
    */
   getUserAds = asyncHandler(async (req, res) => {
     const { user_id } = req.params;
-    const { status, sort, order } = req.query;
+    const { status, category, subcategory, search, sort, order, page, limit } =
+      req.query;
 
-    const filters = { status, sort, order };
-    const ads = await this.adRepository.findByUserId(Number(user_id), filters);
+    // `req.user.user_id` — BigInt из Prisma, `user_id` из пути — строка: `===`
+    // у разных типов всегда false, и владелец не узнавался бы никогда.
+    const isOwner = !!req.user && String(req.user.user_id) === String(user_id);
+    const canSeeAll = isOwner || isModerator(req.user);
+
+    const filters = {
+      status: canSeeAll ? status : AD_STATUS.ACTIVE,
+      category,
+      subcategory,
+      search,
+      sort,
+      order,
+      limit,
+      offset: (page - 1) * limit,
+    };
+
+    const [{ ads, total }, summary] = await Promise.all([
+      this.adRepository.findByUserId(Number(user_id), filters),
+      canSeeAll
+        ? this.adRepository.summarizeForUser(Number(user_id), {
+            category,
+            subcategory,
+            search,
+          })
+        : null,
+    ]);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
       data: ads.map((ad) => ad.toJSON()),
+      // Та же форма ответа, что у `GET /api/ads`: страница — в `pagination`.
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      ...(summary && { summary }),
     });
   });
 

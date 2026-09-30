@@ -104,7 +104,6 @@ export class AdController {
    * Create new ad
    */
   createAd = asyncHandler(async (req, res) => {
-    console.log("RAW BODY (createAd)", JSON.stringify(req.body)); // log
     const { selectedChats, selectedMaxChats, ...adData } = req.body;
     const authenticatedUserId = req.user.user_id;
     const ad = await this.createAdUseCase.execute(

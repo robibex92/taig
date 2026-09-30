@@ -25,10 +25,20 @@ export class IAdRepository {
   /**
    * Find ads by user ID
    * @param {number} userId - User ID
-   * @param {Object} filters - Filter criteria
-   * @returns {Promise<AdEntity[]>}
+   * @param {Object} filters - Filter criteria (status, category, search, sort, order, limit, offset)
+   * @returns {Promise<{ads: AdEntity[], total: number}>}
    */
   async findByUserId(userId, filters = {}) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Сводка по объявлениям пользователя: по состояниям и сумме просмотров
+   * @param {number} userId - User ID
+   * @param {Object} filters - Те же фильтры, что у списка, кроме `status`
+   * @returns {Promise<{byStatus: Object, total: number, totalViews: number}>}
+   */
+  async summarizeForUser(userId, filters = {}) {
     throw new Error("Method not implemented");
   }
 

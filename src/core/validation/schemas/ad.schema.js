@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { AD_STATUS } from "../../constants/index.js";
+import { AD_SORT_FIELDS, AD_STATUS } from "../../constants/index.js";
 
 export const createAdSchema = Joi.object({
   user_id: Joi.number().integer().positive().required().messages({
@@ -119,4 +119,29 @@ export const getAdsQuerySchema = Joi.object({
 /** `/:id` в маршрутах объявлений. */
 export const adIdParamSchema = Joi.object({
   id: Joi.number().integer().positive().required(),
+});
+
+/**
+ * Список объявлений одного пользователя (`GET /api/ads/user/:user_id`).
+ *
+ * От витрины отличается двумя вещами: `status` необязателен (без него приходят
+ * все состояния — страница делит их на вкладки, а счётчики берёт из `counts`),
+ * и страница передаётся `page`/`limit`, как в обычном списке.
+ */
+export const userAdsQuerySchema = Joi.object({
+  status: Joi.string().valid(...Object.values(AD_STATUS)),
+  category: Joi.number().integer().positive(),
+  subcategory: Joi.number().integer().positive(),
+  search: Joi.string().trim().max(200),
+  sort: Joi.string()
+    .valid(...Object.values(AD_SORT_FIELDS))
+    .default(AD_SORT_FIELDS.CREATED_AT),
+  order: Joi.string().valid("ASC", "DESC").default("DESC"),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+});
+
+/** `/:user_id` в маршруте чужого списка объявлений. */
+export const userAdsParamsSchema = Joi.object({
+  user_id: Joi.number().integer().positive().required(),
 });

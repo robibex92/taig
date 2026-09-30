@@ -11,6 +11,12 @@ export class AdEntity {
     this.content = data.content;
     this.category = data.category;
     this.subcategory = data.subcategory || null;
+    /**
+     * Названия справочников дотягивает репозиторий одним запросом на страницу:
+     * карточке списка нужен текст чипа, а не только id.
+     */
+    this.category_name = data.category_name ?? null;
+    this.subcategory_name = data.subcategory_name ?? null;
     this.price = data.price || null;
     this.status = data.status || AD_STATUS.ACTIVE;
     this.view_count = data.view_count || 0;
@@ -88,6 +94,8 @@ export class AdEntity {
       content: this.content,
       category: this.category,
       subcategory: this.subcategory,
+      category_name: this.category_name,
+      subcategory_name: this.subcategory_name,
       price: this.price,
       status: this.status,
       view_count: this.view_count,

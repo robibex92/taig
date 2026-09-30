@@ -2,11 +2,17 @@ import { prisma } from "../database/prisma.js";
 import { AdEntity } from "../../domain/entities/Ad.entity.js";
 import { IAdRepository } from "../../domain/repositories/IAdRepository.js";
 import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
-import { AD_STATUS } from "../../core/constants/index.js";
+import { AD_SORT_FIELDS, AD_STATUS } from "../../core/constants/index.js";
 import { logger } from "../../core/utils/logger.js";
 
 /** Порядок картинок одного объявления: главное фото первым. */
 const IMAGES_ORDER_BY = [{ is_main: "desc" }, { created_at: "asc" }];
+
+/**
+ * Поля, по которым список может сортироваться в базе. Порядок приходит из URL,
+ * поэтому в `orderBy` попадает только по имени из этого белого списка.
+ */
+const SORT_FIELDS = new Set(Object.values(AD_SORT_FIELDS));
 
 // `ad_images.ad_id` — Int, а `ads.id` — BigInt: отношения в схеме Prisma между ними нет,
 // поэтому `include` не работает и картинки дотягиваются отдельным запросом.
@@ -84,40 +90,17 @@ export class AdRepository extends IAdRepository {
       });
 
       const safeOrder = order === "ASC" ? "asc" : "desc";
-      const orderBy = { [sort]: safeOrder };
-      const numericPrice =
-        priceMin !== undefined || priceMax !== undefined || sort === "price";
+      const { rows: ads, total } = await this._page(where, {
+        orderBy: this._orderBy(sort, safeOrder),
+        sort,
+        order: safeOrder,
+        priceMin,
+        priceMax,
+        offset: (page - 1) * limit,
+        limit,
+      });
 
-      let ads;
-      let total;
-
-      if (numericPrice) {
-        // `price` — VarChar: фильтр и сортировку по нему Prisma в SQL не выразит.
-        // Такую страницу читаем целиком, считаем и режем в JS. Раньше цена
-        // отфильтровывалась уже ПОСЛЕ `take: limit`, а `total` приравнивался к
-        // числу оставшихся строк страницы — из-за этого `totalPages` врал, часть
-        // объявлений пропадала из выдачи, а порядок был лексикографическим
-        // («10000» раньше «900»).
-        const rows = await prisma.ad.findMany({ where, orderBy });
-        const filtered = this._filterByPrice(rows, priceMin, priceMax);
-        const sorted =
-          sort === "price" ? this._sortByPrice(filtered, safeOrder) : filtered;
-
-        total = sorted.length;
-        ads = sorted.slice((page - 1) * limit, (page - 1) * limit + limit);
-      } else {
-        [ads, total] = await prisma.$transaction([
-          prisma.ad.findMany({
-            where,
-            orderBy,
-            skip: (page - 1) * limit,
-            take: limit,
-          }),
-          prisma.ad.count({ where }),
-        ]);
-      }
-
-      const withImages = await this._attachImages(ads);
+      const withImages = await this._decorate(ads);
 
       return {
         ads: withImages.map((ad) => new AdEntity(ad)),
@@ -130,6 +113,55 @@ export class AdRepository extends IAdRepository {
       logger.error("Error finding ads", { error: error.message, filters });
       throw new DatabaseError("Failed to find ads", error);
     }
+  }
+
+  /**
+   * Страница объявлений: `where` + `orderBy` + срез.
+   *
+   * Единственное исключение — строковая `price`: в SQL она ни фильтруется, ни
+   * сортируется честно, поэтому такую страницу читаем целиком и режем в JS.
+   * Раньше цена отфильтровывалась уже ПОСЛЕ `take: limit`, а `total` приравнивался
+   * к числу строк страницы — из-за этого `totalPages` врал, часть объявлений
+   * пропадала из выдачи, а порядок был лексикографическим («10000» раньше «900»).
+   */
+  async _page(
+    where,
+    { orderBy, sort, order, priceMin, priceMax, offset, limit }
+  ) {
+    const needsJsPrice =
+      sort === "price" || priceMin !== undefined || priceMax !== undefined;
+
+    if (!needsJsPrice) {
+      const [rows, total] = await prisma.$transaction([
+        prisma.ad.findMany({
+          where,
+          orderBy,
+          ...(limit === undefined ? {} : { skip: offset, take: limit }),
+        }),
+        prisma.ad.count({ where }),
+      ]);
+
+      return { rows, total };
+    }
+
+    const rows = await prisma.ad.findMany({ where, orderBy });
+    const filtered = this._filterByPrice(rows, priceMin, priceMax);
+    const sorted =
+      sort === "price" ? this._sortByPrice(filtered, order) : filtered;
+
+    return {
+      rows: limit === undefined ? sorted : sorted.slice(offset, offset + limit),
+      total: sorted.length,
+    };
+  }
+
+  /**
+   * `orderBy` для списка: в него попадает только поле из белого списка
+   * `SORT_FIELDS` — порядок приходит из URL и прямо в SQL не уходит.
+   */
+  _orderBy(sort, order) {
+    const field = SORT_FIELDS.has(sort) ? sort : AD_SORT_FIELDS.CREATED_AT;
+    return { [field]: order };
   }
 
   /** Общий билдер `where` для списка и для «мои объявления». */
@@ -201,6 +233,14 @@ export class AdRepository extends IAdRepository {
   }
 
   /**
+   * Страница объявлений в том виде, в котором она уходит на фронт: картинки и
+   * названия категорий дотягиваются пачкой на весь список, по запросу на каждую.
+   */
+  async _decorate(rows) {
+    return this._attachCategoryNames(await this._attachImages(rows));
+  }
+
+  /**
    * Картинки пачкой на всю страницу.
    *
    * Отношения `ads` ↔ `ad_images` в схеме Prisma нет (типы ключей разные), поэтому
@@ -242,23 +282,48 @@ export class AdRepository extends IAdRepository {
   }
 
   /**
-   * Find ads by user ID
+   * Объявления одного пользователя — теми же фильтрами, что и витрина.
+   *
+   * Раньше сюда доходили только `status`/`sort`/`order` и без лимита: страница
+   * «Мои объявления» читала все строки целиком и фильтровала их по вкладкам в
+   * браузере, поэтому ни пагинация, ни фильтр по категории там не работали, а
+   * счётчики вкладок считались по уже отфильтрованному списку.
+   *
+   * @returns {Promise<{ads: AdEntity[], total: number}>}
    */
   async findByUserId(userId, filters = {}) {
     try {
-      const { status, sort = "created_at", order = "DESC" } = filters;
+      const {
+        status,
+        category,
+        subcategory,
+        search,
+        sort = "created_at",
+        order = "DESC",
+        limit,
+        offset = 0,
+      } = filters;
 
-      const where = this._buildWhere({ userId, status });
+      const where = this._buildWhere({
+        userId,
+        status,
+        category,
+        subcategory,
+        search,
+      });
       const safeOrder = order === "ASC" ? "asc" : "desc";
 
-      const ads = await prisma.ad.findMany({
-        where,
-        orderBy: { [sort]: safeOrder },
+      const { rows, total } = await this._page(where, {
+        orderBy: this._orderBy(sort, safeOrder),
+        sort,
+        order: safeOrder,
+        offset: Number(offset) || 0,
+        limit: limit === undefined ? undefined : Number(limit),
       });
 
-      const withImages = await this._attachImages(ads);
+      const withImages = await this._decorate(rows);
 
-      return withImages.map((ad) => new AdEntity(ad));
+      return { ads: withImages.map((ad) => new AdEntity(ad)), total };
     } catch (error) {
       logger.error("Error finding ads by user ID", {
         error: error.message,
@@ -266,6 +331,89 @@ export class AdRepository extends IAdRepository {
       });
       throw new DatabaseError("Failed to find user ads", error);
     }
+  }
+
+  /**
+   * Сводка по объявлениям пользователя: сколько в каждом состоянии и сколько
+   * просмотров они дают суммарно — одним `groupBy`.
+   *
+   * Нужна потому, что список теперь страницный: посчитать эти числа «на фронте»
+   * можно только по одной странице, и счётчик просмотров врал бы на второй.
+   *
+   * Фильтры (`category`, `search`) учитываются, а `status` — нет: состояния и
+   * есть то, что сводка разбивает.
+   */
+  async summarizeForUser(userId, filters = {}) {
+    const where = this._buildWhere({ userId, ...filters, status: undefined });
+
+    const grouped = await prisma.ad.groupBy({
+      by: ["status"],
+      where,
+      _count: { _all: true },
+      _sum: { view_count: true },
+    });
+
+    const byStatus = Object.fromEntries(
+      Object.values(AD_STATUS).map((status) => [status, 0])
+    );
+
+    let total = 0;
+    let totalViews = 0;
+
+    for (const row of grouped) {
+      const count = row._count._all;
+      total += count;
+      totalViews += row._sum.view_count ?? 0;
+
+      if (row.status in byStatus) {
+        byStatus[row.status] = count;
+      }
+    }
+
+    return { byStatus, total, totalViews };
+  }
+
+  /**
+   * Названия категории и подкатегории пачкой на страницу.
+   *
+   * Карточки списка показывали `category_name`, которого в ответе никогда не
+   * было, — чип категории молча не рисовался. Отношений в схеме Prisma для
+   * `category`/`subcategory` нет только у сущности-обёртки, поэтому читаем
+   * справочники отдельным запросом, как картинки.
+   */
+  async _attachCategoryNames(ads) {
+    if (!ads.length) return [];
+
+    const categoryIds = [
+      ...new Set(ads.map((ad) => ad.category).filter((id) => id != null)),
+    ];
+    const subcategoryIds = [
+      ...new Set(ads.map((ad) => ad.subcategory).filter((id) => id != null)),
+    ];
+
+    const [categories, subcategories] = await Promise.all([
+      categoryIds.length
+        ? prisma.category.findMany({
+            where: { id: { in: categoryIds.map((id) => BigInt(id)) } },
+            select: { id: true, name: true },
+          })
+        : [],
+      subcategoryIds.length
+        ? prisma.subcategory.findMany({
+            where: { id: { in: subcategoryIds.map((id) => BigInt(id)) } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
+
+    const categoryNames = new Map(categories.map((c) => [String(c.id), c.name]));
+    const subcategoryNames = new Map(subcategories.map((s) => [String(s.id), s.name]));
+
+    return ads.map((ad) => ({
+      ...ad,
+      category_name: categoryNames.get(String(ad.category)) ?? null,
+      subcategory_name: subcategoryNames.get(String(ad.subcategory)) ?? null,
+    }));
   }
 
   /**
