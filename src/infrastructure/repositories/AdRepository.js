@@ -54,7 +54,11 @@ export class AdRepository extends IAdRepository {
         orderBy: IMAGES_ORDER_BY,
       });
 
-      return new AdEntity({ ...ad, images });
+      // Названия справочников нужны самой карточке: страница объявления раньше
+      // тянула категории и подкатегории отдельными запросами, хотя id уже был.
+      const [withNames] = await this._attachCategoryNames([ad]);
+
+      return new AdEntity({ ...withNames, images });
     } catch (error) {
       logger.error("Error finding ad by ID", { error: error.message, id });
       throw new DatabaseError("Failed to find ad", error);

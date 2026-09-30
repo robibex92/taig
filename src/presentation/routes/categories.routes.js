@@ -39,6 +39,16 @@ router.get(
 );
 
 /**
+ * Буквальный `with-counts` — до `:subcategory_id`: express матчит маршруты в
+ * порядке регистрации, и «with-counts» успевал попасть в параметр, откуда
+ * прилетало «"subcategory_id" must be a number».
+ */
+router.get(
+  "/categories/:category_id/subcategories/with-counts",
+  categoryController.getSubcategoriesWithCounts
+);
+
+/**
  * @route   GET /subcategories
  * @desc    Get all subcategories
  * @access  Public
@@ -53,16 +63,6 @@ router.get("/subcategories", categoryController.getAllSubcategories);
 router.get(
   "/categories/:category_id/subcategories/:subcategory_id",
   categoryController.getSubcategoryById
-);
-
-/**
- * @route   GET /categories/:category_id/subcategories/with-counts
- * @desc    Get subcategories with ad counts for a category
- * @access  Public
- */
-router.get(
-  "/categories/:category_id/subcategories/with-counts",
-  categoryController.getSubcategoriesWithCounts
 );
 
 export default router;
