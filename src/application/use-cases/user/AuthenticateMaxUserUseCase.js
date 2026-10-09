@@ -385,6 +385,34 @@ export class AuthenticateMaxUserUseCase {
     return user;
   }
 
+  /**
+   * Вход подтверждён в чате бота — без мини-аппа.
+   *
+   * Сайт открывает ссылку на бота с одноразовым `requestId`, MAX присылает
+   * событие, в котором есть автор и этот параметр. Личность подтверждена самим
+   * MAX (событие пришло из бот-апдейта), поэтому верифицировать `WebAppData`
+   * не нужно — а на десктопном клиенте подписи в адресе нет вовсе, и путь через
+   * мини-апп там физически непроходим.
+   *
+   * Хендовер тот же (`kind: "request"`, 5 минут), забирает его тот же
+   * `claimLoginRequest`, так что сайт ничего не выбирает заново.
+   *
+   * @param {object} maxUser — `{ id, username, first_name, last_name }` из события
+   * @returns {Promise<{user_id: bigint, confirmed: boolean}>}
+   */
+  async confirmLoginFromBotUser(maxUser, requestId) {
+    const user = await this.findOrCreateMaxUser(maxUser);
+    const confirmed = await this.createLoginRequest(requestId, user.user_id);
+
+    logger.info("MAX login confirmed in bot chat", {
+      user_id: user.user_id,
+      // Сам requestId не логируется: до обмена это действующий credential.
+      hasRequestId: Boolean(confirmed),
+    });
+
+    return { user_id: user.user_id, confirmed };
+  }
+
   async execute(
     initData,
     deviceInfo = {},

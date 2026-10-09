@@ -5,7 +5,7 @@ import {
   MAX_BOT_INBOX_DIRECTION,
   MAX_BOT_STATE_KEYS,
 } from "../../core/constants/maxBot.js";
-import { extractPayloadMarker, parseMaxUpdatesPayload } from "../../core/utils/maxBotEvents.js";
+import { extractPayloadMarker, extractMaxLoginRequests, parseMaxUpdatesPayload } from "../../core/utils/maxBotEvents.js";
 
 const POLL_TIMEOUT_MS = 25000;
 const POLL_LIMIT = 50;
@@ -14,6 +14,12 @@ const ERROR_RETRY_DELAY_MS = 5000;
 const FAST_RESPONSE_MS = 1000;
 /** Дедупликация событий без marker: то же сообщение того же автора в этом окне считается повтором. */
 const MARKERLESS_DEDUPE_WINDOW_MS = 2 * 60 * 1000;
+
+/** Ответ бота после подтверждения входа с сайта — та же формулировка, что у Telegram-бота. */
+const LOGIN_CONFIRMED_TEXT =
+  "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.";
+const LOGIN_REJECTED_TEXT =
+  "Код входа из ссылки не подошёл. Нажмите «Войти через MAX» на сайте и перейдите по ссылке, которую он откроет, — код в ней длинный и одноразовый.";
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
@@ -45,6 +51,7 @@ export class MaxBotUpdatePoller {
     db = prisma,
     service = defaultService,
     loggerImpl,
+    loginConfirmation = null,
     pollTimeoutMs = POLL_TIMEOUT_MS,
     limit = POLL_LIMIT,
     errorRetryDelayMs = ERROR_RETRY_DELAY_MS,
@@ -52,6 +59,8 @@ export class MaxBotUpdatePoller {
     this.db = db;
     this.service = service;
     this.log = loggerImpl ?? logger;
+    /** `AuthenticateMaxUserUseCase`: вход с сайта подтверждается в чате бота. */
+    this.loginConfirmation = loginConfirmation;
     this.pollTimeoutMs = pollTimeoutMs;
     this.limit = limit;
     this.errorRetryDelayMs = errorRetryDelayMs;
@@ -117,6 +126,10 @@ export class MaxBotUpdatePoller {
 
         const incoming = parseMaxUpdatesPayload(payload, { botUserId: this.botUserId });
         this.stats.polls += 1;
+
+        // Подтверждение входа с сайта читается из того же ответа /updates:
+        // отдельного запроса к MAX ради него нет.
+        await this._processLoginRequests(payload);
 
         if (incoming.length) {
           const { stored, duplicates } = await this.persistIncoming(incoming);
@@ -254,6 +267,59 @@ export class MaxBotUpdatePoller {
         error: error.message,
       });
       return false;
+    }
+  }
+
+  /**
+   * MAX-бот как подтверждение входа на сайт: событие `bot_started` (или
+   * сообщение `/start login_…`) привязывает автора к одноразовому `requestId`,
+   * и вкладка сайта, которая этот requestId придумала, забирает сессию своим
+   * поллингом `POST /api/auth/max/claim`.
+   *
+   * Мини-апп для этого не нужен: на десктопном клиенте MAX не отдаёт подпись
+   * `WebAppData`, поэтому путь «подтвердить в мини-аппе» там непроходим, а
+   * автор события подтверждён самим MAX.
+   */
+  async _processLoginRequests(payload) {
+    if (!this.loginConfirmation) return;
+
+    const { requests, observed } = extractMaxLoginRequests(payload, {
+      botUserId: this.botUserId,
+    });
+
+    for (const event of observed) {
+      // info, не debug: на проде LOG_LEVEL = info, и без этой строки неизвестную
+      // форму события MAX пришлось бы угадывать следующей правкой.
+      this.log.info("MAX-бот: start-событие без параметра входа", event);
+    }
+
+    for (const item of requests) {
+      try {
+        const { confirmed } = await this.loginConfirmation.confirmLoginFromBotUser(
+          {
+            id: item.max_user_id,
+            username: item.username,
+            first_name: item.display_name,
+          },
+          item.request_id
+        );
+
+        const sent = await this.service.sendMessage(
+          item.max_user_id,
+          confirmed ? LOGIN_CONFIRMED_TEXT : LOGIN_REJECTED_TEXT
+        );
+
+        if (!sent.ok && !sent.skipped) {
+          this.log.warn("MAX-бот: ответ о подтверждении входа не отправлен", {
+            error: sent.error,
+          });
+        }
+      } catch (error) {
+        this.log.error("MAX-бот: вход с сайта не подтверждён", {
+          max_user_id: item.max_user_id,
+          error: error.message,
+        });
+      }
     }
   }
 

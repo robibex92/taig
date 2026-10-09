@@ -269,4 +269,116 @@ export const extractPayloadMarker = (payload) => {
   return max === null ? null : max.toString();
 };
 
-export default { parseMaxUpdate, parseMaxUpdatesPayload, extractPayloadMarker };
+/**
+ * Подтверждение входа с сайта прямо в чате бота — без мини-аппа.
+ *
+ * Сайт придумывает одноразовый `requestId` и открывает ссылку на бота с этим
+ * параметром. MAX доставляет событие, в котором есть автор и стартовый параметр,
+ * бэк по нему кладёт хендовер (`kind: "request"`), а сайт забирает сессию
+ * привычным поллингом `POST /api/auth/max/claim`. Личность подтверждена самим
+ * MAX — событие пришло из бот-апдейта, — поэтому подпись `WebAppData` не нужна,
+ * а на десктопном клиенте её и нет вовсе.
+ *
+ * Форма `bot_started` документирована нестабильно (см. шапку файла), поэтому:
+ *  - у start-событий параметр ищется обходом по всему узлу (глубина ограничена);
+ *  - у message-событий — только по тексту, иначе любой пользователь, вставивший
+ *    в чат слово `login_…`, подтвердил бы чужой вход;
+ *  - в `observed` возвращаются ИМЕНА ключей тех start-событий, в которых параметр
+ *    не найдся: по ним видно настоящую форму ответа MAX, а одноразовый код
+ *    не попадает в лог.
+ */
+const LOGIN_REQUEST_RE = /login_([A-Za-z0-9_-]{8,64})/;
+const WALK_MAX_DEPTH = 4;
+const WALK_MAX_NODES = 200;
+
+const collectLoginIds = (node, depth = 0, seen = { count: 0, ids: [] }) => {
+  if (seen.count >= WALK_MAX_NODES || depth > WALK_MAX_DEPTH) return seen.ids;
+  seen.count += 1;
+
+  if (typeof node === "string") {
+    const matched = node.match(LOGIN_REQUEST_RE);
+    if (matched) seen.ids.push(matched[1]);
+    return seen.ids;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) collectLoginIds(item, depth + 1, seen);
+    return seen.ids;
+  }
+
+  const obj = asObject(node);
+  if (obj) {
+    for (const value of Object.values(obj)) collectLoginIds(value, depth + 1, seen);
+  }
+
+  return seen.ids;
+};
+
+const messageOf = (update) => {
+  const raw = update.message ?? update.data?.message ?? update.messages?.[0] ?? update.body;
+  return typeof raw === "string" ? { text: raw } : asObject(raw);
+};
+
+/**
+ * @returns {{ requests: Array<{max_user_id: string, request_id: string, marker: string|null, source: string}>, observed: Array<{update_type: string|null, keys: string[]}> }}
+ */
+export const extractMaxLoginRequests = (payload, options = {}) => {
+  const requests = [];
+  const observed = [];
+  const seenKeys = new Set();
+
+  for (const update of extractUpdateList(payload)) {
+    const obj = asObject(update);
+    if (!obj) continue;
+
+    const type = getUpdateType(obj);
+    const isMessage = Boolean(type?.includes("message"));
+    const isStartFamily = Boolean(type) && !isMessage && type.includes("start");
+
+    if (!isMessage && !isStartFamily) continue;
+
+    const message = isMessage ? messageOf(obj) : null;
+    const { authorId, displayName, username, isBot } = resolveAuthor(obj, message, options);
+
+    if (!authorId || isBot) continue;
+
+    const candidates = isMessage
+      ? collectLoginIds(firstString(...collectTextCandidates(obj, message)) ?? "")
+      : collectLoginIds(obj);
+
+    const requestId = candidates[0];
+
+    // Start-событие, в котором параметр не найден, — это неизвестная форма
+    // ответа MAX: без записи о нём следующий разбор начинался бы с нуля.
+    // Пишутся только ИМЕНА ключей: значение параметра — действующий
+    // одноразовый credential.
+    if (isStartFamily && !requestId) {
+      observed.push({ update_type: type, keys: Object.keys(obj).sort() });
+    }
+
+    if (!requestId) continue;
+
+    const marker = getUpdateMarker(obj);
+    const dedupeKey = `${authorId}:${requestId}:${marker ?? ""}`;
+    if (seenKeys.has(dedupeKey)) continue;
+    seenKeys.add(dedupeKey);
+
+    requests.push({
+      max_user_id: authorId,
+      request_id: requestId,
+      marker,
+      display_name: displayName,
+      username,
+      source: isMessage ? "message" : "bot_started",
+    });
+  }
+
+  return { requests, observed };
+};
+
+export default {
+  parseMaxUpdate,
+  parseMaxUpdatesPayload,
+  extractPayloadMarker,
+  extractMaxLoginRequests,
+};

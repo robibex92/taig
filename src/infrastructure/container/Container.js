@@ -695,6 +695,7 @@ export class Container {
       (container) =>
         new MaxBotUpdatePoller({
           service: container.resolve("maxBotService"),
+          loginConfirmation: container.resolve("authenticateMaxUserUseCase"),
         })
     );
 
