@@ -31,6 +31,24 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(err.statusCode).json(err.toJSON());
   }
 
+  // Отказ multer — это проблема запроса, а не авария: раньше «файл больше 10 МБ»
+  // и неподходящее поле доходили до клиента как 500.
+  if (err.name === "MulterError") {
+    const messages = {
+      LIMIT_FILE_SIZE: "Файл слишком большой",
+      LIMIT_FILE_COUNT: "Слишком много файлов в одном запросе",
+      LIMIT_UNEXPECTED_FILE: "Файлы нужно передавать в поле photos",
+    };
+
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      error: {
+        message: messages[err.code] || "Не удалось загрузить файл",
+        code: ERROR_CODES.VALIDATION_ERROR,
+        statusCode: HTTP_STATUS.BAD_REQUEST,
+      },
+    });
+  }
+
   // Handle JWT errors
   if (err.name === "JsonWebTokenError") {
     return res.status(HTTP_STATUS.UNAUTHORIZED).json({

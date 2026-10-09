@@ -2,7 +2,8 @@ import { prisma } from "../database/prisma.js";
 import { AdEntity } from "../../domain/entities/Ad.entity.js";
 import { IAdRepository } from "../../domain/repositories/IAdRepository.js";
 import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
-import { AD_SORT_FIELDS, AD_STATUS } from "../../core/constants/index.js";
+import { AD_OFFER_TYPE, AD_SORT_FIELDS, AD_STATUS } from "../../core/constants/index.js";
+import { priceToDecimal } from "../../core/utils/price.js";
 import { logger } from "../../core/utils/logger.js";
 
 /** Порядок картинок одного объявления: главное фото первым. */
@@ -19,18 +20,11 @@ const SORT_FIELDS = new Set(Object.values(AD_SORT_FIELDS));
 const imagesWhere = (adId) => ({ ad_id: Number(adId) });
 
 /**
- * Число из `price`: колонка строковая, и в ней лежит и «1200», и «1 200 ₽», и
- * «Договорная». Пусто для всего, что числом не является.
+ * Числовая колонка цены вместо разбора строки в JS. `price_value` появляется из
+ * `price` по правилу `core/utils/price.js` и заполняется миграцией
+ * `add_ad_price_value.sql`.
  */
-const parsePriceNumber = (value) => {
-  if (value === null || value === undefined || value === "") return null;
-
-  const digits = String(value).replace(/[^\d.]/g, "");
-  if (!digits) return null;
-
-  const parsed = parseFloat(digits);
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const priceOrderBy = (order) => ({ price_value: { sort: order, nulls: "last" } });
 
 /**
  * Prisma implementation of Ad Repository
@@ -81,6 +75,7 @@ export class AdRepository extends IAdRepository {
         dateFrom,
         dateTo,
         search,
+        authorIds,
       } = filters;
       const { page = 1, limit = 20 } = pagination;
 
@@ -91,15 +86,14 @@ export class AdRepository extends IAdRepository {
         dateFrom,
         dateTo,
         search,
+        priceMin,
+        priceMax,
+        authorIds,
       });
 
       const safeOrder = order === "ASC" ? "asc" : "desc";
       const { rows: ads, total } = await this._page(where, {
         orderBy: this._orderBy(sort, safeOrder),
-        sort,
-        order: safeOrder,
-        priceMin,
-        priceMax,
         offset: (page - 1) * limit,
         limit,
       });
@@ -120,43 +114,25 @@ export class AdRepository extends IAdRepository {
   }
 
   /**
-   * Страница объявлений: `where` + `orderBy` + срез.
+   * Страница объявлений: `where` + `orderBy` + срез, одним обращением за
+   * строками и за `total`.
    *
-   * Единственное исключение — строковая `price`: в SQL она ни фильтруется, ни
-   * сортируется честно, поэтому такую страницу читаем целиком и режем в JS.
-   * Раньше цена отфильтровывалась уже ПОСЛЕ `take: limit`, а `total` приравнивался
-   * к числу строк страницы — из-за этого `totalPages` врал, часть объявлений
-   * пропадала из выдачи, а порядок был лексикографическим («10000» раньше «900»).
+   * Раньше здесь был второй путь — «строка в `price` не сортируется в SQL,
+   * читаем всю выборку и режем в JS». Он стоил линейного роста запроса и
+   * молча терял объявления, если фильтр цены отсекал строки после `take`.
+   * С колонкой `price_value` оба случая идут через базу.
    */
-  async _page(
-    where,
-    { orderBy, sort, order, priceMin, priceMax, offset, limit }
-  ) {
-    const needsJsPrice =
-      sort === "price" || priceMin !== undefined || priceMax !== undefined;
+  async _page(where, { orderBy, offset, limit }) {
+    const [rows, total] = await prisma.$transaction([
+      prisma.ad.findMany({
+        where,
+        orderBy,
+        ...(limit === undefined ? {} : { skip: offset, take: limit }),
+      }),
+      prisma.ad.count({ where }),
+    ]);
 
-    if (!needsJsPrice) {
-      const [rows, total] = await prisma.$transaction([
-        prisma.ad.findMany({
-          where,
-          orderBy,
-          ...(limit === undefined ? {} : { skip: offset, take: limit }),
-        }),
-        prisma.ad.count({ where }),
-      ]);
-
-      return { rows, total };
-    }
-
-    const rows = await prisma.ad.findMany({ where, orderBy });
-    const filtered = this._filterByPrice(rows, priceMin, priceMax);
-    const sorted =
-      sort === "price" ? this._sortByPrice(filtered, order) : filtered;
-
-    return {
-      rows: limit === undefined ? sorted : sorted.slice(offset, offset + limit),
-      total: sorted.length,
-    };
+    return { rows, total };
   }
 
   /**
@@ -165,15 +141,35 @@ export class AdRepository extends IAdRepository {
    */
   _orderBy(sort, order) {
     const field = SORT_FIELDS.has(sort) ? sort : AD_SORT_FIELDS.CREATED_AT;
-    return { [field]: order };
+
+    // Объявления без цены (и «Договорная») в конце — сравнить их нельзя.
+    return field === AD_SORT_FIELDS.PRICE ? priceOrderBy(order) : { [field]: order };
   }
 
-  /** Общий билдер `where` для списка и для «мои объявления». */
-  _buildWhere({ status, category, subcategory, dateFrom, dateTo, search, userId }) {
+  /** Общий билдер `where` для списка, для «мои объявления» и для сводки. */
+  _buildWhere({
+    status,
+    category,
+    subcategory,
+    dateFrom,
+    dateTo,
+    search,
+    priceMin,
+    priceMax,
+    userId,
+    authorIds,
+  }) {
     const where = {};
 
     if (userId !== undefined) {
       where.user_id = BigInt(userId);
+    }
+
+    // Список id авторов: «только мой дом» отдаёт объявления соседей.
+    // `in: []` Prisma трактует как «ни одной строки» — ровно то, что нужно,
+    // когда в доме больше никого нет.
+    if (authorIds !== undefined) {
+      where.user_id = { in: authorIds.map((id) => BigInt(id)) };
     }
 
     if (status) {
@@ -195,6 +191,14 @@ export class AdRepository extends IAdRepository {
       };
     }
 
+    if (priceMin !== undefined || priceMax !== undefined) {
+      where.price_value = {
+        not: null,
+        ...(priceMin !== undefined && { gte: Number(priceMin) }),
+        ...(priceMax !== undefined && { lte: Number(priceMax) }),
+      };
+    }
+
     if (search) {
       where.OR = [
         { title: { contains: search, mode: "insensitive" } },
@@ -205,35 +209,26 @@ export class AdRepository extends IAdRepository {
     return where;
   }
 
-  _filterByPrice(rows, priceMin, priceMax) {
-    if (priceMin === undefined && priceMax === undefined) return rows;
+  /**
+   * Тип предложения и срок.
+   *
+   * Правило одно и при создании, и при правке: срок живёт только у проката,
+   * иначе объявление, переведённое обратно в продажу, осталось бы
+   * «продам на 3 дня».
+   *
+   * Пара трогается целиком и только когда в данных есть хотя бы одно из двух:
+   * правка без них не должна менять тип и стирать срок.
+   */
+  _offerFields({ offer_type, rental_days }) {
+    if (offer_type === undefined && rental_days === undefined) return {};
 
-    const min = priceMin === undefined ? null : parseFloat(priceMin);
-    const max = priceMax === undefined ? null : parseFloat(priceMax);
+    const type = offer_type ?? AD_OFFER_TYPE.SALE;
 
-    return rows.filter((row) => {
-      const price = parsePriceNumber(row.price);
-      if (price === null) return false;
-      if (min !== null && price < min) return false;
-      if (max !== null && price > max) return false;
-      return true;
-    });
-  }
-
-  /** Объявления без цены (и «Договорная») всегда в конце — сравнить их нельзя. */
-  _sortByPrice(rows, order) {
-    const direction = order === "asc" ? 1 : -1;
-
-    return [...rows].sort((a, b) => {
-      const left = parsePriceNumber(a.price);
-      const right = parsePriceNumber(b.price);
-
-      if (left === null && right === null) return 0;
-      if (left === null) return 1;
-      if (right === null) return -1;
-
-      return (left - right) * direction;
-    });
+    return {
+      offer_type: type,
+      rental_days:
+        type === AD_OFFER_TYPE.RENT && rental_days != null ? Number(rental_days) : null,
+    };
   }
 
   /**
@@ -302,6 +297,10 @@ export class AdRepository extends IAdRepository {
         category,
         subcategory,
         search,
+        dateFrom,
+        dateTo,
+        priceMin,
+        priceMax,
         sort = "created_at",
         order = "DESC",
         limit,
@@ -314,13 +313,15 @@ export class AdRepository extends IAdRepository {
         category,
         subcategory,
         search,
+        dateFrom,
+        dateTo,
+        priceMin,
+        priceMax,
       });
       const safeOrder = order === "ASC" ? "asc" : "desc";
 
       const { rows, total } = await this._page(where, {
         orderBy: this._orderBy(sort, safeOrder),
-        sort,
-        order: safeOrder,
         offset: Number(offset) || 0,
         limit: limit === undefined ? undefined : Number(limit),
       });
@@ -339,18 +340,19 @@ export class AdRepository extends IAdRepository {
 
   /**
    * Сводка по объявлениям пользователя: сколько в каждом состоянии и сколько
-   * просмотров они дают суммарно — одним `groupBy`.
+   * просмотров они дают суммарно.
    *
    * Нужна потому, что список теперь страницный: посчитать эти числа «на фронте»
    * можно только по одной странице, и счётчик просмотров врал бы на второй.
    *
-   * Фильтры (`category`, `search`) учитываются, а `status` — нет: состояния и
-   * есть то, что сводка разбивает.
+   * Считается по тем же фильтрам, что и список, — включая цену, — иначе чипы
+   * вкладок показывали бы число всех объявлений, а под ними лежала отфильтрованная
+   * пустота. `status` не участвует: состояния сводка как раз и разбивает.
    */
   async summarizeForUser(userId, filters = {}) {
     const where = this._buildWhere({ userId, ...filters, status: undefined });
 
-    const grouped = await prisma.ad.groupBy({
+    const groups = await prisma.ad.groupBy({
       by: ["status"],
       where,
       _count: { _all: true },
@@ -364,13 +366,14 @@ export class AdRepository extends IAdRepository {
     let total = 0;
     let totalViews = 0;
 
-    for (const row of grouped) {
-      const count = row._count._all;
-      total += count;
-      totalViews += row._sum.view_count ?? 0;
+    for (const group of groups) {
+      const count = group._count?._all ?? 0;
 
-      if (row.status in byStatus) {
-        byStatus[row.status] = count;
+      total += count;
+      totalViews += Number(group._sum?.view_count ?? 0);
+
+      if (group.status in byStatus) {
+        byStatus[group.status] = count;
       }
     }
 
@@ -446,6 +449,9 @@ export class AdRepository extends IAdRepository {
             category: category ? parseInt(category) : null,
             subcategory: subcategory ? parseInt(subcategory) : null,
             price: price ? String(price) : null,
+            // Число рядом со строкой: по нему сортировка и диапазон цен.
+            price_value: priceToDecimal(price),
+            ...this._offerFields(adData),
             status: status || "active",
             created_at: new Date(),
           },
@@ -499,12 +505,19 @@ export class AdRepository extends IAdRepository {
               updateData[field] = data[field] ? parseInt(data[field]) : null;
             } else if (field === "price") {
               updateData[field] = data[field] ? String(data[field]) : null;
+              // Числовая колонка живёт по той же цене, что и строка, — иначе
+              // сортировка показывала бы старое число рядом с новой ценой.
+              updateData.price_value = priceToDecimal(data[field]);
             } else {
               updateData[field] = data[field];
             }
           }
         });
 
+
+        // Тип предложения и срок — одним правилом (см. _offerFields), а не
+        // двумя полями из whitelist: правка «прокат → продажа» обязана снять срок.
+        Object.assign(updateData, this._offerFields(data));
 
         updateData.updated_at = new Date();
 

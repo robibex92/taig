@@ -3,6 +3,7 @@ import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
 import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
 import { container } from "../../infrastructure/container/Container.js";
+import { backupLimiter } from "../middlewares/securityMiddleware.js";
 
 const router = express.Router();
 
@@ -57,5 +58,17 @@ router.get(
  * @access  Private (admin only)
  */
 router.get("/roles", requireRoles(GLOBAL_ROLES.ADMIN), adminController.getRoleCatalog);
+
+/**
+ * @route   GET /api/admin/backup
+ * @desc    Whole-database backup as a downloadable .sql file
+ * @access  Private (admin only)
+ */
+router.get(
+  "/backup",
+  requireRoles(GLOBAL_ROLES.ADMIN),
+  backupLimiter,
+  adminController.downloadBackup
+);
 
 export default router;

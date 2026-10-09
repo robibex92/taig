@@ -176,3 +176,47 @@ export const feedbackLimiter = rateLimit({
     return Boolean(req.user && req.user.user_id);
   },
 });
+
+/**
+ * Rate limiter for file uploads
+ *
+ * Один запрос приносит до 10 файлов, поэтому потолок — 60 запросов в час на
+ * жителя: на реальные объявления и новости с запасом, но диск уже не забивается
+ * циклом из одного скрипта.
+ */
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: parseInt(process.env.RATE_LIMIT_UPLOAD_MAX) || 60,
+  keyGenerator: rateLimitKey,
+  message: {
+    error: {
+      message: "Слишком много загрузок, попробуйте позже",
+      code: "UPLOAD_RATE_LIMIT_EXCEEDED",
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
+/**
+ * Rate limiter for whole-database backups
+ *
+ * Каждый дамп — полное чтение базы внешним процессом, поэтому потолок жёсткий:
+ * 5 копий в час на администратора. Случайный двойной клик не должен
+ * превращаться в нагрузку на прод-БД.
+ */
+export const backupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: parseInt(process.env.RATE_LIMIT_BACKUP_MAX) || 5,
+  keyGenerator: rateLimitKey,
+  message: {
+    error: {
+      message: "Резервные копии создаются слишком часто, попробуйте позже",
+      code: "BACKUP_RATE_LIMIT_EXCEEDED",
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});

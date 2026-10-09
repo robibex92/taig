@@ -1,7 +1,11 @@
-import { HTTP_STATUS } from "../../core/constants/index.js";
+import { AD_STATUS, HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import { logger } from "../../core/utils/logger.js";
-import { isAdmin } from "../../core/utils/roles.js";
+import { isAdmin, isModerator } from "../../core/utils/roles.js";
+import {
+  AuthorizationError,
+  ValidationError,
+} from "../../core/errors/AppError.js";
 
 /**
  * Ad Controller - handles HTTP requests for ads
@@ -44,10 +48,14 @@ export class AdController {
       dateFrom,
       dateTo,
       search,
+      onlyMyHouse,
     } = req.query;
 
     const filters = {
-      status,
+      // Снятые и удалённые объявления витрина не отдаёт: статус выбирает
+      // смотритель по правам, а не тот, кто прислал запрос. Иначе `?status=archive`
+      // вываливал чужие архивы в общий список.
+      status: isModerator(req.user) ? status : AD_STATUS.ACTIVE,
       category,
       subcategory,
       sort,
@@ -57,10 +65,11 @@ export class AdController {
       dateFrom,
       dateTo,
       search,
+      onlyMyHouse,
     };
     const pagination = { page, limit };
 
-    const result = await this.getAdsUseCase.execute(filters, pagination);
+    const result = await this.getAdsUseCase.execute(filters, pagination, req.user ?? null);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -79,7 +88,7 @@ export class AdController {
    */
   getAdById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const ad = await this.getAdByIdUseCase.execute(Number(id), false);
+    const ad = await this.getAdByIdUseCase.execute(Number(id), false, req.user ?? null);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -92,7 +101,7 @@ export class AdController {
    */
   incrementViewCount = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const ad = await this.getAdByIdUseCase.execute(Number(id), true);
+    const ad = await this.getAdByIdUseCase.execute(Number(id), true, req.user ?? null);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -177,20 +186,21 @@ export class AdController {
     const { id } = req.params;
     const authenticatedUserId = req.user.user_id;
 
-    // First check if user owns the ad or is admin
-    const ad = await this.getAdByIdUseCase.execute(Number(id), false);
+    // Правого просмотра здесь нет: удаляем именно своё снятое объявление, а
+    // модератору разрешает правило внутри кейса.
+    const ad = await this.getAdByIdUseCase.execute(
+      Number(id),
+      false,
+      req.user ?? null
+    );
 
-    if (
-      String(ad.user_id) !== String(authenticatedUserId) &&
-      !isAdmin(req.user)
-    ) {
-      throw new Error("You can only permanently delete your own ads");
+    if (String(ad.user_id) !== String(authenticatedUserId) && !isAdmin(req.user)) {
+      throw new AuthorizationError("Можно удалять только свои объявления");
     }
 
-    // Only allow permanent delete for ads with status 'deleted'
-    if (ad.status !== "deleted") {
-      throw new Error(
-        "Can only permanently delete ads that are already soft-deleted"
+    if (ad.status !== AD_STATUS.DELETED) {
+      throw new ValidationError(
+        "Объявление нужно сначала удалить — навсегда стираются только удалённые"
       );
     }
 
@@ -268,8 +278,19 @@ export class AdController {
   /**
    * Get telegram messages for an ad
    */
+  /**
+   * Журнал публикаций объявления (в какие чаты и какими сообщениями).
+   *
+   * Нужен только редактору объявления, и наружу он отдаёт `chat_id` домашних
+   * чатов дома, поэтому доступ — автор или модерация.
+   */
   getTelegramMessages = asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const ad = await this.getAdByIdUseCase.execute(Number(id), false, req.user ?? null);
+
+    if (String(ad.user_id) !== String(req.user.user_id) && !isModerator(req.user)) {
+      throw new AuthorizationError("Журнал публикаций виден только автору объявления");
+    }
 
     const messages = await this.adRepository.getTelegramMessagesByAdId(
       Number(id)

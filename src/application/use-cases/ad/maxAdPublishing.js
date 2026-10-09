@@ -1,4 +1,5 @@
 import { logger } from "../../../core/utils/logger.js";
+import { adOfferLine } from "../../../core/utils/adOfferText.js";
 import { frontendLink } from "../../services/TelegramService.js";
 import { PUBLISH_DELAY_MS, sleep } from "./adPublishing.js";
 
@@ -22,6 +23,13 @@ import { PUBLISH_DELAY_MS, sleep } from "./adPublishing.js";
  */
 export const buildMaxAdMessageText = (ad) => {
   const lines = [`📢 ${ad.title ?? "Объявление"}`, "", (ad.content ?? "").trim()];
+
+  // Та же строка, что в Telegram: в чате дома объявление без срока читается
+  // как продажа, и сосед предлагает купить то, что отдают на несколько дней.
+  const offer = adOfferLine(ad);
+  if (offer) {
+    lines.push("", offer);
+  }
 
   if (ad.price) {
     lines.push("", `💰 Цена: ${ad.price}`);

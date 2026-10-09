@@ -7,6 +7,25 @@ const __dirname = path.dirname(__filename);
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
+/**
+ * Метаданные пишутся в одну строку JSON.
+ *
+ * `JSON.stringify` падает на BigInt, а BigInt в метаданных — это обычное дело:
+ * `user_id` и `ad_id` из Prisma именно такие. Падение происходило внутри
+ * логгера, то есть превращало в 500 уже успешное действие (например, установку
+ * главного фото), поэтому большие числа тут же заменяются строкой, а любая
+ * другая неудача сериализации — просто текстом.
+ */
+const stringifyMetadata = (metadata) => {
+  try {
+    return JSON.stringify(metadata, (_key, value) =>
+      typeof value === "bigint" ? String(value) : value
+    );
+  } catch {
+    return String(metadata);
+  }
+};
+
 // Custom log format
 const logFormat = printf(
   ({ level, message, timestamp, stack, ...metadata }) => {
@@ -14,7 +33,7 @@ const logFormat = printf(
 
     // Add metadata if present
     if (Object.keys(metadata).length > 0) {
-      msg += ` ${JSON.stringify(metadata)}`;
+      msg += ` ${stringifyMetadata(metadata)}`;
     }
 
     // Add stack trace if present

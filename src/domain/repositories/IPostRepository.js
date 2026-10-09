@@ -22,6 +22,13 @@ export class IPostRepository {
   }
 
   /**
+   * Страница ленты: `{ posts, total }`.
+   */
+  async findPage(filters, page, limit) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
    * Create a new post
    * @param {PostEntity} post - Post entity
    * @returns {Promise<PostEntity>}

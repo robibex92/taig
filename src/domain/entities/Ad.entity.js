@@ -1,4 +1,4 @@
-import { AD_STATUS } from "../../core/constants/index.js";
+import { AD_STATUS, AD_OFFER_TYPE } from "../../core/constants/index.js";
 
 /**
  * Ad Entity - represents a classified advertisement
@@ -18,6 +18,12 @@ export class AdEntity {
     this.category_name = data.category_name ?? null;
     this.subcategory_name = data.subcategory_name ?? null;
     this.price = data.price || null;
+    /**
+     * Продажа или прокат. По умолчанию — продажа: таких строк в базе
+     * большинство, и объявление без этого поля не может быть «непонятным».
+     */
+    this.offer_type = data.offer_type || AD_OFFER_TYPE.SALE;
+    this.rental_days = data.rental_days ?? null;
     this.status = data.status || AD_STATUS.ACTIVE;
     this.view_count = data.view_count || 0;
     this.created_at = data.created_at || new Date();
@@ -44,6 +50,14 @@ export class AdEntity {
    */
   isArchived() {
     return this.status === AD_STATUS.ARCHIVE;
+  }
+
+  /**
+   * Вещь отдают на время, а не продают. Карточка и публикация в чат обязаны это
+   * показывать: «цена 500» над прокатом дрели читается как продажа.
+   */
+  isRental() {
+    return this.offer_type === AD_OFFER_TYPE.RENT;
   }
 
   /**
@@ -97,6 +111,8 @@ export class AdEntity {
       category_name: this.category_name,
       subcategory_name: this.subcategory_name,
       price: this.price,
+      offer_type: this.offer_type,
+      rental_days: this.rental_days,
       status: this.status,
       view_count: this.view_count,
       created_at: this.created_at,

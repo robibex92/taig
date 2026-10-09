@@ -22,6 +22,9 @@ import { SessionIssuer } from "../../application/services/SessionIssuer.js";
 import { telegramService } from "../../application/services/TelegramService.js";
 import { messageDeliveryService } from "../../application/services/MessageDeliveryService.js";
 import { FileUploadService } from "../../application/services/FileUploadService.js";
+import { UploadedFileRepository } from "../repositories/UploadedFileRepository.js";
+import { DeleteUploadUseCase } from "../../application/use-cases/upload/DeleteUploadUseCase.js";
+import { SweepOrphanUploadsUseCase } from "../../application/use-cases/upload/SweepOrphanUploadsUseCase.js";
 import { CarImageUploadService } from "../../application/services/CarImageUploadService.js";
 
 // Services - MAX Bot (инфраструктурный HTTP-клиент + сборщик входящих)
@@ -158,6 +161,7 @@ import { GetAllUsersUseCase } from "../../application/use-cases/admin/GetAllUser
 import { UpdateUserRolesUseCase } from "../../application/use-cases/admin/UpdateUserRolesUseCase.js";
 import { GetStatisticsUseCase } from "../../application/use-cases/admin/GetStatisticsUseCase.js";
 import { GetRoleCatalogUseCase } from "../../application/use-cases/admin/GetRoleCatalogUseCase.js";
+import { CreateDatabaseBackupUseCase } from "../../application/use-cases/admin/CreateDatabaseBackupUseCase.js";
 
 // Controllers
 import { AdController } from "../../presentation/controllers/AdController.js";
@@ -270,6 +274,7 @@ export class Container {
       ["carAdminNoteRepository", CarAdminNoteRepository, []],
       ["parkingSpotNoteRepository", ParkingSpotNoteRepository, []],
       ["adImageRepository", AdImageRepository, []],
+      ["uploadedFileRepository", UploadedFileRepository, []],
       ["houseRepository", HouseRepository, []],
       ["refreshTokenRepository", RefreshTokenRepository, []],
       ["telegramChatRepository", TelegramChatRepository, []],
@@ -298,7 +303,7 @@ export class Container {
 
     // Use Cases - Ad
     this.registerMany([
-      ["getAdsUseCase", GetAdsUseCase, ["adRepository"]],
+      ["getAdsUseCase", GetAdsUseCase, ["adRepository", "userRepository"]],
       ["getAdByIdUseCase", GetAdByIdUseCase, ["adRepository"]],
       ["createAdUseCase", CreateAdUseCase, ["adRepository", "userRepository", "telegramChatRepository", "telegramService", "maxChatRepository", "maxBotService"]],
       ["updateAdUseCase", UpdateAdUseCase, ["adRepository", "telegramService", "telegramChatRepository", "maxBotService", "maxChatRepository"]],
@@ -515,9 +520,9 @@ export class Container {
       ["createAdImagesUseCase", CreateAdImagesUseCase, ["adImageRepository", "adRepository", "postRepository"]],
       ["getAdImagesUseCase", GetAdImagesUseCase, ["adImageRepository"]],
       ["getImagesByIdUseCase", GetImagesByIdUseCase, ["adImageRepository"]],
-      ["deleteAdImageUseCase", DeleteAdImageUseCase, ["adImageRepository"]],
-      ["deleteMultipleAdImagesUseCase", DeleteMultipleAdImagesUseCase, ["adImageRepository"]],
-      ["setMainImageUseCase", SetMainImageUseCase, ["adImageRepository"]],
+      ["deleteAdImageUseCase", DeleteAdImageUseCase, ["adImageRepository", "adRepository", "postRepository"]],
+      ["deleteMultipleAdImagesUseCase", DeleteMultipleAdImagesUseCase, ["adImageRepository", "adRepository", "postRepository"]],
+      ["setMainImageUseCase", SetMainImageUseCase, ["adImageRepository", "adRepository", "postRepository"]],
     ]);
 
     // Controllers - AdImage
@@ -527,7 +532,21 @@ export class Container {
 
     // Controllers - Upload
     this.registerMany([
-      ["uploadController", UploadController, ["fileUploadService"]],
+      [
+        "uploadController",
+        UploadController,
+        ["fileUploadService", "uploadedFileRepository", "deleteUploadUseCase", "sweepOrphanUploadsUseCase"],
+      ],
+    ]);
+
+    // Use Cases - Upload
+    this.registerMany([
+      ["deleteUploadUseCase", DeleteUploadUseCase, ["uploadedFileRepository", "fileUploadService"]],
+      [
+        "sweepOrphanUploadsUseCase",
+        SweepOrphanUploadsUseCase,
+        ["uploadedFileRepository", "fileUploadService"],
+      ],
     ]);
 
     // Use Cases - House
@@ -623,11 +642,14 @@ export class Container {
       ["updateUserRolesUseCase", UpdateUserRolesUseCase, ["userRepository"]],
       ["getStatisticsUseCase", GetStatisticsUseCase, []],
       ["getRoleCatalogUseCase", GetRoleCatalogUseCase, []],
+      // Дамп базы зависит только от `pg_dump` и переменных окружения — поэтому
+      // зависимостей нет, а конструктор принимает дефолты (spawn, process.env).
+      ["createDatabaseBackupUseCase", CreateDatabaseBackupUseCase, []],
     ]);
 
     // Controllers - Admin
     this.registerMany([
-      ["adminController", AdminController, ["getAllUsersUseCase", "updateUserRolesUseCase", "getStatisticsUseCase", "getRoleCatalogUseCase"]],
+      ["adminController", AdminController, ["getAllUsersUseCase", "updateUserRolesUseCase", "getStatisticsUseCase", "getRoleCatalogUseCase", "createDatabaseBackupUseCase"]],
     ]);
 
     // Controllers - Event

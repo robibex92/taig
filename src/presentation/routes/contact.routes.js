@@ -1,7 +1,7 @@
 import express from "express";
 import Joi from "joi";
 import container from "../../infrastructure/container/Container.js";
-import { authenticateConditional, authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { contactMessageLimiter } from "../middlewares/securityMiddleware.js";
 import { validate } from "../../core/validation/validator.js";
 import { prisma } from "../../infrastructure/database/db.js";
@@ -12,6 +12,10 @@ import { ContactController } from "../controllers/ContactController.js";
  *
  * Замена прямому `POST /telegram/send` с `chat_id` из клиента: адресат —
  * человек, а канал и id выбирает бэк (MessageDeliveryService).
+ *
+ * Оба маршрута под `authenticateJWT`: анониму писать соседу нечем — адресата
+ * всё равно определяет аккаунт отправителя, а лимитер по IP делит квоту на весь
+ * дом. Обратно на `authenticateConditional` это переводить нельзя.
  */
 
 const router = express.Router();
@@ -92,7 +96,7 @@ router.get(
  */
 router.post(
   "/contacts/send",
-  authenticateConditional,
+  authenticateJWT,
   contactMessageLimiter,
   (req, res, next) => {
     req.body = validate(sendSchema, req.body);

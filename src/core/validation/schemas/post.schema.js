@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { ownUploadUrl } from "./uploadUrl.js";
 
 export const createPostSchema = Joi.object({
   title: Joi.string().min(3).max(255).trim().required().messages({
@@ -13,7 +14,8 @@ export const createPostSchema = Joi.object({
     "any.required": "Content is required",
   }),
 
-  image_url: Joi.string().uri().allow("", null),
+  // Только файл из нашего каталога загрузок: ссылка попадает в `src` на сайте.
+  image_url: ownUploadUrl().allow("", null),
 
   status: Joi.string().valid("active", "deleted").default("active"),
 
@@ -49,7 +51,8 @@ export const createPostSchema = Joi.object({
 export const updatePostSchema = Joi.object({
   title: Joi.string().min(3).max(255).trim(),
   content: Joi.string().min(10).max(5000).trim(),
-  image_url: Joi.string().uri().allow("", null),
+  // Только файл из нашего каталога загрузок: ссылка попадает в `src` на сайте.
+  image_url: ownUploadUrl().allow("", null),
   status: Joi.string().valid("active", "deleted"),
   source: Joi.string().trim().allow("", null),
   marker: Joi.string().trim().allow("", null),
@@ -57,4 +60,8 @@ export const updatePostSchema = Joi.object({
 
 export const getPostsQuerySchema = Joi.object({
   status: Joi.string().valid("active", "deleted").default("active"),
+  page: Joi.number().integer().min(1).default(1),
+  // Без лимита лента выгружается целиком; 50 — потолок, чтобы запрос нельзя было
+  // превратить в «отдай всю таблицу».
+  limit: Joi.number().integer().min(1).max(50).default(10),
 });

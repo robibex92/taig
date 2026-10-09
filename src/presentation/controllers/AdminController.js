@@ -9,12 +9,14 @@ export class AdminController {
     getAllUsersUseCase,
     updateUserRolesUseCase,
     getStatisticsUseCase,
-    getRoleCatalogUseCase
+    getRoleCatalogUseCase,
+    createDatabaseBackupUseCase
   ) {
     this.getAllUsersUseCase = getAllUsersUseCase;
     this.updateUserRolesUseCase = updateUserRolesUseCase;
     this.getStatisticsUseCase = getStatisticsUseCase;
     this.getRoleCatalogUseCase = getRoleCatalogUseCase;
+    this.createDatabaseBackupUseCase = createDatabaseBackupUseCase;
   }
 
   /**
@@ -87,5 +89,20 @@ export class AdminController {
       success: true,
       data: catalog,
     });
+  });
+
+  /**
+   * Whole-database backup as a downloadable SQL file.
+   * GET /api-v1/admin/backup
+   *
+   * Тело ответа — сам дамп, поэтому ни `success`, ни JSON-конверта здесь нет.
+   */
+  downloadBackup = asyncHandler(async (req, res) => {
+    const { buffer, filename } = await this.createDatabaseBackupUseCase.execute();
+
+    res.setHeader("Content-Type", "application/sql; charset=utf-8");
+    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
   });
 }

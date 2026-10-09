@@ -6,7 +6,6 @@ import {
   getAdImagesSchema,
   getImagesByIdSchema,
   deleteImagesSchema,
-  setMainImageSchema,
   imageIdSchema,
 } from "../../core/validation/schemas/adImage.schema.js";
 
@@ -49,7 +48,8 @@ export class AdImageController {
       ad_id,
       post_id,
       images,
-      serverUrl
+      serverUrl,
+      req.user
     );
 
     res.status(201).json({
@@ -117,7 +117,7 @@ export class AdImageController {
       throw new ValidationError(error.details[0].message);
     }
 
-    await this.deleteAdImageUseCase.execute(parseInt(req.params.id));
+    await this.deleteAdImageUseCase.execute(parseInt(req.params.id), req.user);
 
     res.json({
       success: true,
@@ -137,7 +137,7 @@ export class AdImageController {
     }
 
     const { ids } = req.body;
-    const deletedCount = await this.deleteMultipleAdImagesUseCase.execute(ids);
+    const deletedCount = await this.deleteMultipleAdImagesUseCase.execute(ids, req.user);
 
     res.json({
       success: true,
@@ -159,21 +159,9 @@ export class AdImageController {
       throw new ValidationError(paramError.details[0].message);
     }
 
-    const { error: bodyError } = setMainImageSchema.validate({
-      image_id: parseInt(req.params.image_id),
-      ...req.body,
-    });
-
-    if (bodyError) {
-      throw new ValidationError(bodyError.details[0].message);
-    }
-
-    const { ad_id, post_id } = req.body;
-    await this.setMainImageUseCase.execute(
-      parseInt(req.params.image_id),
-      ad_id,
-      post_id
-    );
+    // `ad_id`/`post_id` из тела больше не участвуют: хозяин снимка берётся из
+    // строки `ad_images`, иначе им можно было бы прикрыть чужое объявление.
+    await this.setMainImageUseCase.execute(parseInt(req.params.image_id), req.user);
 
     res.json({
       success: true,
@@ -201,8 +189,7 @@ export class AdImageController {
       throw new ValidationError("Image not found");
     }
 
-    // Delete the image by its ID
-    await this.deleteAdImageUseCase.execute(imageToDelete.id);
+    await this.deleteAdImageUseCase.execute(imageToDelete.id, req.user);
 
     res.json({
       success: true,

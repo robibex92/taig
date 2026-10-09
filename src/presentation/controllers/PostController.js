@@ -24,18 +24,30 @@ export class PostController {
   }
 
   /**
-   * Get all posts (with optional status filter)
-   * GET /api-v1/posts?status=active
+   * Get posts (with optional status filter), page by page
+   * GET /api-v1/posts?status=active&page=1&limit=10
    */
   getPosts = async (req, res, next) => {
     try {
-      const filters = validate(getPostsQuerySchema, req.query, "query");
+      const { page, limit, ...filters } = validate(
+        getPostsQuerySchema,
+        req.query,
+        "query"
+      );
 
-      const posts = await this.getPostsUseCase.execute(filters);
+      const { posts, total } = await this.getPostsUseCase.execute(filters, page, limit);
+      const totalPages = Math.max(1, Math.ceil(total / limit));
 
       res.json({
         success: true,
         data: posts,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasMore: page < totalPages,
+        },
       });
     } catch (error) {
       next(error);

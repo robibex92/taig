@@ -1,6 +1,7 @@
 import { Telegraf } from "telegraf";
 import pLimit from "p-limit";
 import { logger } from "../../core/utils/logger.js";
+import { adOfferLine } from "../../core/utils/adOfferText.js";
 import { AdRepository } from "../../infrastructure/repositories/AdRepository.js";
 import { PostRepository } from "../../infrastructure/repositories/PostRepository.js";
 
@@ -405,9 +406,15 @@ export class TelegramService {
   /**
    * Build message text for ad
    */
-  buildAdMessageText({ title, content, price, username, user_id, ad_id }) {
+  buildAdMessageText({ title, content, price, username, user_id, ad_id, offer }) {
     let text = `📢 <b>${this._escapeHtml(title)}</b>\n\n`;
     text += `${this._escapeHtml(content)}\n\n`;
+
+    // Строка проката идёт перед ценой: «💰 Цена: 500» без неё читается как
+    // продажа, и сосед в чате предлагает деньги за вещь, которую отдают на три дня.
+    if (offer) {
+      text += `${this._escapeHtml(offer)}\n\n`;
+    }
 
     if (price) {
       text += `💰 Цена: <b>${this._escapeHtml(price)}</b>\n\n`;
@@ -614,6 +621,7 @@ export class TelegramService {
         title: ad.title,
         content: ad.content,
         price: ad.price,
+        offer: adOfferLine(ad),
         username: username,
         user_id: ad.user_id,
         ad_id: ad.id,
@@ -731,6 +739,9 @@ export class TelegramService {
         title: updatedAd.title,
         content: updatedAd.content,
         price: updatedAd.price,
+        // Правка «продажа → прокат» обязан перепубликоваться со строкой срока:
+        // без неё в чате остаётся объявление, которое продают.
+        offer: adOfferLine(updatedAd),
         username: username,
         user_id: updatedAd.user_id,
         ad_id: updatedAd.id,

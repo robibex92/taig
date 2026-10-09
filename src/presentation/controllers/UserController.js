@@ -106,14 +106,29 @@ export class UserController {
    */
   getUserAds = asyncHandler(async (req, res) => {
     const { user_id } = req.params;
-    const { status, category, subcategory, search, sort, order, page, limit } =
-      req.query;
+    const {
+      status,
+      category,
+      subcategory,
+      search,
+      sort,
+      order,
+      page,
+      limit,
+      priceMin,
+      priceMax,
+      dateFrom,
+      dateTo,
+    } = req.query;
 
     // `req.user.user_id` — BigInt из Prisma, `user_id` из пути — строка: `===`
     // у разных типов всегда false, и владелец не узнавался бы никогда.
     const isOwner = !!req.user && String(req.user.user_id) === String(user_id);
     const canSeeAll = isOwner || isModerator(req.user);
 
+    // Набор фильтров тот же, что у витрины: страница «Мои объявления» шлёт его
+    // одним и тем же запросом, и цена с датами должны пониматься обоими
+    // списками — иначе любой фильтр цены превращается в 400.
     const filters = {
       status: canSeeAll ? status : AD_STATUS.ACTIVE,
       category,
@@ -121,6 +136,10 @@ export class UserController {
       search,
       sort,
       order,
+      priceMin,
+      priceMax,
+      dateFrom,
+      dateTo,
       limit,
       offset: (page - 1) * limit,
     };
@@ -128,11 +147,7 @@ export class UserController {
     const [{ ads, total }, summary] = await Promise.all([
       this.adRepository.findByUserId(Number(user_id), filters),
       canSeeAll
-        ? this.adRepository.summarizeForUser(Number(user_id), {
-            category,
-            subcategory,
-            search,
-          })
+        ? this.adRepository.summarizeForUser(Number(user_id), filters)
         : null,
     ]);
 

@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { ownUploadUrl } from "./uploadUrl.js";
 
 /**
  * Validation schemas for AdImage operations
@@ -10,7 +11,8 @@ export const createAdImagesSchema = Joi.object({
   images: Joi.array()
     .items(
       Joi.object({
-        image_url: Joi.string().required(),
+        // Ссылка ведёт в наш каталог загрузок — см. uploadUrl.js.
+        image_url: ownUploadUrl().required(),
         is_main: Joi.boolean().optional().default(false),
       })
     )
@@ -38,16 +40,6 @@ export const getImagesByIdSchema = Joi.object({
 export const deleteImagesSchema = Joi.object({
   ids: Joi.array().items(Joi.number().integer().positive()).min(1).required(),
 });
-
-export const setMainImageSchema = Joi.object({
-  image_id: Joi.number().integer().positive().required(),
-  ad_id: Joi.number().integer().positive().optional(),
-  post_id: Joi.number().integer().positive().optional(),
-})
-  .xor("ad_id", "post_id")
-  .messages({
-    "object.xor": "Either ad_id or post_id must be provided",
-  });
 
 export const imageIdSchema = Joi.object({
   id: Joi.number().integer().positive().required(),

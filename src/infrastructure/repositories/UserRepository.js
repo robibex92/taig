@@ -3,6 +3,12 @@ import { UserEntity } from "../../domain/entities/User.entity.js";
 import { IUserRepository } from "../../domain/repositories/IUserRepository.js";
 import { DatabaseError, NotFoundError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
+import {
+  GLOBAL_ROLES,
+  houseManageRole,
+  houseViewRole,
+  normalizeHouseKey,
+} from "../../core/utils/roles.js";
 
 /**
  * Prisma where-clause for the admin user list (search + role filters).
@@ -388,6 +394,39 @@ export class UserRepository extends IUserRepository {
         filters,
       });
       throw new DatabaseError("Failed to count users", error);
+    }
+  }
+
+  /**
+   * id жителей перечисленных домов.
+   *
+   * Колонки «дом» у `users` нет и не будет: принадлежность дому — это роль
+   * `house:<номер>:view|manage`, она же GIN-индексирована, поэтому выборка идёт
+   * по ролям, а не по таблице `houses` (там реестр квартир, и связь с человеком
+   * в `id_telegram` исторически то `telegram_id`, то `user_id`).
+   *
+   * Заблокированные исключены: их объявления и так не участвуют в витрине.
+   */
+  async findResidentIdsByHouses(houses) {
+    const roles = (houses ?? [])
+      .filter((house) => normalizeHouseKey(house))
+      .flatMap((house) => [houseViewRole(house), houseManageRole(house)]);
+
+    if (!roles.length) return [];
+
+    try {
+      const users = await prisma.user.findMany({
+        where: {
+          roles: { hasSome: roles },
+          NOT: [{ roles: { has: GLOBAL_ROLES.BLOCKED } }],
+        },
+        select: { user_id: true },
+      });
+
+      return users.map((user) => user.user_id);
+    } catch (error) {
+      logger.error("Error finding residents by houses", { error: error.message, houses });
+      throw new DatabaseError("Failed to find residents", error);
     }
   }
 }

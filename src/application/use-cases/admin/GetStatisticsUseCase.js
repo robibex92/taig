@@ -1,5 +1,6 @@
 import { prisma } from "../../../infrastructure/database/prisma.js";
 import { PRIVILEGED_ROLES } from "../../../core/utils/roles.js";
+import { AD_STATUS } from "../../../core/constants/index.js";
 
 /**
  * Get Statistics Use Case
@@ -33,9 +34,14 @@ export class GetStatisticsUseCase {
       _count: true,
     });
 
-    // Price is stored as String, so we can't use aggregate
-    // Just skip avg_price calculation for now
-    const avgPrice = { _avg: { price: 0 } };
+    // Среднюю по строковой `price` посчитать было нельзя (`avg(text)` в SQL не
+    // существует), поэтому показатель годами стоял нулевым. С колонкой
+    // `price_value` он считается в базе — по активным объявлениям, как и цифра
+    // «сколько сейчас продается».
+    const priceAggregate = await prisma.ad.aggregate({
+      _avg: { price_value: true },
+      where: { status: AD_STATUS.ACTIVE },
+    });
 
     // Get booking statistics (if table exists)
     let totalBookings = 0;
@@ -193,7 +199,7 @@ export class GetStatisticsUseCase {
         by_status: Object.fromEntries(
           adsByStatus.map((a) => [a.status, a._count])
         ),
-        avg_price: avgPrice._avg.price || 0,
+        avg_price: Number(priceAggregate._avg.price_value ?? 0),
       },
       bookings: {
         total: totalBookings,

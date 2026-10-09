@@ -18,7 +18,7 @@ const BASE_ROUTE = "/posts";
  * @swagger
  * /api-v1/posts:
  *   get:
- *     summary: Get all posts
+ *     summary: Get a page of posts
  *     tags: [Posts]
  *     parameters:
  *       - in: query
@@ -28,9 +28,24 @@ const BASE_ROUTE = "/posts";
  *           enum: [active, deleted]
  *           default: active
  *         description: Filter posts by status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Posts per page
  *     responses:
  *       200:
- *         description: List of posts
+ *         description: List of posts and pagination
  *       500:
  *         description: Internal Server Error
  */

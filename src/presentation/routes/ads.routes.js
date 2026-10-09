@@ -1,6 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
 import {
   createAdSchema,
@@ -16,11 +16,22 @@ const BASE_PATH = "/ads";
 // Public routes
 router.get(
   BASE_PATH,
+  authenticateOptional,
   validateRequest(getAdsQuerySchema, "query"),
   adController.getAds
 );
 
-router.get(`${BASE_PATH}/:id`, adController.getAdById);
+/**
+ * Кто смотрит объявление решает его видимость: активное открыто всем, снятое и
+ * удалённое — только автору и модерации (см. `GetAdByIdUseCase`), поэтому
+ * маршруту нужен необязательный токен, а не полный отказ гостю.
+ */
+router.get(
+  `${BASE_PATH}/:id`,
+  authenticateOptional,
+  validateRequest(adIdParamSchema, "params"),
+  adController.getAdById
+);
 
 // Get ad images (alias for /ad-images/:id for convenience)
 router.get(`${BASE_PATH}/:id/images`, async (req, res, next) => {
@@ -31,10 +42,16 @@ router.get(`${BASE_PATH}/:id/images`, async (req, res, next) => {
 // Get telegram messages for an ad
 router.get(
   `${BASE_PATH}/:id/telegram-messages`,
+  authenticateJWT,
   adController.getTelegramMessages
 );
 
-router.post(`${BASE_PATH}/:id/view_count`, adController.incrementViewCount);
+router.post(
+  `${BASE_PATH}/:id/view_count`,
+  authenticateOptional,
+  validateRequest(adIdParamSchema, "params"),
+  adController.incrementViewCount
+);
 
 // Protected routes
 router.post(

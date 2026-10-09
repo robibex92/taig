@@ -80,4 +80,19 @@ describe("getUserAds", () => {
     expect(listCalls[0].filters.status).toBe("archive");
     expect(body.summary).toBeDefined();
   });
+
+  it("фильтры цены и дат доходят до списка и сводки", async () => {
+    const query = {
+      priceMin: 100,
+      priceMax: 5000,
+      dateFrom: "2026-09-01T00:00:00.000Z",
+      dateTo: "2026-09-30T23:59:59.999Z",
+    };
+
+    await respond(requestFor({ user_id: 7n, roles: [] }, query));
+
+    // Панель поиска на «Моих объявлениях» та же, что на витрине: непонятый
+    // параметр — это либо 400, либо счётчики вкладок вразрез со списком.
+    expect(listCalls[0].filters).toMatchObject(query);
+  });
 });

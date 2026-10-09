@@ -7,10 +7,7 @@ import { Post } from "../../domain/entities/Post.entity.js";
  * Handles database operations for posts/news
  */
 export class PostRepository extends IPostRepository {
-  /**
-   * Get all posts with optional filters
-   */
-  async findAll(filters = {}) {
+  _where(filters = {}) {
     const where = {};
 
     if (filters.status) {
@@ -21,12 +18,38 @@ export class PostRepository extends IPostRepository {
       where.marker = filters.marker;
     }
 
+    return where;
+  }
+
+  /**
+   * Get all posts with optional filters
+   */
+  async findAll(filters = {}) {
     const posts = await prisma.post.findMany({
-      where,
+      where: this._where(filters),
       orderBy: { created_at: "desc" },
     });
 
     return posts.map((post) => Post.fromDatabase(post));
+  }
+
+  /**
+   * Одна страница ленты и общее число подходящих записей одним обращением:
+   * счётчик нужен, чтобы «Показать ещё» исчезал честно, а не по короткому ответу.
+   */
+  async findPage(filters = {}, page = 1, limit = 10) {
+    const where = this._where(filters);
+    const [posts, total] = await prisma.$transaction([
+      prisma.post.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.post.count({ where }),
+    ]);
+
+    return { posts: posts.map((post) => Post.fromDatabase(post)), total };
   }
 
   /**

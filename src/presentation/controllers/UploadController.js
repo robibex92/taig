@@ -1,15 +1,26 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
-import { ValidationError } from "../../core/errors/AppError.js";
+import { AuthorizationError, ValidationError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
 import { buildServerUrl } from "../../core/utils/requestUrl.js";
+import { isModerator } from "../../core/utils/roles.js";
+import { validate } from "../../core/validation/validator.js";
+import { sweepUploadsQuerySchema } from "../../core/validation/schemas/upload.schema.js";
 
 /**
  * Upload Controller
  * Handles file upload and deletion operations
  */
 export class UploadController {
-  constructor(fileUploadService) {
+  constructor(
+    fileUploadService,
+    uploadedFileRepository,
+    deleteUploadUseCase,
+    sweepOrphanUploadsUseCase
+  ) {
     this.fileUploadService = fileUploadService;
+    this.uploadedFileRepository = uploadedFileRepository;
+    this.deleteUploadUseCase = deleteUploadUseCase;
+    this.sweepOrphanUploadsUseCase = sweepOrphanUploadsUseCase;
   }
 
   /**
@@ -25,8 +36,19 @@ export class UploadController {
       throw new ValidationError("No files uploaded");
     }
 
+    // Имя файла должно соответствовать его байтам: HEIC с расширением .jpg
+    // браузер не рисует, а `Content-Type` берётся именно из расширения.
+    await this.fileUploadService.normalizeStored(req.files);
+
     const serverUrl = buildServerUrl(req);
     const fileUrls = this.fileUploadService.getFileUrls(req.files, serverUrl);
+
+    // Кто принёс файл — записываем сразу: без этого удаления не отличить своё
+    // от чужого, а уборка не знает, что файл уже никому не нужен.
+    await this.uploadedFileRepository.record(
+      req.files.map((file) => file.filename),
+      req.user?.user_id
+    );
 
     logger.info("Files uploaded successfully", {
       count: fileUrls.length,
@@ -44,17 +66,35 @@ export class UploadController {
    * Delete a file
    */
   deleteFile = asyncHandler(async (req, res) => {
-    const relPath = req.query.path;
-
-    if (!relPath) {
-      throw new ValidationError("File path not provided");
-    }
-
-    await this.fileUploadService.deleteFile(relPath);
+    const result = await this.deleteUploadUseCase.execute(req.query.path, req.user);
 
     res.json({
       success: true,
       message: "File deleted",
+      ...result,
     });
+  });
+
+  /**
+   * POST /api-v1/upload/sweep
+   * Список (и, по запросу, удаление) файлов, которые никто не использует.
+   * Разрушающий шаг только явный: `dry_run=false`.
+   */
+  sweep = asyncHandler(async (req, res) => {
+    if (!isModerator(req.user)) {
+      throw new AuthorizationError("Уборкой файлов занимается модерация");
+    }
+
+    const { older_than_hours: olderThanHours, dry_run: dryRun } = validate(
+      sweepUploadsQuerySchema,
+      req.query
+    );
+
+    const report = await this.sweepOrphanUploadsUseCase.execute({
+      olderThanHours,
+      dryRun,
+    });
+
+    res.json({ success: true, ...report });
   });
 }

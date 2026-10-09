@@ -52,6 +52,11 @@ model Ad {
   updated_at   DateTime?    @updatedAt @db.Timestamptz(6)
   category     BigInt?
   price        String?
+  price_value  Decimal?    @db.Decimal(12, 2)
+  /// 'sale' — продаёт, 'rent' — отдаёт временно на срок rental_days.
+  offer_type   String       @default("sale") @db.VarChar(20)
+  /// На сколько дней отдают; заполнено только при `offer_type = "rent"`.
+  rental_days  Int?
   view_count   Int?
   bookings     Booking[]
   favorites    FavoriteAd[]
@@ -86,6 +91,19 @@ model AdImage {
   post_id    Int?
 
   @@map("ad_images")
+}
+
+/// Загруженные файлы: кто их принёс и когда. Ссылка на пользователя сознательно
+/// не внешний ключ — файл переживает удаливший его объявления, а при удалении
+/// аккаунта файлы остаются до плановой уборки.
+model UploadedFile {
+  id          BigInt   @id @default(autoincrement())
+  filename    String   @unique
+  uploaded_by BigInt?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at])
+  @@map("uploaded_files")
 }
 
 model Post {

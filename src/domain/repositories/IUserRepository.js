@@ -104,4 +104,13 @@ export class IUserRepository {
   async count(filters) {
     throw new Error("Method not implemented");
   }
+
+  /**
+   * id жителей перечисленных домов.
+   * @param {Array<string|number>} houses - Номера домов без нормализации
+   * @returns {Promise<bigint[]>}
+   */
+  async findResidentIdsByHouses(houses) {
+    throw new Error("Method not implemented");
+  }
 }
