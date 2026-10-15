@@ -52,6 +52,8 @@ export class CreateEntranceCommentUseCase {
 
     const created = await this.entranceCommentRepository.create({
       house_id: house.id,
+      // Адрес здания: текст принадлежит дому с этим номером, а не конкретной квартире.
+      house_number: house.house,
       entrance: entranceNumber,
       author_id: BigInt(author_id),
       comment: text,

@@ -165,13 +165,17 @@ model House {
 }
 
 model HouseComment {
-  id         BigInt   @id @default(autoincrement())
-  house_id   BigInt
-  author_id  BigInt
-  comment    String
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  id           BigInt   @id @default(autoincrement())
+  house_id     BigInt
+  /// Номер дома, к которому относится текст: '39' или '39/1'. Адрес здания, а не квартиры.
+  house_number String?  @db.VarChar(20)
+  author_id    BigInt
+  comment      String
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  /// Один текст на дом — повтор невозможен на уровне базы.
+  @@unique([house_number])
   @@index([house_id])
   @@index([author_id])
   @@index([created_at])
@@ -179,14 +183,18 @@ model HouseComment {
 }
 
 model EntranceComment {
-  id         BigInt   @id @default(autoincrement())
-  house_id   BigInt
-  entrance   Int
-  author_id  BigInt
-  comment    String
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  id           BigInt   @id @default(autoincrement())
+  house_id     BigInt
+  /// Номер дома, к которому относится текст: '39' или '39/1'. Адрес здания, а не квартиры.
+  house_number String?  @db.VarChar(20)
+  entrance     Int
+  author_id    BigInt
+  comment      String
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  /// Один текст на подъезд — повтор невозможен на уровне базы.
+  @@unique([house_number, entrance])
   @@index([author_id])
   @@index([created_at])
   @@map("entrance_comments")

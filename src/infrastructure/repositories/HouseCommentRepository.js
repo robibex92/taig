@@ -7,21 +7,20 @@ import { isAdmin } from "../../core/utils/roles.js";
  */
 export class HouseCommentRepository {
   /**
-   * Id всех записей этого номера дома.
+   * Якорная запись дома — самая ранняя квартира этого номера.
    *
-   * Комментарий принадлежит зданию, а `houses` — таблица квартир: под номером
-   * `39` их десятки строк, и строки комментариев исторически легли на разные
-   * квартиры. Поэтому читаем по всему списку, а пишем в самую раннюю, чтобы
-   * адрес нового комментария не зависел от порядка обхода.
+   * Нужна только чтобы заполнить легаси-колонку `house_id`; адресом комментария
+   * служит `house_number`, потому что `houses` — таблица квартир, и привязанный
+   * к квартире комментарий уезжал вместе с квартирой в другой дом.
    */
-  async #houseRowIds(houseNumber) {
-    const rows = await prisma.house.findMany({
+  async #anchorHouseId(houseNumber) {
+    const house = await prisma.house.findFirst({
       where: { house: String(houseNumber) },
       select: { id: true },
       orderBy: { id: "asc" },
     });
 
-    return rows.map((row) => row.id);
+    return house?.id ?? null;
   }
 
   /**
@@ -40,7 +39,7 @@ export class HouseCommentRepository {
       }
 
       // Находим house_id по номеру дома
-      const [anchorId] = await this.#houseRowIds(commentData.house_id);
+      const anchorId = await this.#anchorHouseId(commentData.house_id);
 
       if (!anchorId) {
         throw new Error(
@@ -48,13 +47,29 @@ export class HouseCommentRepository {
         );
       }
 
-      const comment = await prisma.houseComment.create({
-        data: {
-          house_id: anchorId, // Используем найденный house_id
-          author_id: commentData.author_id,
-          comment: commentData.comment,
-        },
-      });
+      const comment = await prisma.houseComment
+        .create({
+          data: {
+            house_id: anchorId, // легаси-привязка к квартире
+            house_number: String(commentData.house_id), // адрес здания
+            author_id: commentData.author_id,
+            comment: commentData.comment,
+          },
+        })
+        .catch(async (error) => {
+          /**
+           * Уникальный индекс `house_number` не даст появиться второму тексту на
+           * дом. Столкнуться может только одновременное сохранение двумя
+           * администраторами, и по правилу «один текст на дом» это замена, а не
+           * ошибка.
+           */
+          if (error?.code !== "P2002") throw error;
+
+          const [latest] = await this.findByHouseNumber(commentData.house_id);
+          if (!latest) throw error;
+
+          return this.update(latest.id, { comment: commentData.comment });
+        });
 
       logger.info("House comment created", {
         commentId: comment.id,
@@ -107,19 +122,14 @@ export class HouseCommentRepository {
   /**
    * Get comments for a specific house by house number
    *
-   * Номер дома — точное значение: `37` и `37/1` не пересекаются.
+   * Адрес — `house_number`, точное значение колонки: `37` и `37/1` не пересекаются,
+   * и переезд квартиры в другой дом текст больше не затрагивает.
    */
   async findByHouseNumber(houseNumber) {
     try {
-      const ids = await this.#houseRowIds(houseNumber);
-
-      if (!ids.length) {
-        return [];
-      }
-
       return prisma.houseComment.findMany({
         where: {
-          house_id: { in: ids },
+          house_number: String(houseNumber),
         },
         select: {
           id: true,
@@ -127,6 +137,7 @@ export class HouseCommentRepository {
           created_at: true,
           author_id: true,
           house_id: true,
+          house_number: true,
         },
         orderBy: { created_at: "desc" },
       });

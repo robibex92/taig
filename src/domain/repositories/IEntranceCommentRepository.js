@@ -27,12 +27,12 @@ export class IEntranceCommentRepository {
 
   /**
    * Get comment for a specific house entrance
-   * @param {BigInt[]} house_ids - все id записей этого номера дома
+   * @param {string} house_number - номер дома целиком: '39' или '39/1'
    * @param {number} entrance - Entrance number
    * @returns {Promise<Object|null>} Comment or null (only one per entrance)
    */
-  async findByHouseIdsAndEntrance(house_ids, entrance) {
-    throw new Error("Method 'findByHouseIdsAndEntrance()' must be implemented");
+  async findByHouseNumberAndEntrance(house_number, entrance) {
+    throw new Error("Method 'findByHouseNumberAndEntrance()' must be implemented");
   }
 
   /**

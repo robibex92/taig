@@ -39,19 +39,6 @@ export class IHouseRepository {
   }
 
   /**
-   * All row ids of this exact house number.
-   *
-   * Комментарий дома относится к зданию, а `houses` — таблица квартир: у одного
-   * номера их столько строк, сколько квартир.
-   *
-   * @param {string} house_number
-   * @returns {Promise<BigInt[]>}
-   */
-  async findIdsByHouseNumber(house_number) {
-    throw new Error("Method not implemented");
-  }
-
-  /**
    * Find all houses by user telegram ID
    * @param {number} telegramId
    * @returns {Promise<House[]>}

@@ -10,18 +10,34 @@ export class EntranceCommentRepository {
    * Create a new entrance comment
    */
   async create(commentData) {
-    const comment = await prisma.entranceComment.create({
-      data: {
-        house_id: commentData.house_id,
-        entrance: commentData.entrance,
-        author_id: commentData.author_id,
-        comment: commentData.comment,
-      },
-    });
+    const comment = await prisma.entranceComment
+      .create({
+        data: {
+          house_id: commentData.house_id,
+          house_number: commentData.house_number,
+          entrance: commentData.entrance,
+          author_id: commentData.author_id,
+          comment: commentData.comment,
+        },
+      })
+      .catch(async (error) => {
+        // Один текст на подъезд: одновременное сохранение двумя администраторами
+        // означает замену, а не вторую строку.
+        if (error?.code !== "P2002") throw error;
+
+        const latest = await this.findByHouseNumberAndEntrance(
+          commentData.house_number,
+          commentData.entrance
+        );
+        if (!latest) throw error;
+
+        return this.update(latest.id, { comment: commentData.comment });
+      });
 
     logger.info("Entrance comment created", {
       commentId: comment.id,
       houseId: comment.house_id,
+      houseNumber: comment.house_number,
       entrance: comment.entrance,
       authorId: comment.author_id,
     });
@@ -44,15 +60,12 @@ export class EntranceCommentRepository {
    * Всегда с `orderBy: created_at desc`: «последний» комментарий подъезда не должен
    * зависеть от порядка строк в БД.
    *
-   * `house_ids` — все записи этого номера дома (см. `HouseRepository.findIdsByHouseNumber`):
-   * строки комментариев легли на разные квартиры одного здания, искать по одной
-   * «первой» квартире нельзя.
+   * Адрес — номер дома целиком (`39/1` ≠ `39`), а не id квартиры: `houses` — таблица
+   * квартир, и строка, привязанная к квартире, уезжала вместе с ней в другой дом.
    */
-  async findByHouseIdsAndEntrance(house_ids, entrance) {
-    if (!house_ids.length) return null;
-
+  async findByHouseNumberAndEntrance(house_number, entrance) {
     return prisma.entranceComment.findFirst({
-      where: { house_id: { in: house_ids }, entrance: Number(entrance) },
+      where: { house_number: String(house_number), entrance: Number(entrance) },
       orderBy: { created_at: "desc" },
     });
   }
