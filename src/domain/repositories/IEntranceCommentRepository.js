@@ -26,22 +26,13 @@ export class IEntranceCommentRepository {
   }
 
   /**
-   * Get comments for a specific house entrance
-   * @param {BigInt} house_id - House ID
+   * Get comment for a specific house entrance
+   * @param {BigInt[]} house_ids - все id записей этого номера дома
    * @param {number} entrance - Entrance number
    * @returns {Promise<Object|null>} Comment or null (only one per entrance)
    */
-  async findByHouseAndEntrance(house_id, entrance) {
-    throw new Error("Method 'findByHouseAndEntrance()' must be implemented");
-  }
-
-  /**
-   * Get all comments for a house
-   * @param {BigInt} house_id - House ID
-   * @returns {Promise<Array>} Comments array
-   */
-  async findByHouseId(house_id) {
-    throw new Error("Method 'findByHouseId()' must be implemented");
+  async findByHouseIdsAndEntrance(house_ids, entrance) {
+    throw new Error("Method 'findByHouseIdsAndEntrance()' must be implemented");
   }
 
   /**

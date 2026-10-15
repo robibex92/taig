@@ -43,21 +43,17 @@ export class EntranceCommentRepository {
    *
    * Всегда с `orderBy: created_at desc`: «последний» комментарий подъезда не должен
    * зависеть от порядка строк в БД.
+   *
+   * `house_ids` — все записи этого номера дома (см. `HouseRepository.findIdsByHouseNumber`):
+   * строки комментариев легли на разные квартиры одного здания, искать по одной
+   * «первой» квартире нельзя.
    */
-  async findByHouseAndEntrance(house_id, entrance) {
-    return prisma.entranceComment.findFirst({
-      where: { house_id, entrance: Number(entrance) },
-      orderBy: { created_at: "desc" },
-    });
-  }
+  async findByHouseIdsAndEntrance(house_ids, entrance) {
+    if (!house_ids.length) return null;
 
-  /**
-   * Get all comments for a house
-   */
-  async findByHouseId(house_id) {
-    return prisma.entranceComment.findMany({
-      where: { house_id: BigInt(house_id) },
-      orderBy: { entrance: "asc" },
+    return prisma.entranceComment.findFirst({
+      where: { house_id: { in: house_ids }, entrance: Number(entrance) },
+      orderBy: { created_at: "desc" },
     });
   }
 

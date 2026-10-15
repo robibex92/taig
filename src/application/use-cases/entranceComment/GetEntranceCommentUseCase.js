@@ -24,27 +24,21 @@ export class GetEntranceCommentUseCase {
     }
 
     const houseKey = String(house_id ?? "").trim();
-    const house = await this.houseRepository.findByHouseNumber(houseKey);
+    const ids = await this.houseRepository.findIdsByHouseNumber(houseKey);
 
-    if (!house) {
+    if (!ids.length) {
       throw new NotFoundError("House");
     }
 
-    let comment = await this.entranceCommentRepository.findByHouseAndEntrance(
-      house.id,
+    const comment = await this.entranceCommentRepository.findByHouseIdsAndEntrance(
+      ids,
       entranceNumber
     );
 
-    // Легаси: часть старых строк хранит в `house_id` номер дома вместо id записи.
-    if (!comment && /^\d+$/.test(houseKey)) {
-      comment = await this.entranceCommentRepository.findByHouseAndEntrance(
-        BigInt(houseKey),
-        entranceNumber
-      );
-    }
-
+    // `houseKey` — точное значение колонки `houses.house`, поэтому `37` и `37/1`
+    // здесь не пересекаются.
     return {
-      house: house.house,
+      house: houseKey,
       entrance: entranceNumber,
       comment: comment ? comment.comment : null,
     };

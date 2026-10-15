@@ -7,6 +7,24 @@ import { isAdmin } from "../../core/utils/roles.js";
  */
 export class HouseCommentRepository {
   /**
+   * Id всех записей этого номера дома.
+   *
+   * Комментарий принадлежит зданию, а `houses` — таблица квартир: под номером
+   * `39` их десятки строк, и строки комментариев исторически легли на разные
+   * квартиры. Поэтому читаем по всему списку, а пишем в самую раннюю, чтобы
+   * адрес нового комментария не зависел от порядка обхода.
+   */
+  async #houseRowIds(houseNumber) {
+    const rows = await prisma.house.findMany({
+      where: { house: String(houseNumber) },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+
+    return rows.map((row) => row.id);
+  }
+
+  /**
    * Create a new house comment
    */
   async create(commentData) {
@@ -22,16 +40,9 @@ export class HouseCommentRepository {
       }
 
       // Находим house_id по номеру дома
-      const house = await prisma.house.findFirst({
-        where: {
-          house: String(commentData.house_id),
-        },
-        select: {
-          id: true,
-        },
-      });
+      const [anchorId] = await this.#houseRowIds(commentData.house_id);
 
-      if (!house) {
+      if (!anchorId) {
         throw new Error(
           `House with number "${commentData.house_id}" not found`
         );
@@ -39,7 +50,7 @@ export class HouseCommentRepository {
 
       const comment = await prisma.houseComment.create({
         data: {
-          house_id: house.id, // Используем найденный house_id
+          house_id: anchorId, // Используем найденный house_id
           author_id: commentData.author_id,
           comment: commentData.comment,
         },
@@ -95,27 +106,20 @@ export class HouseCommentRepository {
 
   /**
    * Get comments for a specific house by house number
+   *
+   * Номер дома — точное значение: `37` и `37/1` не пересекаются.
    */
   async findByHouseNumber(houseNumber) {
     try {
-      // Находим house_id по номеру дома
-      const house = await prisma.house.findFirst({
-        where: {
-          house: houseNumber,
-        },
-        select: {
-          id: true,
-        },
-      });
+      const ids = await this.#houseRowIds(houseNumber);
 
-      if (!house) {
+      if (!ids.length) {
         return [];
       }
 
-      // Ищем комментарии по найденному house_id
-      const comments = await prisma.houseComment.findMany({
+      return prisma.houseComment.findMany({
         where: {
-          house_id: house.id,
+          house_id: { in: ids },
         },
         select: {
           id: true,
@@ -126,63 +130,8 @@ export class HouseCommentRepository {
         },
         orderBy: { created_at: "desc" },
       });
-
-      // Возвращаем все комментарии без фильтрации по автору
-      return comments;
     } catch (error) {
       logger.error("Error finding house comments by house number:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find house ID by house number
-   */
-  async findHouseIdByNumber(houseNumber) {
-    try {
-      console.log(
-        `findHouseIdByNumber: Looking for house with number: "${houseNumber}"`
-      );
-
-      // Ищем дом точно по номеру
-      let house = await prisma.house.findFirst({
-        where: { house: houseNumber },
-        select: { id: true, house: true },
-      });
-
-      console.log(`findHouseIdByNumber: Exact house found:`, house);
-
-      // Если точного совпадения нет, ищем дом который начинается с этого номера
-      // НО только если номер дома не содержит "/" и не является частью другого номера
-      if (!house && houseNumber && !houseNumber.includes("/")) {
-        console.log(
-          `findHouseIdByNumber: Looking for house that starts with: "${houseNumber}"`
-        );
-        house = await prisma.house.findFirst({
-          where: {
-            house: {
-              startsWith: houseNumber,
-            },
-          },
-          select: { id: true, house: true },
-        });
-        console.log(
-          `findHouseIdByNumber: House starting with "${houseNumber}" found:`,
-          house
-        );
-
-        // Проверяем, что найденный дом не является поддомом (например, 39/1 когда ищем 39)
-        if (house && house.house !== houseNumber && house.house.includes("/")) {
-          console.log(
-            `findHouseIdByNumber: Found house "${house.house}" but it's a sub-house, not exact match for "${houseNumber}"`
-          );
-          house = null;
-        }
-      }
-
-      return house ? Number(house.id) : null;
-    } catch (error) {
-      logger.error("Error finding house ID by house number:", error);
       throw error;
     }
   }
@@ -197,23 +146,7 @@ export class HouseCommentRepository {
         return null;
       }
 
-      houseNumber = String(houseNumber).trim();
-
-      const house = await prisma.house.findFirst({
-        where: { house: houseNumber },
-        select: { id: true },
-      });
-
-      if (!house) {
-        return null;
-      }
-
-      const comments = await prisma.houseComment.findMany({
-        where: { house_id: house.id },
-        select: { comment: true },
-        orderBy: { created_at: "desc" },
-        take: 1,
-      });
+      const comments = await this.findByHouseNumber(houseNumber.trim());
 
       return comments.length > 0 ? comments[0].comment : null;
     } catch (error) {

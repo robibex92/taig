@@ -45,13 +45,36 @@ export class HouseRepository extends IHouseRepository {
    *
    * Нужно комментариям подъездов: они привязаны к дому как к зданию, а не к
    * конкретной квартире, поэтому «position = 1» из `findByFilters` здесь ни при чём.
+   *
+   * Строка берётся с минимальным `id`, а не «какая попалась»: у номера дома
+   * столько строк, сколько квартир, и без `orderBy` Postgres мог вернуть другую
+   * квартиру того же дома между двумя запросами.
    */
   async findByHouseNumber(house_number) {
     const house = await prisma.house.findFirst({
       where: { house: house_number },
+      orderBy: { id: "asc" },
     });
 
     return house ? House.fromDatabase(house) : null;
+  }
+
+  /**
+   * Все id записей этого номера дома.
+   *
+   * Читать комментарии по одной «первой» квартире нельзя: исторически строки
+   * примотаны к разным квартирам одного дома (проверено на проде 15.10.2026 —
+   * у дома `39` комментарии стоят на id 2, 6 и 39). Точность по дому держится на
+   * `where: { house }`: `37` и `37/1` — разные значения, пересечений нет.
+   */
+  async findIdsByHouseNumber(house_number) {
+    const rows = await prisma.house.findMany({
+      where: { house: house_number },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+
+    return rows.map((row) => row.id);
   }
 
   /**

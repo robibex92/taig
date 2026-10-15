@@ -30,11 +30,24 @@ export class IHouseRepository {
   }
 
   /**
-   * First house row by house number, regardless of apartment position
+   * Earliest house row by house number, regardless of apartment position
    * @param {string} house_number
    * @returns {Promise<House|null>}
    */
   async findByHouseNumber(house_number) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * All row ids of this exact house number.
+   *
+   * Комментарий дома относится к зданию, а `houses` — таблица квартир: у одного
+   * номера их столько строк, сколько квартир.
+   *
+   * @param {string} house_number
+   * @returns {Promise<BigInt[]>}
+   */
+  async findIdsByHouseNumber(house_number) {
     throw new Error("Method not implemented");
   }
 

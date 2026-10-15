@@ -212,14 +212,14 @@ export class HouseController {
   /** GET /api-v1/nearby/comments?house=HOUSE_NUMBER */
   getHouseCommentsByNumber = asyncHandler(async (req, res) => {
     const { house } = validate(houseCommentQuerySchema, req.query);
-    const comments = await this.getHouseCommentsUseCase.execute(house);
+    const comments = await this.getHouseCommentsUseCase.executeByNumber(house);
 
     res.json(comments);
   });
 
   /** GET /api-v1/nearby/:house_id/comment — только текст последнего комментария. */
   getHouseComment = asyncHandler(async (req, res) => {
-    const comment = await this.#latestHouseComment(req.params.house_id);
+    const comment = await this.#latestHouseCommentById(req.params.house_id);
 
     res.json(comment ? { comment } : null);
   });
@@ -227,7 +227,7 @@ export class HouseController {
   /** GET /api-v1/nearby/comment?house=HOUSE_NUMBER */
   getHouseCommentByNumber = asyncHandler(async (req, res) => {
     const { house } = validate(houseCommentQuerySchema, req.query);
-    const comment = await this.#latestHouseComment(house);
+    const comment = await this.getHouseCommentsUseCase.executeSimple(house);
 
     res.json(comment ? { comment } : null);
   });
@@ -306,20 +306,18 @@ export class HouseController {
   });
 
   /**
-   * Последний текст комментария дома. Ключ может быть и id записи, и номером
-   * дома — фронт присылает и то, и другое с разных экранов; раньше эта ветка
-   * была скопирована в двух обработчиках.
+   * Последний текст комментария по id записи дома.
+   *
+   * Номер дома сюда не заходит: он приходит только через
+   * `getHouseCommentByNumber`, и смешивать их нельзя — `isNaN('37')` как раз и
+   * превращал номер дома в id квартиры.
    */
-  async #latestHouseComment(houseKey) {
-    if (!houseKey) {
+  async #latestHouseCommentById(house_id) {
+    if (!house_id) {
       throw new ValidationError("House number is required");
     }
 
-    if (isNaN(houseKey)) {
-      return this.getHouseCommentsUseCase.executeSimple(houseKey);
-    }
-
-    const comments = await this.getHouseCommentsUseCase.execute(houseKey);
+    const comments = await this.getHouseCommentsUseCase.execute(house_id);
 
     return comments?.[0]?.comment ?? null;
   }
