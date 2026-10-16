@@ -43,18 +43,27 @@ function formatSenderName(sender) {
 }
 
 /**
- * Single serializer for parking spots.
+ * Единый сериализатор парковочных мест. Сколько уровней видно — решает вызывающий:
  *
- * The public grid exposes only the place number and its status: price,
- * description, contacts and owner identity are resident data, included only
- * for staff (see `RESIDENT_DATA_ROLES`) or the owner of that exact place.
+ * - `withStatus: false` — гость: только геометрия места (номер, этаж, секция).
+ *   Статус сам по себе выдаёт чужую машину и то, занята ли она, поэтому он тоже
+ *   данные жителя;
+ * - `detailed: false` — сосед: статус и занятость, но без данных жителя;
+ * - `detailed: true` — персонал (`RESIDENT_DATA_ROLES`) и владелец места: всё,
+ *   включая цену, описание, контакты и владельца.
  */
-function mapSpot(spot, { detailed = false } = {}) {
-  const base = {
+function mapSpot(spot, { detailed = false, withStatus = true } = {}) {
+  const scheme = {
     id: Number(spot.id),
     spotNumber: spot.spot_number,
     floor: spot.floor,
     section: spot.section,
+  };
+
+  if (!withStatus) return scheme;
+
+  const base = {
+    ...scheme,
     status: spot.status,
     isActive: spot.is_active,
     hasOwner: Boolean(spot.owner_id),
@@ -100,15 +109,6 @@ function historyValues(before, after) {
   return values;
 }
 
-const STATS_KEY_BY_STATUS = {
-  [PARKING_STATUSES.UNDEFINED]: "undefined",
-  [PARKING_STATUSES.OWNED]: "owned",
-  [PARKING_STATUSES.FOR_SALE]: "forSale",
-  [PARKING_STATUSES.FOR_RENT]: "forRent",
-  [PARKING_STATUSES.MAINTENANCE]: "maintenance",
-  [PARKING_STATUSES.RESERVED]: "reserved",
-};
-
 /**
  * Данные места при создании/обновлении: HTTP-имена → колонки.
  * `undefined` означает «не трогать», `null` — «очистить».
@@ -144,6 +144,7 @@ class ParkingUseCases {
   // Получить все парковочные места
   async getAllParkingSpots(viewer) {
     const detailed = canViewResidentData(viewer);
+    const withStatus = Boolean(viewer);
 
     const spots = await prisma.parkingSpot.findMany({
       orderBy: { spot_number: "asc" },
@@ -152,7 +153,7 @@ class ParkingUseCases {
 
     return {
       success: true,
-      data: spots.map((spot) => mapSpot(spot, { detailed })),
+      data: spots.map((spot) => mapSpot(spot, { detailed, withStatus })),
     };
   }
 
@@ -164,7 +165,7 @@ class ParkingUseCases {
     return {
       success: true,
       data: {
-        ...mapSpot(spot, { detailed }),
+        ...mapSpot(spot, { detailed, withStatus: Boolean(viewer) }),
         history: detailed ? await this.#historyOf(spot.id) : [],
       },
     };
@@ -375,26 +376,6 @@ class ParkingUseCases {
   }
 
   // Получить статистику парковки
-  async getParkingStats() {
-    const [totalSpots, statusCounts] = await Promise.all([
-      prisma.parkingSpot.count({ where: { is_active: true } }),
-      prisma.parkingSpot.groupBy({
-        by: ["status"],
-        where: { is_active: true },
-        _count: { status: true },
-      }),
-    ]);
-
-    const stats = { totalSpots, ...Object.fromEntries(Object.values(STATS_KEY_BY_STATUS).map((key) => [key, 0])) };
-
-    for (const row of statusCounts) {
-      const key = STATS_KEY_BY_STATUS[row.status];
-      if (key) stats[key] = row._count.status;
-    }
-
-    return { success: true, data: stats };
-  }
-
   // Создать новое парковочное место (администратор паркинга)
   async createParkingSpot(spotData) {
     const existingSpot = await prisma.parkingSpot.findFirst({

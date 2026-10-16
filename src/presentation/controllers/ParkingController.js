@@ -106,12 +106,6 @@ export class ParkingController {
       .json({ success: true, data: result.data, message: result.data.message });
   });
 
-  getParkingStats = asyncHandler(async (req, res) => {
-    const result = await this.parkingUseCases.getParkingStats();
-
-    res.status(HTTP_STATUS.OK).json({ success: true, data: result.data });
-  });
-
   createParkingSpot = asyncHandler(async (req, res) => {
     const result = await this.parkingUseCases.createParkingSpot(req.body);
 

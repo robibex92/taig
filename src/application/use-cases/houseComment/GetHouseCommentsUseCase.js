@@ -58,14 +58,19 @@ export class GetHouseCommentsUseCase {
     return comment;
   }
 
-  /** Таблица комментариев могла не появиться после миграции — страница не должна падать. */
+  /**
+   * Пустой ответ допускается только когда таблицы комментариев ещё нет (P2021 —
+   * миграция не прогнана на свежей базе). Отсутствие КОЛОНКИ (P2022) — это
+   * поломка, и заглушать её молчанием нельзя: ровно так прогон кода без
+   * `add_comment_house_number.sql` выглядел как «комментариев нет».
+   */
   async #swallow(read, empty = []) {
     try {
       return await read();
     } catch (error) {
       logger.error("Error getting house comments:", error);
 
-      if (error.code === "P2021" || String(error.message).includes("does not exist")) {
+      if (error.code === "P2021") {
         return empty;
       }
 

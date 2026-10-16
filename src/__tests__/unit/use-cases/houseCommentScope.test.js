@@ -94,6 +94,24 @@ describe("комментарий дома принадлежит номеру д
 
     expect(await useCase.executeByNumber("39")).toHaveLength(3);
   });
+
+  it("нет таблицы — пусто, нет колонки — ошибка", async () => {
+    const failing = (code) => {
+      const boom = async () => {
+        throw Object.assign(new Error(`${code}: …`), { code });
+      };
+
+      return new GetHouseCommentsUseCase({
+        findByHouseNumber: boom,
+        findSimpleCommentByHouseNumber: boom,
+      });
+    };
+
+    expect(await failing("P2021").executeByNumber("39")).toEqual([]);
+    expect(await failing("P2021").executeSimple("39")).toBeNull();
+    await expect(failing("P2022").executeByNumber("39")).rejects.toMatchObject({ code: "P2022" });
+    await expect(failing("P2022").executeSimple("39")).rejects.toMatchObject({ code: "P2022" });
+  });
 });
 
 describe("комментарий подъезда", () => {

@@ -46,7 +46,7 @@ const BASE_ROUTE = "/parking-spots";
  * @swagger
  * /api-v1/parking-spots:
  *   get:
- *     summary: Get all parking spots (detailed data only for parking admins)
+ *     summary: Get parking spots (statuses only for signed-in users, resident data only for staff)
  *     tags: [Parking]
  *     responses:
  *       200:
@@ -55,20 +55,6 @@ const BASE_ROUTE = "/parking-spots";
  *         description: Internal Server Error
  */
 router.get(BASE_ROUTE, authenticateOptional, parkingController.getParkingSpots);
-
-/**
- * @swagger
- * /api-v1/parking-spots/stats:
- *   get:
- *     summary: Get parking statistics
- *     tags: [Parking]
- *     responses:
- *       200:
- *         description: Parking statistics
- *       500:
- *         description: Internal Server Error
- */
-router.get("/parking/stats", parkingController.getParkingStats);
 
 /**
  * @swagger
