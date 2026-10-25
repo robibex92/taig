@@ -255,16 +255,17 @@ export class HouseRepository extends IHouseRepository {
   }
 
   /**
-   * Раскладка квартиры в сетке витрины: этаж, колонка ряда, ширина.
+   * Раскладка квартиры в сетке витрины: этаж, колонка ряда, ширина, цвет клетки.
    * Меняются только переданные поля; `cellIndex: null` возвращает квартиру в
-   * автоматическую расстановку по номеру.
+   * автоматическую расстановку по номеру, `facadeColor: null` — на цвет по умолчанию.
    */
-  async updateLayout(id, { floor, cellIndex, cellSpan }) {
+  async updateLayout(id, { floor, cellIndex, cellSpan, facadeColor }) {
     const data = {};
 
     if (floor !== undefined) data.floor = floor;
     if (cellIndex !== undefined) data.cell_index = cellIndex;
     if (cellSpan !== undefined) data.cell_span = cellSpan;
+    if (facadeColor !== undefined) data.facade_color = facadeColor;
 
     const house = await prisma.house.update({
       where: { id: BigInt(id) },

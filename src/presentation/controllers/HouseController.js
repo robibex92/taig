@@ -155,13 +155,13 @@ export class HouseController {
     });
   });
 
-  /** PATCH /api-v1/nearby/:id/layout — раскладка: этаж, колонка, ширина ячейки. */
+  /** PATCH /api-v1/nearby/:id/layout — раскладка: этаж, колонка, ширина и цвет ячейки. */
   updateApartmentLayout = asyncHandler(async (req, res) => {
-    const { floor, cellIndex, cellSpan } = req.body;
+    const { floor, cellIndex, cellSpan, facadeColor } = req.body;
 
     const updatedHouse = await this.updateApartmentLayoutUseCase.execute(
       req.params.id,
-      { floor, cellIndex, cellSpan },
+      { floor, cellIndex, cellSpan, facadeColor },
       req.user
     );
 

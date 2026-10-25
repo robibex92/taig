@@ -10,6 +10,9 @@ import {
  * Validation schemas for House operations
  */
 
+/** Цвет клетки фасада: `#rrggbb` без альфа-канала — фронт сам дописывает `80` пустой клетке. */
+const FACADE_COLOR = Joi.string().trim().regex(/^#[0-9a-fA-F]{6}$/);
+
 export const getEntrancesSchema = Joi.object({
   house: Joi.string().required(),
 });
@@ -81,7 +84,8 @@ export const updateHouseInfoSchema = Joi.object({
 
 /**
  * `PATCH /nearby/:id/layout` — раскладка квартиры в сетке витрины.
- * `cellIndex: null` возвращает квартиру в автоматическую расстановку.
+ * `cellIndex: null` возвращает квартиру в автоматическую расстановку,
+ * `facadeColor: null` — снимает цвет (клетка снова по умолчанию).
  */
 export const apartmentLayoutSchema = Joi.object({
   floor: Joi.number().integer().min(1).max(HOUSE_FLOOR_MAX).optional().messages({
@@ -102,8 +106,12 @@ export const apartmentLayoutSchema = Joi.object({
     "number.min": "Cell span must be at least 1",
     "number.max": `Cell span cannot exceed ${HOUSE_CELL_SPAN_MAX}`,
   }),
+  // Шесть HEX-символов без альфа-канала: пустая клетка на фронте сама дописывает `80`.
+  facadeColor: FACADE_COLOR.allow(null).optional().messages({
+    "string.pattern.base": "Facade color must be a hex color like #A1B2C3",
+  }),
 })
-  .or("floor", "cellIndex", "cellSpan")
+  .or("floor", "cellIndex", "cellSpan", "facadeColor")
   .messages({
     "object.missing": "Нужно указать хотя бы один параметр раскладки",
   });
