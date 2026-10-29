@@ -6,6 +6,7 @@ import {
   MAX_BOT_STATE_KEYS,
 } from "../../core/constants/maxBot.js";
 import { extractPayloadMarker, extractMaxLoginRequests, parseMaxUpdatesPayload } from "../../core/utils/maxBotEvents.js";
+import { frontendEntry } from "../../core/utils/frontendUrl.js";
 
 const POLL_TIMEOUT_MS = 25000;
 const POLL_LIMIT = 50;
@@ -15,9 +16,19 @@ const FAST_RESPONSE_MS = 1000;
 /** Дедупликация событий без marker: то же сообщение того же автора в этом окне считается повтором. */
 const MARKERLESS_DEDUPE_WINDOW_MS = 2 * 60 * 1000;
 
-/** Ответ бота после подтверждения входа с сайта — та же формулировка, что у Telegram-бота. */
-const LOGIN_CONFIRMED_TEXT =
-  "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.";
+/**
+ * Ответ бота после подтверждения входа с сайта.
+ *
+ * Ссылка с одноразовым кодом — главный способ добрать вход на телефоне: пока
+ * человек подтверждает в MAX, вкладка сайта фоновая, её опрос засыпается, и
+ * забирать сессию становится некому. Тап по ссылке открывает сайт с
+ * `?max_login=`, и фронт обменивает код сам — жива та вкладка или нет.
+ */
+const loginConfirmedText = (code) =>
+  code
+    ? `✅ Вход подтверждён. Откройте сайт по ссылке — он войдёт сам:\n${frontendEntry(`max_login=${code}`)}`
+    : "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.";
+
 const LOGIN_REJECTED_TEXT =
   "Код входа из ссылки не подошёл. Нажмите «Войти через MAX» на сайте и перейдите по ссылке, которую он откроет, — код в ней длинный и одноразовый.";
 
@@ -273,8 +284,9 @@ export class MaxBotUpdatePoller {
   /**
    * MAX-бот как подтверждение входа на сайт: событие `bot_started` (или
    * сообщение `/start login_…`) привязывает автора к одноразовому `requestId`,
-   * и вкладка сайта, которая этот requestId придумала, забирает сессию своим
-   * поллингом `POST /api/auth/max/claim`.
+   * и в чат уходит ответ со ссылкой `?max_login=<code>`. Сайт забирает сессию
+   * либо своим поллингом `POST /api/auth/max/claim`, либо тапом по ссылке —
+   * второе работает и когда вкладка за время подтверждения уснула.
    *
    * Мини-апп для этого не нужен: на десктопном клиенте MAX не отдаёт подпись
    * `WebAppData`, поэтому путь «подтвердить в мини-аппе» там непроходим, а
@@ -295,7 +307,7 @@ export class MaxBotUpdatePoller {
 
     for (const item of requests) {
       try {
-        const { confirmed } = await this.loginConfirmation.confirmLoginFromBotUser(
+        const { confirmed, code } = await this.loginConfirmation.confirmLoginFromBotUser(
           {
             id: item.max_user_id,
             username: item.username,
@@ -306,7 +318,7 @@ export class MaxBotUpdatePoller {
 
         const sent = await this.service.sendMessage(
           item.max_user_id,
-          confirmed ? LOGIN_CONFIRMED_TEXT : LOGIN_REJECTED_TEXT
+          confirmed ? loginConfirmedText(code) : LOGIN_REJECTED_TEXT
         );
 
         if (!sent.ok && !sent.skipped) {

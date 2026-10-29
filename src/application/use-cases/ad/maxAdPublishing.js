@@ -1,6 +1,6 @@
 import { logger } from "../../../core/utils/logger.js";
 import { adOfferLine } from "../../../core/utils/adOfferText.js";
-import { frontendLink } from "../../services/TelegramService.js";
+import { frontendLink } from "../../../core/utils/frontendUrl.js";
 import { PUBLISH_DELAY_MS, sleep } from "./adPublishing.js";
 
 /**

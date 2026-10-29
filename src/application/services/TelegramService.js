@@ -2,31 +2,12 @@ import { Telegraf } from "telegraf";
 import pLimit from "p-limit";
 import { logger } from "../../core/utils/logger.js";
 import { adOfferLine } from "../../core/utils/adOfferText.js";
+import { frontendLink } from "../../core/utils/frontendUrl.js";
 import { AdRepository } from "../../infrastructure/repositories/AdRepository.js";
 import { PostRepository } from "../../infrastructure/repositories/PostRepository.js";
 
 // Initialize bot instance
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-/**
- * Ссылка на страницу сайта в текстах уведомлений.
- *
- * Фронт намеренно на `HashRouter`: адрес без решётки на проде отдаёт 404, поэтому
- * форма `/#/ads/5` — единственная рабочая. База читается при вызове, а не при импорте:
- * `dotenv.config()` в server.js выполняется уже после статических импортов.
- */
-const frontendBase = () =>
-  (process.env.FRONTEND_URL || "https://infojk.ru").replace(/\/+$/, "");
-
-export const frontendLink = (page) => `${frontendBase()}/#${page}`;
-
-/**
- * Вход на сайт с query-параметром: `?tg_login=<код>`.
- *
- * Не через `/#/…`: код читается до монтирования роутера (HashRouter положил бы
- * его внутрь хэша, и маршрутизация перестала бы совпадать с путём).
- */
-export const frontendEntry = (query) => `${frontendBase()}/?${query}`;
 
 /**
  * Centralized Telegram Service

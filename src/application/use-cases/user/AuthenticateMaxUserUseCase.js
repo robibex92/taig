@@ -397,20 +397,27 @@ export class AuthenticateMaxUserUseCase {
    * Хендовер тот же (`kind: "request"`, 5 минут), забирает его тот же
    * `claimLoginRequest`, так что сайт ничего не выбирает заново.
    *
+   * Вместе с запросом выдаётся и одноразовый `code` для ссылки `?max_login=`:
+   * на телефоне вкладка сайта засыпает, когда пользователь уходит подтверждать
+   * вход в MAX, и опрос до подтверждения может не дожить. Ссылка в ответе бота
+   * не зависит от того, жива ли вкладка, — открыл, тапнул, вошёл.
+   *
    * @param {object} maxUser — `{ id, username, first_name, last_name }` из события
-   * @returns {Promise<{user_id: bigint, confirmed: boolean}>}
+   * @returns {Promise<{user_id: bigint, confirmed: boolean, code: string|null}>}
    */
   async confirmLoginFromBotUser(maxUser, requestId) {
     const user = await this.findOrCreateMaxUser(maxUser);
     const confirmed = await this.createLoginRequest(requestId, user.user_id);
+    const code = confirmed ? await this.createLoginCode(user.user_id) : null;
 
     logger.info("MAX login confirmed in bot chat", {
       user_id: user.user_id,
-      // Сам requestId не логируется: до обмена это действующий credential.
+      // Сам requestId и сам code не логируются: до обмена это действующие credentials.
       hasRequestId: Boolean(confirmed),
+      hasLoginCode: Boolean(code),
     });
 
-    return { user_id: user.user_id, confirmed };
+    return { user_id: user.user_id, confirmed, code };
   }
 
   async execute(

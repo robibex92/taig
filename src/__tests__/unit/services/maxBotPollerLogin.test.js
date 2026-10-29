@@ -12,6 +12,7 @@ import { jest } from "@jest/globals";
 import { MaxBotUpdatePoller } from "../../../infrastructure/services/MaxBotUpdatePoller.js";
 
 const ID = "bfdcc801130747bd8f124b1680f5effd";
+const CODE = "a".repeat(64);
 
 const startedUpdate = {
   update_type: "bot_started",
@@ -37,8 +38,12 @@ const buildPoller = ({ loginConfirmation = null, service } = {}) =>
   });
 
 describe("MaxBotUpdatePoller: вход с сайта", () => {
-  it("привязывает автора события к requestId и отвечает в чат", async () => {
-    const confirmLoginFromBotUser = jest.fn(async () => ({ user_id: 5n, confirmed: true }));
+  it("привязывает автора события к requestId и отвечает в чат ссылкой с кодом", async () => {
+    const confirmLoginFromBotUser = jest.fn(async () => ({
+      user_id: 5n,
+      confirmed: true,
+      code: CODE,
+    }));
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
     const poller = buildPoller({ loginConfirmation: { confirmLoginFromBotUser }, service });
 
@@ -48,7 +53,47 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
       { id: "123", username: "anton", first_name: "Антон" },
       ID
     );
-    expect(service.sendMessage).toHaveBeenCalledWith("123", expect.stringContaining("Вход подтверждён"));
+
+    const text = service.sendMessage.mock.calls[0][1];
+    expect(text).toContain("Вход подтверждён");
+    // Ссылка с `?max_login=` — то, что делает вход независимым от вкладки сайта.
+    expect(text).toContain(`/?max_login=${CODE}`);
+  });
+
+  it("без кода отвечает старой формулировкой и без ссылки", async () => {
+    const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
+    const poller = buildPoller({
+      service,
+      loginConfirmation: {
+        confirmLoginFromBotUser: jest.fn(async () => ({ user_id: 5n, confirmed: true, code: null })),
+      },
+    });
+
+    await poller._processLoginRequests({ updates: [startedUpdate] });
+
+    const text = service.sendMessage.mock.calls[0][1];
+    expect(text).toContain("Вернитесь во вкладку сайта");
+    expect(text).not.toContain("max_login");
+  });
+
+  it("неподтверждённый запрос не получает ни кода, ни ссылки", async () => {
+    const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
+    const poller = buildPoller({
+      service,
+      loginConfirmation: {
+        confirmLoginFromBotUser: jest.fn(async () => ({
+          user_id: 5n,
+          confirmed: false,
+          code: null,
+        })),
+      },
+    });
+
+    await poller._processLoginRequests({ updates: [startedUpdate] });
+
+    const text = service.sendMessage.mock.calls[0][1];
+    expect(text).toContain("не подошёл");
+    expect(text).not.toContain("max_login");
   });
 
   it("молчит, если кейс подтверждения не внедрён", async () => {

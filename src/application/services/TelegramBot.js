@@ -5,7 +5,8 @@ import adRepository from "../../infrastructure/repositories/AdRepository.js";
 import userRepository from "../../infrastructure/repositories/UserRepository.js";
 import messageRepository from "../../infrastructure/repositories/MessageRepository.js";
 import { container } from "../../infrastructure/container/Container.js";
-import { telegramService, frontendEntry } from "./TelegramService.js";
+import { telegramService } from "./TelegramService.js";
+import { frontendEntry } from "../../core/utils/frontendUrl.js";
 import { messageDeliveryService } from "./MessageDeliveryService.js";
 
 /** Запрос входа с сайта: `t.me/<bot>?start=login_<requestId>`. */
