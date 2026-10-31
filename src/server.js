@@ -58,6 +58,8 @@ import parkingRoutes from "./presentation/routes/parking.routes.js";
 import favoritesRoutes from "./presentation/routes/favorites.routes.js";
 import maxBotRoutes from "./presentation/routes/maxBot.routes.js";
 import maxChatRoutes from "./presentation/routes/maxChatRoutes.js";
+import chatBotRoutes from "./presentation/routes/chatBot.routes.js";
+import chatReminderScheduler from "./infrastructure/services/ChatReminderScheduler.js";
 
 // Telegram Bot
 import telegramBot from "./application/services/TelegramBot.js";
@@ -187,6 +189,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin/max-bot", maxBotRoutes);
 // Реестр MAX-чатов, в которые бот дублирует объявления (K4).
 app.use("/api/max-chats", maxChatRoutes);
+// Раздел админки «Боты в чатах»: условия автоответа и напоминания.
+app.use("/api/admin/chat-bots", chatBotRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/favorites", favoritesRoutes);
 
@@ -308,6 +312,17 @@ const archiveOldAdsJob = databaseConnected
     })
   : null;
 
+/**
+ * Напоминания в чаты — проверка расписания раз в минуту.
+ *
+ * Свой интервал, а не cron: планировщик сам решает, занято ли срабатывание
+ * (ключ в базе), и не пускает два тика одновременно. Без базы данных не
+ * стартует — читать расписание негде.
+ */
+if (databaseConnected) {
+  chatReminderScheduler.start();
+}
+
 // ================== Graceful Shutdown ==================
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -336,6 +351,7 @@ const gracefulShutdown = async (signal) => {
 
   await stopStep("Telegram bot", () => telegramBot.stop());
   await stopStep("cron jobs", async () => archiveOldAdsJob?.stop());
+  await stopStep("chat reminders", async () => chatReminderScheduler.stop());
   // Поллер MAX держит long-polling-запрос /updates — без остановки процесс не завершится.
   await stopStep("MAX bot poller", () =>
     container.resolve("maxBotUpdatePoller").stop()

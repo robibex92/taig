@@ -34,9 +34,10 @@ const readText = (value) => {
  * см. src/presentation/routes/maxBot.routes.js.
  */
 export class MaxBotController {
-  constructor({ adminUseCases, broadcastUseCases }) {
+  constructor({ adminUseCases, broadcastUseCases, chatSendUseCases }) {
     this.admin = adminUseCases;
     this.broadcasts = broadcastUseCases;
+    this.chatSend = chatSendUseCases;
   }
 
   /** GET /status */
@@ -178,6 +179,24 @@ export class MaxBotController {
         offset: result.offset,
       },
     });
+  });
+
+  /**
+   * POST /chat-send — текст в выбранные чаты реестра.
+   *
+   * `max_chat_ids` — id строк `max_chats`, а не `chat_id` MAX: адрес берётся
+   * только из реестра. Ответ нести сразу: чатов немного, поллинг не нужен.
+   */
+  sendToChats = asyncHandler(async (req, res) => {
+    const { text, max_chat_ids } = req.body ?? {};
+
+    const result = await this.chatSend.send({
+      text: readText(text),
+      maxChatIds: max_chat_ids,
+      actorUserId: req.user?.user_id,
+    });
+
+    ok(res, result);
   });
 
   /** POST /webhook/setup */

@@ -8,6 +8,8 @@ import { container } from "../../infrastructure/container/Container.js";
 import { telegramService } from "./TelegramService.js";
 import { frontendEntry } from "../../core/utils/frontendUrl.js";
 import { messageDeliveryService } from "./MessageDeliveryService.js";
+import chatAutoReplyService from "./ChatAutoReplyService.js";
+import { CHAT_BOT_PLATFORM, isFreshChatMessage } from "../../core/utils/chatAutoReply.js";
 
 /** Запрос входа с сайта: `t.me/<bot>?start=login_<requestId>`. */
 const LOGIN_PAYLOAD_PREFIX = "login_";
@@ -45,6 +47,7 @@ export class TelegramBot {
     this.adRepository = adRepository;
     this.userRepository = userRepository;
     this.messageRepository = messageRepository;
+    this.autoReplies = chatAutoReplyService;
     this.setupHandlers();
   }
 
@@ -52,6 +55,65 @@ export class TelegramBot {
    * Setup bot message handlers
    */
   setupHandlers() {
+    /**
+     * Автоответы по ключевым словам — только в групповых чатах и только по новым
+     * сообщениям.
+     *
+     * Личные сообщения боту здесь не трогаем: там уже работают вход по ссылке и
+     * ответы администратора. Личный чат Telegram отдаёт всегда, а вот обычные
+     * сообщения группы бот видит лишь при выключенном приватном режиме
+     * (BotFather → /setprivacy → Disable) или с правами админа в чате.
+     *
+     * Свежесть обязательна: Telegraf начинает long polling с `offset = 0`, то
+     * есть первым же запросом получает всю накопившуюся очередь апдейтов. Без
+     * проверки по дате бот после каждого рестарта отвечал бы на вчерашние
+     * сообщения чата.
+     */
+    this.bot.on(message("text"), async (ctx, next) => {
+      const chat = ctx.chat;
+      const isGroup = chat?.type === "group" || chat?.type === "supergroup";
+      const text = ctx.message?.text;
+
+      if (isGroup && text && !ctx.from?.is_bot) {
+        if (isFreshChatMessage(ctx.message.date)) {
+          const { sent, phrase } = await this.autoReplies.handleChatMessage({
+            platform: CHAT_BOT_PLATFORM.TELEGRAM,
+            chatLabel: String(chat.id),
+            text,
+            send: async (response) => {
+              try {
+                await ctx.telegram.sendMessage(chat.id, response);
+
+                return { ok: true };
+              } catch (error) {
+                return { ok: false, error: error.message };
+              }
+            },
+          });
+
+          // info на каждое сообщение группы, даже без совпадения: по этой строке
+          // видно, доходит ли бот до чата вообще. Иначе «не отвечает» нельзя
+          // отличить от «приватность не отдаёт сообщения». У MAX такой зонд уже
+          // есть в поллере.
+          logger.info("Telegram-бот: сообщение из группового чата", {
+            chat_id: String(chat.id),
+            chat_type: chat.type,
+            matched: Boolean(phrase),
+            sent,
+          });
+        } else {
+          logger.info("Telegram-бот: сообщение из чата пропущено как не новое", {
+            chat_id: String(chat.id),
+            age_seconds: Math.round(Date.now() / 1000 - Number(ctx.message.date ?? 0)),
+          });
+        }
+      }
+
+      // Дальше идёт обработчик ответов на сообщения бота — он должен увидеть то
+      // же сообщение.
+      return next?.();
+    });
+
     // Вход на сайт по ссылке `?start=login_<requestId>` — схема как у MAX.
     // Личность подтверждает сам Telegram: `ctx.from` пришёл из бот-апдейта,
     // поэтому верифицировать initData или просить пароль не нужно.

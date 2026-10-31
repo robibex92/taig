@@ -102,6 +102,13 @@ router.get("/broadcasts", maxBotController.getBroadcasts);
 router.get("/broadcasts/:id/recipients", maxBotController.getBroadcastRecipients);
 
 /**
+ * @route   POST /api/admin/max-bot/chat-send
+ * @desc    Отправить текст в выбранные чаты реестра max_chats, результат по каждому чату сразу в ответе
+ * @access  Private (admin only)
+ */
+router.post("/chat-send", maxBotController.sendToChats);
+
+/**
  * @route   POST /api/admin/max-bot/webhook/setup
  * @desc    Зарегистрировать webhook MAX вместо long polling (по явному действию админа)
  * @access  Private (admin only)

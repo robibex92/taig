@@ -15,6 +15,7 @@
  *     username: string | null,
  *     marker: string | null,       // курсор события (для дедупликации)
  *     update_type: string | null,
+ *     chat_id: string | null,      // чат, где появилось сообщение (группа или диалог)
  *   }
  *
  * События, автором которых является сам бот (свои рассылки/ответы), отбрасываются —
@@ -95,6 +96,10 @@ const collectUserCandidates = (update, message) => {
   push(asObject(message)?.user);
   push(asObject(message)?.data?.user);
   push(asObject(message)?.from);
+  // Документированная форма message_created: автор — `message.sender`, а чат —
+  // `message.recipient`. Без sender автоответы в группах ловили бы некого.
+  push(asObject(message)?.sender);
+  push(asObject(update)?.sender);
   push(asObject(message)?.repliers);
   push(asObject(asObject(message)?.hints)?.user);
   push(asObject(update)?.user);
@@ -110,11 +115,31 @@ const collectTextCandidates = (update, message) => [
   asObject(message)?.text,
   asObject(message)?.data?.text,
   asObject(message)?.body,
+  // Документированная форма: текст лежит в `message.body.text`.
+  asObject(asObject(message)?.body)?.text,
   asObject(message)?.content,
   asObject(message)?.data?.body,
   asObject(update)?.text,
   asObject(update)?.data?.text,
   asObject(update)?.data?.message?.text,
+];
+
+/**
+ * Id чата, в котором появилось сообщение.
+ *
+ * В документации MAX это `message.recipient.chat_id` (для диалога 1:1 такой id
+ * чат-эндпоинты не принимает, для группового чата — принимает), в реальных
+ * ответах встречались и плоские варианты. Читаем широко: нормальный путь —
+ * `recipient.chat_id`, запасные — `chat_id` рядом.
+ */
+const collectChatIdCandidates = (update, message) => [
+  asObject(message)?.recipient?.chat_id,
+  asObject(message)?.chat_id,
+  asObject(message)?.data?.recipient?.chat_id,
+  asObject(message)?.data?.chat_id,
+  asObject(update)?.recipient?.chat_id,
+  asObject(update)?.chat_id,
+  asObject(update)?.data?.chat_id,
 ];
 
 /**
@@ -223,6 +248,7 @@ export const parseMaxUpdate = (update, options = {}) => {
     username,
     marker: getUpdateMarker(obj),
     update_type: type,
+    chat_id: collectChatIdCandidates(obj, message).map(asIdString).find(Boolean) ?? null,
   };
 };
 

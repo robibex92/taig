@@ -34,10 +34,28 @@ export const MAX_BOT_RECIPIENT_STATUS = {
   SKIPPED: "skipped",
 };
 
-/** Курсор long polling в таблице max_bot_state. */
+/**
+ * Курсоры long polling в таблице max_bot_state.
+ *
+ * `updates_marker` — общий курсор: по нему режем повторную доставку событий.
+ * `chat_reply_marker` — максимальный marker среди событий, уже рассмотренных для
+ * автоответа. Ключ отдельный, а не тот же `updates_marker`, из-за самого первого
+ * запуска: курсора ещё нет, MAX отдаёт накопленный backlog чата, и бот не должен
+ * отвечать на сообщения, появившиеся до его включения.
+ */
 export const MAX_BOT_STATE_KEYS = {
   UPDATES_MARKER: "updates_marker",
+  CHAT_REPLY_MARKER: "chat_reply_marker",
 };
+
+/**
+ * Сколько чатов реестра можно залить в одну отправку.
+ *
+ * Ограничик не косметический: отправка синхронная (админ ждёт ответ), а между
+ * чатами пауза, поэтому десяток чатов — это секунды, а сотни — уже таймаут
+ * запроса. Настраиваемым не делаем: за него отвечает список реестра.
+ */
+export const MAX_BOT_CHAT_RECIPIENTS = 50;
 
 /**
  * Текст сообщения бота: непустой и не длиннее лимита MAX API.
@@ -58,11 +76,53 @@ export const validateMaxBotText = (text) => {
   return value;
 };
 
+/**
+ * id строк реестра `max_chats`, которые админ выбрал для отправки.
+ *
+ * Принимаются именно внутренние id записей, а не `chat_id` MAX: реестр —
+ * единственный источник адресов, и подстановка чужого `chat_id` в запрос не
+ * должна быть возможна даже теоретически. Дубли схлопываются, нечисловые
+ * значения — ошибка.
+ *
+ * @returns {string[]} id в виде строк (BigInt-safe), в порядке выбора
+ */
+export const validateMaxBotChatIds = (ids) => {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new ValidationError("Не выбран ни один чат");
+  }
+
+  const normalized = [];
+
+  for (const item of ids) {
+    const asNumber = Number(item);
+
+    if (!Number.isInteger(asNumber) || asNumber <= 0) {
+      throw new ValidationError(`Некорректный id чата: ${String(item)}`);
+    }
+
+    const asString = String(asNumber);
+
+    if (!normalized.includes(asString)) {
+      normalized.push(asString);
+    }
+  }
+
+  if (normalized.length > MAX_BOT_CHAT_RECIPIENTS) {
+    throw new ValidationError(
+      `Слишком много чатов в одной отправке: ${normalized.length}, максимум ${MAX_BOT_CHAT_RECIPIENTS}`
+    );
+  }
+
+  return normalized;
+};
+
 export default {
   MAX_BOT_TEXT_LIMIT,
+  MAX_BOT_CHAT_RECIPIENTS,
   MAX_BOT_INBOX_DIRECTION,
   MAX_BOT_BROADCAST_STATUS,
   MAX_BOT_RECIPIENT_STATUS,
   MAX_BOT_STATE_KEYS,
   validateMaxBotText,
+  validateMaxBotChatIds,
 };

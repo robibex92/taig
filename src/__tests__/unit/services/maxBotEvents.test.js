@@ -35,7 +35,37 @@ describe("maxBotEvents — parseMaxUpdate", () => {
       username: "ivan",
       marker: "101",
       update_type: "message_created",
+      chat_id: null,
     });
+  });
+
+  /**
+   * Документированная форма `message_created`: чат в `recipient.chat_id`. По нему
+   * поллер отличает сообщение группового чата от личного диалога — без этого поля
+   * автоответы в чатах было бы на что строить нельзя.
+   */
+  it("читает chat_id из recipient.chat_id", () => {
+    const parsed = parseMaxUpdate({
+      update_type: "message_created",
+      message: {
+        recipient: { chat_id: 500100 },
+        sender: { user_id: 5001, name: "Иван" },
+        body: { text: "телефон ук?" },
+      },
+    });
+
+    expect(parsed.chat_id).toBe("500100");
+    expect(parsed.text).toBe("телефон ук?");
+  });
+
+  it("плоский chat_id читается так же, как вложенный", () => {
+    const parsed = parseMaxUpdate({
+      update_type: "message_created",
+      chat_id: "4242",
+      message: { user_id: 5001, text: "привет" },
+    });
+
+    expect(parsed.chat_id).toBe("4242");
   });
 
   it("распаковывает вложенный message.data.text + hints.user", () => {

@@ -365,6 +365,48 @@ model MaxAdMessage {
   @@map("max_ad_messages")
 }
 
+/// Условие автоответа в групповом чате: написали фразу — бот отвечает текстом.
+/// Фраза сравнивается без регистра, с ё=е и схлопнутыми пробелами.
+model ChatAutoReply {
+  id         BigInt   @id @default(autoincrement())
+  platform   String   @db.VarChar(16)
+  phrase     String
+  response   String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([platform, phrase], map: "chat_auto_replies_platform_phrase_key")
+  @@index([platform, is_active], map: "idx_chat_auto_replies_active")
+  @@map("chat_auto_replies")
+}
+
+/// Плановое сообщение в конкретный чат: раз в день / по дням недели / раз в месяц.
+/// Время локальное в поясе REMINDER_TZ; last_occurrence_key не даёт задвоить
+/// срабатывание после рестарта процесса.
+model ChatReminder {
+  id                  BigInt    @id @default(autoincrement())
+  platform            String    @db.VarChar(16)
+  chat_record_id      BigInt
+  text                String
+  schedule_kind       String    @db.VarChar(16)
+  time_of_day         String    @db.VarChar(5)
+  weekdays            String?   @db.VarChar(20)
+  day_of_month        Int?
+  last_day_of_month   Boolean   @default(false)
+  is_active           Boolean   @default(true)
+  last_occurrence_key String?
+  last_result         String?   @db.VarChar(16)
+  last_error          String?
+  last_sent_at        DateTime? @db.Timestamptz(6)
+  failed_attempts     Int       @default(0)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_chat_reminders_active")
+  @@map("chat_reminders")
+}
+
 model CarImage {
   id               BigInt    @id @default(autoincrement())
   car_id           BigInt

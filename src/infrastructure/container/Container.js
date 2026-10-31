@@ -30,6 +30,8 @@ import { CarImageUploadService } from "../../application/services/CarImageUpload
 // Services - MAX Bot (инфраструктурный HTTP-клиент + сборщик входящих)
 import { maxBotService } from "../services/MaxBotService.js";
 import { MaxChatRepository } from "../repositories/MaxChatRepository.js";
+import { ChatAutoReplyRepository } from "../repositories/ChatAutoReplyRepository.js";
+import { ChatReminderRepository } from "../repositories/ChatReminderRepository.js";
 import { MaxBotUpdatePoller } from "../services/MaxBotUpdatePoller.js";
 
 // Use Cases - Ad
@@ -62,6 +64,10 @@ import { LinkPlatformUseCase } from "../../application/use-cases/user/LinkPlatfo
 // Use Cases - MAX Bot (админка: рассылки и входящие обращения)
 import { MaxBotAdminUseCases } from "../../application/use-cases/maxBot/MaxBotAdminUseCases.js";
 import { MaxBotBroadcastUseCases } from "../../application/use-cases/maxBot/MaxBotBroadcastUseCases.js";
+import { SendMaxBotChatMessageUseCase } from "../../application/use-cases/maxBot/SendMaxBotChatMessageUseCase.js";
+import chatAutoReplyService from "../../application/services/ChatAutoReplyService.js";
+import { ChatBotAdminUseCases } from "../../application/use-cases/chatBot/ChatBotAdminUseCases.js";
+import { ChatBotController } from "../../presentation/controllers/ChatBotController.js";
 
 // Use Cases - Session
 import { GetUserSessionsUseCase } from "../../application/use-cases/session/GetUserSessionsUseCase.js";
@@ -280,6 +286,9 @@ export class Container {
       ["telegramChatRepository", TelegramChatRepository, []],
       // Реестр MAX-чатов (K4): по той же схеме, что telegram_chats.
       ["maxChatRepository", MaxChatRepository, []],
+      // «Боты в чатах»: условия автоответа и напоминания.
+      ["chatAutoReplyRepository", ChatAutoReplyRepository, []],
+      ["chatReminderRepository", ChatReminderRepository, []],
       ["houseCommentRepository", HouseCommentRepository, []],
       ["entranceCommentRepository", EntranceCommentRepository, []],
       ["authHandoffRepository", AuthHandoffRepository, []],
@@ -717,6 +726,15 @@ export class Container {
         })
     );
 
+    this.register(
+      "sendMaxBotChatMessageUseCase",
+      (container) =>
+        new SendMaxBotChatMessageUseCase({
+          chatRepository: container.resolve("maxChatRepository"),
+          service: container.resolve("maxBotService"),
+        })
+    );
+
     // Controllers - MAX Bot
     this.register(
       "maxBotController",
@@ -724,6 +742,32 @@ export class Container {
         new MaxBotController({
           adminUseCases: container.resolve("maxBotAdminUseCases"),
           broadcastUseCases: container.resolve("maxBotBroadcastUseCases"),
+          chatSendUseCases: container.resolve("sendMaxBotChatMessageUseCase"),
+        })
+    );
+
+    // «Боты в чатах»: условия автоответа и напоминания (админский раздел).
+    // Инстанс сервиса один на процесс: у него кэш условий на несколько секунд,
+    // и два кэша разъезжались бы при правках из админки.
+    this.register("chatAutoReplyService", () => chatAutoReplyService);
+
+    this.register(
+      "chatBotAdminUseCases",
+      (container) =>
+        new ChatBotAdminUseCases({
+          autoReplyRepository: container.resolve("chatAutoReplyRepository"),
+          reminderRepository: container.resolve("chatReminderRepository"),
+          telegramChats: container.resolve("telegramChatRepository"),
+          maxChats: container.resolve("maxChatRepository"),
+          autoReplyService: container.resolve("chatAutoReplyService"),
+        })
+    );
+
+    this.register(
+      "chatBotController",
+      (container) =>
+        new ChatBotController({
+          adminUseCases: container.resolve("chatBotAdminUseCases"),
         })
     );
   }
