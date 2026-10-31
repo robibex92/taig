@@ -194,21 +194,23 @@ app.use("/api/admin/chat-bots", chatBotRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/favorites", favoritesRoutes);
 
-// Swagger API Documentation
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    customCss: ".swagger-ui .topbar { display: none }",
-    customSiteTitle: "Taiginsky API Docs",
-  })
-);
+// Swagger доступен только вне прода: `/api-docs.json` отдаёт наружу полную карту
+// эндпоинтов, их параметры и схемы ответов — готовый план для подбора доступов.
+if (process.env.NODE_ENV !== "production") {
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      customCss: ".swagger-ui .topbar { display: none }",
+      customSiteTitle: "Taiginsky API Docs",
+    })
+  );
 
-// Swagger JSON
-app.get("/api-docs.json", (req, res) => {
-  res.setHeader("Content-Type", "application/json");
-  res.send(swaggerSpec);
-});
+  app.get("/api-docs.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(swaggerSpec);
+  });
+}
 
 // Health check
 app.get("/api/health", (req, res) => {

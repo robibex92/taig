@@ -93,7 +93,7 @@ npx pm2 start ecosystem.config.cjs
 ### Реализовано
 
 1. **SQL Injection** - Prisma ORM с параметризованными запросами
-2. **XSS** - Sanitization middleware (`xss`, `dompurify`)
+2. **XSS** - CSP от `helmet`, экранирование при сборке HTML-сообщений Telegram
 3. **CSRF** - CORS настройка
 4. **Rate Limiting** - `express-rate-limit`
 5. **Idempotency** - `Idempotency-Key` header
