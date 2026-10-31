@@ -42,12 +42,23 @@ const phrasePattern = (normalizedPhrase) => {
   return new RegExp(`(^|[^\\p{L}\\p{N}])${body}($|[^\\p{L}\\p{N}])`, "u");
 };
 
+/**
+ * Быстрый отсев перед поиском фразы: если первого её символа в тексте нет,
+ * искать нечего. Фраза обязана встретиться целиком, поэтому её первая буква
+ * (после той же нормализации, что и текст) обязана быть в тексте. Это дёшево
+ * ровно там, где нужно: сообщения в чате идут потоком, условий может быть
+ * десятки, а конструирование регулярки на каждое — самая дорогая часть проверки.
+ */
+const mayContainPhrase = (normalizedPhrase, normalizedText) =>
+  normalizedText.includes(normalizedPhrase[0]);
+
 /** Подошло ли условие тексту сообщения. */
 export const triggerMatches = (phrase, text) => {
   const normalizedPhrase = normalizeTriggerText(phrase);
   const normalizedText = normalizeTriggerText(text);
 
   if (!normalizedPhrase || !normalizedText) return false;
+  if (!mayContainPhrase(normalizedPhrase, normalizedText)) return false;
 
   return phrasePattern(normalizedPhrase).test(normalizedText);
 };
@@ -83,10 +94,23 @@ export const isFreshChatMessage = (
  * Первый подошедший ответ. Порядок — по id условия (кто раньше заведён, тот и
  * главнее), поэтому админ видит предсказуемый результат: бот пишет ровно один
  * ответ на сообщение, а не сколько-то.
+ *
+ * Текст нормализуется один раз на весь список условий: раньше это делалось
+ * внутри `triggerMatches`, то есть N раз на N условий при одном и том же
+ * сообщении.
  */
 export const matchAutoReply = (replies, text) => {
+  const normalizedText = normalizeTriggerText(text);
+
+  if (!normalizedText) return null;
+
   for (const reply of replies ?? []) {
-    if (triggerMatches(reply.phrase, text)) return reply;
+    const normalizedPhrase = normalizeTriggerText(reply.phrase);
+
+    if (!normalizedPhrase) continue;
+    if (!mayContainPhrase(normalizedPhrase, normalizedText)) continue;
+
+    if (phrasePattern(normalizedPhrase).test(normalizedText)) return reply;
   }
 
   return null;

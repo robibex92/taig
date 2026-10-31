@@ -57,9 +57,10 @@ const chatRow = { id: 7n, chat_id: 500100n, name: "Чат дома 39", chat_typ
 
 /**
  * Поллер с подставными БД, MAX API, реестром чатов и движком автоответов.
- * `state` — содержимое `max_bot_state`, `replyMarker` — порог свежести в памяти.
+ * `state` — содержимое `max_bot_state`, `replyMarker` — порог свежести в памяти,
+ * `chatInfo` — ответ `GET /chats/{id}` для чатов, которых нет в реестре.
  */
-const buildPoller = ({ chat, rows, state = {}, replyMarker = null }) => {
+const buildPoller = ({ chat, rows, state = {}, replyMarker = null, chatInfo = null }) => {
   const db = {
     maxBotInboxMessage: { findUnique: jest.fn(async () => null), create: jest.fn(async () => ({})) },
     maxBotState: {
@@ -77,6 +78,10 @@ const buildPoller = ({ chat, rows, state = {}, replyMarker = null }) => {
   const service = {
     isConfigured: jest.fn(() => true),
     sendChatMessage: jest.fn(async () => ({ ok: true })),
+    getChat: jest.fn(async (chatId) => {
+      if (!chatInfo) throw new Error(`chat.not.found: ${chatId}`);
+      return { chat_id: String(chatId), title: chatInfo.title ?? null, type: chatInfo.type };
+    }),
   };
   const chats = { findByChatId: jest.fn(async () => chat) };
   const autoReplies = new ChatAutoReplyService({
@@ -97,7 +102,7 @@ const buildPoller = ({ chat, rows, state = {}, replyMarker = null }) => {
 };
 
 /** Нормализованное входящее событие, как его отдаёт `parseMaxUpdatesPayload`. */
-const chatEvent = (marker, { text = "телефон ук", chat_id = "500100" } = {}) => ({
+const chatEvent = (marker, { text = "телефон ук", chat_id = "500100", chat_type = null } = {}) => ({
   max_user_id: "42",
   text,
   display_name: null,
@@ -105,6 +110,7 @@ const chatEvent = (marker, { text = "телефон ук", chat_id = "500100" } 
   marker: marker === null ? null : String(marker),
   update_type: "message_created",
   chat_id,
+  chat_type,
 });
 
 describe("движок автоответов", () => {
@@ -212,18 +218,14 @@ describe("свежесть сообщения: Telegram смотрит на да
   });
 });
 
-describe("поллер MAX: чат из реестра не идёт в inbox", () => {
-  const message = (chatId, text, marker = "900") => [
-    chatEvent(marker, { text, chat_id: chatId }),
-  ];
+describe("поллер MAX: группа или личный диалог", () => {
+  const rows = [replyRow(1, "телефон ук", "+7 383 233-02-03")];
+  const dialogRow = { ...chatRow, chat_type: "DIALOG" };
 
-  it("сообщение зарегистрированного чата уходит в автоответ и не сохраняется в inbox", async () => {
-    const { poller, service, db } = buildPoller({
-      chat: { id: 7n, chat_id: 500100n, name: "Чат дома 39", chat_type: "CHAT", is_active: true },
-      rows: [replyRow(1, "телефон ук", "+7 383 233-02-03")],
-    });
+  it("сообщение из группы уходит в автоответ и не сохраняется в inbox", async () => {
+    const { poller, service, db } = buildPoller({ chat: chatRow, rows });
 
-    const { dialogs, groupMessages } = await poller._splitByChat(message("500100", "телефон ук?"));
+    const { dialogs, groupMessages } = await poller._splitByChat([chatEvent(900, { text: "телефон ук?" })]);
 
     expect(dialogs).toEqual([]);
     expect(groupMessages).toHaveLength(1);
@@ -235,36 +237,78 @@ describe("поллер MAX: чат из реестра не идёт в inbox", 
     expect(poller.stats.chatReplies).toBe(1);
   });
 
-  it("личное сообщение боту остаётся в inbox: чата нет в реестре — автоответов не будет", async () => {
-    const { poller, service, db } = buildPoller({
-      chat: null,
-      rows: [replyRow(1, "телефон ук", "ответ")],
-    });
+  it("выключенный чат реестра остаётся группой: флаг `is_active` — про публикации", async () => {
+    const { poller } = buildPoller({ chat: { ...chatRow, is_active: false }, rows });
+    const { groupMessages } = await poller._splitByChat([chatEvent(900)]);
 
-    const { dialogs, groupMessages } = await poller._splitByChat(message("777", "телефон ук"));
-
-    expect(groupMessages).toEqual([]);
-    expect(dialogs).toHaveLength(1);
-
-    await poller.persistIncoming(dialogs);
-
-    expect(db.maxBotInboxMessage.create).toHaveBeenCalled();
-    expect(service.sendChatMessage).not.toHaveBeenCalled();
+    expect(groupMessages).toHaveLength(1);
   });
 
-  it("выключенный или DIALOG-чат реестра не считается групповым", async () => {
-    for (const chat of [
-      { id: 7n, chat_id: 500100n, name: "Выключен", chat_type: "CHAT", is_active: false },
-      { id: 8n, chat_id: 500100n, name: "Диалог", chat_type: "DIALOG", is_active: true },
-    ]) {
-      const { poller } = buildPoller({ chat, rows: [] });
-      const { dialogs, groupMessages } = await poller._splitByChat(message("500100", "привет"));
+  it("группы нет в реестре — тип спрашивается у MAX, и бот отвечает", async () => {
+    const { poller, service } = buildPoller({
+      chat: null,
+      rows,
+      chatInfo: { type: "CHAT", title: "Дом 37" },
+    });
 
-      expect({ dialogs: dialogs.length, groupMessages: groupMessages.length }).toEqual({
-        dialogs: 1,
-        groupMessages: 0,
-      });
+    const { dialogs, groupMessages } = await poller._splitByChat([chatEvent(900, { chat_id: "500777" })]);
+
+    expect({ dialogs: dialogs.length, groups: groupMessages.length }).toEqual({ dialogs: 0, groups: 1 });
+
+    await poller._handleGroupMessage(groupMessages[0]);
+
+    expect(service.getChat).toHaveBeenCalledWith("500777");
+    expect(service.sendChatMessage).toHaveBeenCalledWith("500777", "+7 383 233-02-03");
+  });
+
+  it("тип из самого события экономит запрос к MAX", async () => {
+    const { poller, service } = buildPoller({ chat: null, rows });
+
+    const { groupMessages } = await poller._splitByChat([
+      chatEvent(900, { chat_id: "500777", chat_type: "GROUP" }),
+    ]);
+
+    expect(groupMessages).toHaveLength(1);
+    expect(service.getChat).not.toHaveBeenCalled();
+  });
+
+  it("личная переписка остаётся в inbox: DIALOG группой не считается", async () => {
+    const sources = [
+      // реестр сказал «DIALOG» — спрашивать у MAX не нужно
+      buildPoller({ chat: dialogRow, rows }),
+      // в реестре чата нет, тип пришёл из события
+      buildPoller({ chat: null, rows }),
+      // тип дал запрос `GET /chats/{id}`
+      buildPoller({ chat: null, rows, chatInfo: { type: "DIALOG" } }),
+      // и вовсе неизвестен (бота в чате нет) — тоже не группа
+      buildPoller({ chat: null, rows, chatInfo: null }),
+    ];
+
+    for (const [index, { poller, service, db }] of sources.entries()) {
+      const chat_id = index === 0 ? dialogRow.chat_id.toString() : "500777";
+      const chat_type = index === 1 ? "DIALOG" : null;
+
+      const { dialogs, groupMessages } = await poller._splitByChat([
+        chatEvent(900, { chat_id, chat_type }),
+      ]);
+
+      expect(groupMessages).toEqual([]);
+      expect(dialogs).toHaveLength(1);
+
+      await poller.persistIncoming(dialogs);
+
+      expect(service.sendChatMessage).not.toHaveBeenCalled();
+      expect(db.maxBotInboxMessage.create).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it("вердикт о чате кэшируется: MAX спрашивается один раз за час", async () => {
+    const { poller, service } = buildPoller({ chat: null, rows, chatInfo: { type: "CHAT" } });
+
+    await poller._splitByChat([chatEvent(900, { chat_id: "500777" })]);
+    await poller._splitByChat([chatEvent(901, { chat_id: "500777" })]);
+
+    expect(service.getChat).toHaveBeenCalledTimes(1);
   });
 });
 

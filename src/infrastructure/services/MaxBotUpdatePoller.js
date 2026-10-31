@@ -18,8 +18,18 @@ const ERROR_RETRY_DELAY_MS = 5000;
 const FAST_RESPONSE_MS = 1000;
 /** Дедупликация событий без marker: то же сообщение того же автора в этом окне считается повтором. */
 const MARKERLESS_DEDUPE_WINDOW_MS = 2 * 60 * 1000;
-/** Реестр чатов читаем не на каждое сообщение чата. */
-const CHAT_CACHE_TTL_MS = 60_000;
+/** Вердикт «группа или личный диалог» спрашиваем у MAX не на каждое сообщение. */
+const CHAT_CACHE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Типы чатов MAX, в которых автоответ уместен. Личный диалог — не группа: там
+ * сообщения читают администраторы во вкладке «Входящие».
+ */
+const GROUP_CHAT_TYPES = new Set(["CHAT", "GROUP", "SUPERGROUP"]);
+const DIALOG_CHAT_TYPES = new Set(["DIALOG", "PRIVATE", "USER"]);
+
+const isGroupType = (type) => GROUP_CHAT_TYPES.has(String(type ?? "").toUpperCase());
+const isDialogType = (type) => DIALOG_CHAT_TYPES.has(String(type ?? "").toUpperCase());
 
 /**
  * Ответ бота после подтверждения входа с сайта.
@@ -62,12 +72,12 @@ const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)
  * По умолчанию используется polling, потому что он не требует публичного URL
  * и работает на dev-машинах.
  *
- * ВТОРАЯ ЗАДАЧА ПОЛЛЕРА — автоответы в групповых чатах. Сообщение из чата,
- * который есть в реестре `max_chats` (включён и не `DIALOG`), в inbox не
- * пишется: там обращения жителей лично боту. Такое сообщение отдаётся
- * `ChatAutoReplyService`, и если текст подошёл под условие — в чат уходит
- * ответ админской фразы. Чата нет в реестре — считаем его диалогом и сохраняем,
- * как раньше: реестр и есть разрешение отвечать в группе.
+ * ВТОРАЯ ЗАДАЧА ПОЛЛЕРА — автоответы в группах. Как и в Telegram, бот отвечает
+ * в ЛЮБОЙ группе, куда его добавили, — реестр `max_chats` для этого не
+ * разрешение, а всего лишь самый дешёвый источник типа чата и его названия.
+ * Групповое сообщение в inbox не пишется (там обращения жителей лично боту) и
+ * отдаётся `ChatAutoReplyService`: если текст подошёл под условие — в группу
+ * уходит ответ из админки. Личный диалог группой не считается.
  *
  * ОТВЕЧАЕМ ТОЛЬКО НА НОВЫЕ СООБЩЕНИЯ. Порог — отдельный курсор
  * `chat_reply_marker`: MAX отдаёт и то, что накопилось, пока процесс был
@@ -359,64 +369,87 @@ export class MaxBotUpdatePoller {
   }
 
   /**
-   * Диалог или зарегистрированный групповой чат.
+   * Диалог или группа.
    *
-   * Признак — наличие чата в реестре `max_chats`: у MAX id чата есть и у личных
-   * диалогов (`recipient.chat_id`), так что по одному только id различить их
-   * нельзя. Реестр при этом и есть разрешение: бот отвечает только там, где его
-   * показал админ, и не начинает писать в чужую группу сам.
+   * Реестр `max_chats` больше не разрешение отвечать: бот отвечает в любой
+   * группе, куда его добавили, — как и в Telegram. Реестр остаётся самым
+   * дешёвым источником ответа (и даёт название для лога), для чатов вне реестра
+   * тип сначала читается из самого события, а если его там нет — спрашивается у
+   * MAX (`GET /chats/{id}`). Неопределённый тип трактуем как личный диалог:
+   * пропущенный ответ в группе — потеря, а ответ один на один там, где человека
+   * не спрашивали, — спам.
    */
   async _splitByChat(incoming) {
     const dialogs = [];
     const groupMessages = [];
 
     for (const item of incoming) {
-      const chat = item.chat_id ? await this._chatRow(item.chat_id) : null;
+      const chat = item.chat_id ? await this._chatInfo(item.chat_id, item.chat_type) : null;
 
-      if (chat) groupMessages.push({ ...item, chat });
+      if (chat?.group) groupMessages.push({ ...item, chat });
       else dialogs.push(item);
     }
 
     return { dialogs, groupMessages };
   }
 
-  async _chatRow(chatId) {
+  async _chatInfo(chatId, hintType) {
     const key = String(chatId);
     const cached = this.chatCache.get(key);
 
     if (cached && cached.expiresAt > Date.now()) return cached.chat;
 
-    let chat = null;
-
-    try {
-      const found = await this.chats.findByChatId(key);
-
-      if (found?.is_active && found.chat_type !== "DIALOG") chat = found;
-    } catch (error) {
-      this.log.warn("MAX-бот: реестр чатов не прочитан", { chat_id: key, error: error.message });
-    }
+    const chat = await this._resolveChat(key, hintType);
 
     this.chatCache.set(key, { chat, expiresAt: Date.now() + CHAT_CACHE_TTL_MS });
 
     return chat;
   }
 
-  /** Сообщение из группового чата: условие автоответа, если текст подошёл. */
+  async _resolveChat(chatId, hintType) {
+    try {
+      const row = await this.chats.findByChatId(chatId);
+
+      // `is_active` в реестре — про публикации объявлений и новостей: молчать из-за
+      // него в группе бот не должен.
+      if (row) return { group: !isDialogType(row.chat_type), name: row.name ?? null };
+    } catch (error) {
+      this.log.warn("MAX-бот: реестр чатов не прочитан", { chat_id: chatId, error: error.message });
+    }
+
+    if (isGroupType(hintType)) return { group: true, name: null };
+    if (isDialogType(hintType)) return { group: false, name: null };
+
+    try {
+      const info = await this.service.getChat(chatId);
+
+      if (info?.type) return { group: isGroupType(info.type), name: info.title ?? null };
+    } catch (error) {
+      // `chat.not.found` = бота в чате нет — отвечать некуда.
+      this.log.info("MAX-бот: тип чата не определён", { chat_id: chatId, error: error.message });
+    }
+
+    return null;
+  }
+
+  /** Сообщение из группы: условие автоответа, если текст подошёл. */
   async _handleGroupMessage(item) {
+    const chatId = String(item.chat_id);
+
     const { sent, phrase } = await this.autoReplies.handleChatMessage({
       platform: CHAT_BOT_PLATFORM.MAX,
-      chatLabel: String(item.chat.chat_id),
+      chatLabel: chatId,
       text: item.text,
-      send: (response) => this.service.sendChatMessage(String(item.chat.chat_id), response),
+      send: (response) => this.service.sendChatMessage(chatId, response),
     });
 
     if (sent) this.stats.chatReplies += 1;
 
     // info и при отсутствии совпадения: по этой строке видно, что MAX вообще
-    // доставляет боту сообщения чата, — иначе про факт доставки судить нечем.
-    this.log.info("MAX-бот: сообщение из зарегистрированного чата", {
-      chat_id: String(item.chat.chat_id),
-      chat_name: item.chat.name,
+    // доставляет боту сообщения группы, — иначе про факт доставки судить нечем.
+    this.log.info("MAX-бот: сообщение из группы", {
+      chat_id: chatId,
+      chat_name: item.chat?.name ?? null,
       matched: Boolean(phrase),
       sent,
     });

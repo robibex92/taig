@@ -36,6 +36,7 @@ describe("maxBotEvents — parseMaxUpdate", () => {
       marker: "101",
       update_type: "message_created",
       chat_id: null,
+      chat_type: null,
     });
   });
 
@@ -56,6 +57,27 @@ describe("maxBotEvents — parseMaxUpdate", () => {
 
     expect(parsed.chat_id).toBe("500100");
     expect(parsed.text).toBe("телефон ук?");
+  });
+
+  it("читает тип чата, если MAX его отдаёт, и не путает с типом события", () => {
+    expect(
+      parseMaxUpdate({
+        update_type: "message_created",
+        message: {
+          recipient: { chat_id: 500100, chat_type: "chat" },
+          sender: { user_id: 5001 },
+          body: { text: "телефон ук?" },
+        },
+      }).chat_type
+    ).toBe("CHAT");
+
+    // `type` у события — это тип апдейта, а не чата: из него тип чата не берётся.
+    expect(
+      parseMaxUpdate({
+        type: "message_created",
+        message: { user_id: 5001, text: "телефон ук?" },
+      }).chat_type
+    ).toBeNull();
   });
 
   it("плоский chat_id читается так же, как вложенный", () => {

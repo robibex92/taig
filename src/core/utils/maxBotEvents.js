@@ -16,6 +16,7 @@
  *     marker: string | null,       // курсор события (для дедупликации)
  *     update_type: string | null,
  *     chat_id: string | null,      // чат, где появилось сообщение (группа или диалог)
+ *     chat_type: string | null,    // тип чата, если MAX отдаёт его в событии (CHAT/DIALOG…)
  *   }
  *
  * События, автором которых является сам бот (свои рассылки/ответы), отбрасываются —
@@ -143,6 +144,19 @@ const collectChatIdCandidates = (update, message) => [
 ];
 
 /**
+ * Тип чата из самого события — если MAX его отдаёт, спрашивать `/chats/{id}` не
+ * нужно. Берём только поля чата: `update.type` в этот список не входит, потому
+ * что у события в нём лежит тип апдейта (`message_created`), а не тип чата.
+ */
+const collectChatTypeCandidates = (update, message) => [
+  asObject(message)?.recipient?.chat_type,
+  asObject(message)?.recipient?.type,
+  asObject(message)?.chat_type,
+  asObject(update)?.recipient?.chat_type,
+  asObject(update)?.chat_type,
+];
+
+/**
  * Id автора из одного кандидата.
  * `id` принимаем только если объект похож на профиль пользователя и не похож на
  * событие/сообщение — иначе можно записать автора по `id` самого события.
@@ -249,6 +263,10 @@ export const parseMaxUpdate = (update, options = {}) => {
     marker: getUpdateMarker(obj),
     update_type: type,
     chat_id: collectChatIdCandidates(obj, message).map(asIdString).find(Boolean) ?? null,
+    chat_type:
+      collectChatTypeCandidates(obj, message)
+        .map((value) => (typeof value === "string" ? value.trim().toUpperCase() : null))
+        .find(Boolean) ?? null,
   };
 };
 
