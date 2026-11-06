@@ -31,9 +31,10 @@ router.get("/nearby/entrances", houseController.getEntrances);
 /**
  * @route   GET /nearby
  * @desc    Get houses by filter (house, entrance, position)
- * @access  Public
+ * @access  Public; контакт жильца (`id_telegram`) в ответе только у тех, кому
+ *          открыт этот дом (см. `GetHousesByFilterUseCase`)
  */
-router.get("/nearby", houseController.getHousesByFilter);
+router.get("/nearby", authenticateOptional, houseController.getHousesByFilter);
 
 /**
  * @route   GET /nearby/user/:id_telegram
@@ -104,49 +105,32 @@ router.patch(
 // ================== HOUSE COMMENTS ==================
 
 /**
- * @route   GET /nearby/test-comments
- * @desc    Test endpoint for comments
- * @access  Public
- */
-router.get("/nearby/test-comments", async (req, res) => {
-  try {
-    res.json({
-      message: "Comments API is working",
-      timestamp: new Date().toISOString(),
-      tables: "Checking if tables exist...",
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
  * @route   GET /nearby/:house_id/comments
  * @desc    Get comments for a specific house
  * @access  Public
  */
-router.get("/nearby/:house_id/comments", houseController.getHouseComments);
+router.get("/nearby/:house_id/comments", authenticateOptional, houseController.getHouseComments);
 
 /**
  * @route   GET /nearby/comments
  * @desc    Get comments for a specific house by house number (query param)
- * @access  Public
+ * @access  Public (текст — только тем, кому открыт дом)
  */
-router.get("/nearby/comments", houseController.getHouseCommentsByNumber);
+router.get("/nearby/comments", authenticateOptional, houseController.getHouseCommentsByNumber);
 
 /**
  * @route   GET /nearby/:house_id/comment
  * @desc    Get latest comment for a specific house (simplified)
- * @access  Public
+ * @access  Public (текст — только тем, кому открыт дом)
  */
-router.get("/nearby/:house_id/comment", houseController.getHouseComment);
+router.get("/nearby/:house_id/comment", authenticateOptional, houseController.getHouseComment);
 
 /**
  * @route   GET /nearby/comment
  * @desc    Get latest comment for a specific house by house number (simplified, query param)
- * @access  Public
+ * @access  Public (текст — только тем, кому открыт дом)
  */
-router.get("/nearby/comment", houseController.getHouseCommentByNumber);
+router.get("/nearby/comment", authenticateOptional, houseController.getHouseCommentByNumber);
 
 /**
  * @route   POST /nearby/:house_id/comments
@@ -199,6 +183,7 @@ router.delete(
 // 1) SUBHOUSE — дом "37/1"
 router.get(
   "/nearby/:house(\\d+)/:subhouse(\\d+)/entrances/:entrance/comment",
+  authenticateOptional,
   (req, res, next) => {
     req.params.house_id = `${req.params.house}/${req.params.subhouse}`;
     next();
@@ -209,6 +194,7 @@ router.get(
 // 2) MAIN — дом "37"
 router.get(
   "/nearby/:house(\\d+)/entrances/:entrance/comment",
+  authenticateOptional,
   (req, res, next) => {
     req.params.house_id = req.params.house;
     next();

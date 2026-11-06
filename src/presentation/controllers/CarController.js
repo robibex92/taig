@@ -57,21 +57,24 @@ export class CarController {
 
   /** GET /api-v1/cars — все активные машины. */
   getAll = asyncHandler(async (req, res) => {
-    const cars = await this.getCarsUseCase.execute();
+    const cars = await this.getCarsUseCase.execute(req.user ?? null);
 
     res.json({ success: true, data: cars });
   });
 
   /** GET /api-v1/cars/user/:user_id */
   getUserCars = asyncHandler(async (req, res) => {
-    const cars = await this.getUserCarsUseCase.execute(req.params.user_id);
+    const cars = await this.getUserCarsUseCase.execute(
+      req.params.user_id,
+      req.user ?? null
+    );
 
     res.json({ success: true, data: cars });
   });
 
   /** GET /api-v1/cars/:id */
   getById = asyncHandler(async (req, res) => {
-    const car = await this.getCarByIdUseCase.execute(req.params.id);
+    const car = await this.getCarByIdUseCase.execute(req.params.id, req.user ?? null);
 
     if (!car) {
       throw new NotFoundError("Car");

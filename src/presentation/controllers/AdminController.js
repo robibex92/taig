@@ -1,4 +1,5 @@
 import { asyncHandler } from "../../core/utils/asyncHandler.js";
+import { ValidationError } from "../../core/errors/AppError.js";
 
 /**
  * Admin Controller
@@ -20,17 +21,51 @@ export class AdminController {
   }
 
   /**
-   * Get all users
+   * Каталог жителей страницей
    * GET /api-v1/admin/users
+   *
+   * Строки поиска здесь нет намеренно: имя, телефон или ник в query-параметре
+   * попадают в access.log nginx и в историю браузера администратора. Ищут —
+   * через `POST /api/admin/users/search`.
    */
   getAllUsers = asyncHandler(async (req, res) => {
-    const { limit, offset, search, role } = req.query;
+    const { limit, offset, role, search } = req.query;
+
+    if (search) {
+      throw new ValidationError(
+        "Поиск по жителям отправляйте телом запроса на POST /api/admin/users/search"
+      );
+    }
 
     const result = await this.getAllUsersUseCase.execute({
       limit: parseInt(limit) || 50,
       offset: parseInt(offset) || 0,
-      search,
       role,
+    });
+
+    res.json({
+      success: true,
+      data: result.users,
+      pagination: {
+        total: result.total,
+        limit: result.limit,
+        offset: result.offset,
+      },
+    });
+  });
+
+  /**
+   * Поиск по каталогу жителей
+   * POST /api-v1/admin/users/search
+   */
+  searchUsers = asyncHandler(async (req, res) => {
+    const { limit, offset, search, role } = req.body;
+
+    const result = await this.getAllUsersUseCase.execute({
+      limit: limit ?? 50,
+      offset: offset ?? 0,
+      search: search || null,
+      role: role || null,
     });
 
     res.json({

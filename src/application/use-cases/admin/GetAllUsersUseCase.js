@@ -20,12 +20,11 @@ export class GetAllUsersUseCase {
       filters.role = role;
     }
 
-    logger.info("[GetAllUsersUseCase] Executing with filters", {
+    logger.debug("[GetAllUsersUseCase] Executing with filters", {
       limit,
       offset,
-      search,
+      hasSearch: Boolean(search),
       role,
-      filters,
     });
 
     const [users, total] = await Promise.all([

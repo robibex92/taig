@@ -138,14 +138,19 @@ export class UserEntity {
 
   /**
    * Convert to safe object for public display (even more limited)
+   *
+   * Публичная карточка автора — имя, фамилия и аватар: ровно то, что уже видно
+   * в объявлении. `username` (ник в Telegram) едет наружу только модерации и
+   * самому человеку: по нему человека находят и зовут писать мимо сайта, а в
+   * связке с остальными публичными эндпоинтами он достраивал адрес до личности.
    */
-  toPublicJSON() {
+  toPublicJSON({ withHandle = false } = {}) {
     return {
       user_id: this.user_id,
-      username: this.username,
       first_name: this.first_name,
       last_name: this.last_name,
       avatar: this.avatar,
+      ...(withHandle ? { username: this.username } : {}),
     };
   }
 }

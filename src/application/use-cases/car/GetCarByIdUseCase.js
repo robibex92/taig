@@ -1,3 +1,5 @@
+import { projectCarForViewer } from "./carAccess.js";
+
 /**
  * Use case for getting car by ID
  */
@@ -6,7 +8,9 @@ export class GetCarByIdUseCase {
     this.carRepository = carRepository;
   }
 
-  async execute(carId) {
-    return await this.carRepository.findById(carId);
+  async execute(carId, viewer = null) {
+    const car = await this.carRepository.findById(carId);
+
+    return projectCarForViewer(car, viewer);
   }
 }

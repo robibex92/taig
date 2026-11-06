@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from "../../../core/errors/AppError.js";
+import { isModerator } from "../../../core/utils/roles.js";
 import { logger } from "../../../core/utils/logger.js";
 
 /**
@@ -14,21 +15,30 @@ export class GetMaxChatsUseCase {
     this.maxChatRepository = maxChatRepository;
   }
 
-  async execute(filters = {}) {
+  async execute(filters = {}, viewer = null) {
     const { purpose, active_only, visible_to_all_only } = filters;
 
-    if (active_only) {
-      return await this.maxChatRepository.getActiveChats(
-        purpose || null,
-        Boolean(visible_to_all_only)
-      );
+    const chats = active_only
+      ? await this.maxChatRepository.getActiveChats(
+          purpose || null,
+          Boolean(visible_to_all_only)
+        )
+      : purpose
+        ? await this.maxChatRepository.getByPurpose(purpose)
+        : await this.maxChatRepository.getAll();
+
+    // Как и в реестре Telegram-чатов: форме публикации нужны id и имя чата,
+    // а `chat_id` бота и адрес доставки — это настройка дома для модерации.
+    if (isModerator(viewer)) {
+      return chats;
     }
 
-    if (purpose) {
-      return await this.maxChatRepository.getByPurpose(purpose);
-    }
-
-    return await this.maxChatRepository.getAll();
+    return chats.map(({ id, name, purpose: chatPurpose, chat_type: chatType }) => ({
+      id,
+      name,
+      purpose: chatPurpose,
+      chat_type: chatType,
+    }));
   }
 }
 

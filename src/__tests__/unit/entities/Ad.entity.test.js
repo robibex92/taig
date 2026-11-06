@@ -1,3 +1,4 @@
+/* eslint-env jest */
 import { AdEntity } from "../../../domain/entities/Ad.entity.js";
 import { AD_STATUS } from "../../../core/constants/index.js";
 

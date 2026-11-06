@@ -1,6 +1,17 @@
 import { AD_STATUS, HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
 import { isModerator } from "../../core/utils/roles.js";
+import { NotFoundError } from "../../core/errors/AppError.js";
+import { validate } from "../../core/validation/validator.js";
+import { publicUserIdSchema } from "../../core/validation/schemas/user.schema.js";
+
+/**
+ * Ник человека (`username`) — адрес, по которому его находят в Telegram и зовут
+ * писать мимо сайта. Карточке автора объявления он не нужен: там работает имя.
+ */
+const canSeeHandle = (viewer, user) =>
+  Boolean(viewer) &&
+  (isModerator(viewer) || String(viewer.user_id) === String(user.user_id));
 
 /**
  * User Controller - handles user-related requests
@@ -33,14 +44,21 @@ export class UserController {
 
   /**
    * Get user by ID (public)
+   *
+   * Несуществующий id — 404. Раньше это был 500: `user` не проверялся, и
+   * перебор id выглядел как авария сервиса, а не как отсутствие человека.
    */
   getUserById = asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const { id } = validate(publicUserIdSchema, req.params);
     const user = await this.userRepository.findById(Number(id));
+
+    if (!user) {
+      throw new NotFoundError("User");
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
-      data: user.toPublicJSON(),
+      data: user.toPublicJSON({ withHandle: canSeeHandle(req.user, user) }),
     });
   });
 
@@ -48,8 +66,12 @@ export class UserController {
    * Get user avatar by ID (public)
    */
   getUserAvatar = asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const { id } = validate(publicUserIdSchema, req.params);
     const user = await this.userRepository.findById(Number(id));
+
+    if (!user) {
+      throw new NotFoundError("User");
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

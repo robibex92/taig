@@ -2,25 +2,37 @@
  * GetTelegramChatsUseCase
  * Retrieves all or filtered Telegram chats
  */
+import { isModerator } from "../../../core/utils/roles.js";
+
 export class GetTelegramChatsUseCase {
   constructor(telegramChatRepository) {
     this.telegramChatRepository = telegramChatRepository;
   }
 
-  async execute(filters = {}) {
+  async execute(filters = {}, viewer = null) {
     const { purpose, active_only, visible_to_all_only } = filters;
 
-    if (active_only) {
-      return await this.telegramChatRepository.getActiveChats(
-        purpose || null,
-        visible_to_all_only || false
-      );
+    const chats = active_only
+      ? await this.telegramChatRepository.getActiveChats(
+          purpose || null,
+          visible_to_all_only || false
+        )
+      : purpose
+        ? await this.telegramChatRepository.getByPurpose(purpose)
+        : await this.telegramChatRepository.getAll();
+
+    // Публикации объявления нужен только выбор «в какой чат» — id и имя.
+    // `chat_id` и `thread_id` это адреса доставки бота: они нужны экрану
+    // реестра, то есть модерации и выше, а не каждому жителю.
+    if (isModerator(viewer)) {
+      return chats;
     }
 
-    if (purpose) {
-      return await this.telegramChatRepository.getByPurpose(purpose);
-    }
-
-    return await this.telegramChatRepository.getAll();
+    return chats.map(({ id, name, purpose: chatPurpose, chat_type: chatType }) => ({
+      id,
+      name,
+      purpose: chatPurpose,
+      chat_type: chatType,
+    }));
   }
 }

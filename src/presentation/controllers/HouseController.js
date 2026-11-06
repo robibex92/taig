@@ -2,6 +2,7 @@ import { asyncHandler } from "../../core/utils/asyncHandler.js";
 import { validate } from "../../core/validation/validator.js";
 import { ValidationError } from "../../core/errors/AppError.js";
 import { resolveApartmentSubject } from "../../application/use-cases/house/apartmentAccess.js";
+import { canViewHouse } from "../../core/utils/roles.js";
 import {
   getEntrancesSchema,
   getHousesFilterSchema,
@@ -81,7 +82,10 @@ export class HouseController {
   /** GET /api-v1/nearby */
   getHousesByFilter = asyncHandler(async (req, res) => {
     const filters = validate(getHousesFilterSchema, req.query);
-    const houses = await this.getHousesByFilterUseCase.execute(filters);
+    const houses = await this.getHousesByFilterUseCase.execute(
+      filters,
+      req.user ?? null
+    );
 
     res.json({ data: houses });
   });
@@ -167,7 +171,11 @@ export class HouseController {
 
     res.json({
       success: true,
-      data: updatedHouse.toFilteredJSON(),
+      data: updatedHouse.toFilteredJSON({
+        // Правит раскладку тот, кому дом открыт, — контакт соседа в ответе
+        // остаётся при нём.
+        withResidentContact: canViewHouse(req.user, updatedHouse.house),
+      }),
     });
   });
 
@@ -203,7 +211,8 @@ export class HouseController {
   /** GET /api-v1/nearby/:house_id/comments */
   getHouseComments = asyncHandler(async (req, res) => {
     const comments = await this.getHouseCommentsUseCase.execute(
-      req.params.house_id
+      req.params.house_id,
+      req.user ?? null
     );
 
     res.json(comments);
@@ -212,14 +221,20 @@ export class HouseController {
   /** GET /api-v1/nearby/comments?house=HOUSE_NUMBER */
   getHouseCommentsByNumber = asyncHandler(async (req, res) => {
     const { house } = validate(houseCommentQuerySchema, req.query);
-    const comments = await this.getHouseCommentsUseCase.executeByNumber(house);
+    const comments = await this.getHouseCommentsUseCase.executeByNumber(
+      house,
+      req.user ?? null
+    );
 
     res.json(comments);
   });
 
   /** GET /api-v1/nearby/:house_id/comment — только текст последнего комментария. */
   getHouseComment = asyncHandler(async (req, res) => {
-    const comment = await this.#latestHouseCommentById(req.params.house_id);
+    const comment = await this.#latestHouseCommentById(
+      req.params.house_id,
+      req.user ?? null
+    );
 
     res.json(comment ? { comment } : null);
   });
@@ -227,7 +242,10 @@ export class HouseController {
   /** GET /api-v1/nearby/comment?house=HOUSE_NUMBER */
   getHouseCommentByNumber = asyncHandler(async (req, res) => {
     const { house } = validate(houseCommentQuerySchema, req.query);
-    const comment = await this.getHouseCommentsUseCase.executeSimple(house);
+    const comment = await this.getHouseCommentsUseCase.executeSimple(
+      house,
+      req.user ?? null
+    );
 
     res.json(comment ? { comment } : null);
   });
@@ -278,7 +296,8 @@ export class HouseController {
   getEntranceComment = asyncHandler(async (req, res) => {
     const result = await this.getEntranceCommentUseCase.execute(
       req.params.house_id,
-      req.params.entrance
+      req.params.entrance,
+      req.user ?? null
     );
 
     res.json(result);
@@ -312,12 +331,12 @@ export class HouseController {
    * `getHouseCommentByNumber`, и смешивать их нельзя — `isNaN('37')` как раз и
    * превращал номер дома в id квартиры.
    */
-  async #latestHouseCommentById(house_id) {
+  async #latestHouseCommentById(house_id, viewer = null) {
     if (!house_id) {
       throw new ValidationError("House number is required");
     }
 
-    const comments = await this.getHouseCommentsUseCase.execute(house_id);
+    const comments = await this.getHouseCommentsUseCase.execute(house_id, viewer);
 
     return comments?.[0]?.comment ?? null;
   }

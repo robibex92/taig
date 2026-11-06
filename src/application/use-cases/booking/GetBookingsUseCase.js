@@ -4,7 +4,9 @@ import UserRepository from "../../../infrastructure/repositories/UserRepository.
 import {
   ValidationError,
   NotFoundError,
+  ForbiddenError,
 } from "../../../domain/errors/index.js";
+import { isModerator } from "../../../core/utils/roles.js";
 import logger from "../../../infrastructure/logger/index.js";
 
 /**
@@ -22,9 +24,23 @@ export class GetBookingsUseCase {
   }
 
   /**
+   * Кто имеет право видеть очередь целиком, то есть имена соседей.
+   *
+   * Ранее любой вошедший мог спросить `/ads/:adId/bookings` у любого
+   * объявления и получить список забронировавших с именами — очередь это данные
+   * автора объявления, а не публичный список. Остальные видят только счётчик.
+   */
+  _canSeeQueue(ad, viewer) {
+    if (!viewer || !ad) return false;
+    if (isModerator(viewer)) return true;
+
+    return String(ad.user_id ?? ad.userId ?? "") === String(viewer.user_id);
+  }
+
+  /**
    * Get bookings for a specific ad
    */
-  async getAdBookings({ adId, status = "active" }) {
+  async getAdBookings({ adId, status = "active", viewer = null }) {
     try {
       // Validate input
       if (!adId) {
@@ -35,6 +51,10 @@ export class GetBookingsUseCase {
       const ad = await this.adRepository.findById(adId);
       if (!ad) {
         throw new NotFoundError("Ad not found");
+      }
+
+      if (!this._canSeeQueue(ad, viewer)) {
+        throw new ForbiddenError("Очередь бронирования видна только автору объявления");
       }
 
       // Get bookings
@@ -102,7 +122,7 @@ export class GetBookingsUseCase {
   /**
    * Get booking statistics for an ad
    */
-  async getAdBookingStats({ adId }) {
+  async getAdBookingStats({ adId, viewer = null }) {
     try {
       // Validate input
       if (!adId) {
@@ -124,6 +144,20 @@ export class GetBookingsUseCase {
         totalCount: stats.totalCount,
       });
 
+      // Сосед видит, что в очереди стоят N человек, но не кто именно: имена
+      // забронировавших — данные автора объявления.
+      const queueVisible = this._canSeeQueue(ad, viewer);
+
+      if (!queueVisible) {
+        return {
+          activeCount: stats.activeCount || 0,
+          totalCount: stats.totalCount || 0,
+          cancelledCount: stats.cancelledCount || 0,
+          queueVisible: false,
+          bookings: [],
+        };
+      }
+
       // Safely convert bookings to JSON
       const bookingsJSON =
         stats.bookings && Array.isArray(stats.bookings)
@@ -144,6 +178,7 @@ export class GetBookingsUseCase {
         activeCount: stats.activeCount || 0,
         totalCount: stats.totalCount || 0,
         cancelledCount: stats.cancelledCount || 0,
+        queueVisible: true,
         bookings: bookingsJSON,
       };
     } catch (error) {

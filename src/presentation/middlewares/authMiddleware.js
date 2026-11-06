@@ -39,7 +39,9 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
 
   // Отпечаток собирается тем же кодом, что и при логине, иначе сверка всегда
   // «не совпадает» и каждый запрос пишет предупреждение в лог.
-  const decoded = tokenService.verifyToken(
+  // Проверка асинхронная: помимо подписи сверяется, не отозвана ли сессия в
+  // таблице `refresh_tokens` (отзыв переживает рестарт и второй инстанс PM2).
+  const decoded = await tokenService.verifyToken(
     token,
     tokenService.extractDeviceInfo(req)
   );
@@ -53,6 +55,14 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
 
   if (!user) {
     throw new AuthenticationError("User not found");
+  }
+
+  // Блокировка раньше работала только там, где стоял `authorize()` или
+  // `requireRoles`, то есть на админских маршрутах. Маршруты с голой
+  // `authenticateJWT` (объявления, загрузка файлов, личные сообщения, контакты)
+  // заблокированный аккаунт проходили как обычный.
+  if (isBlocked(user)) {
+    throw new AuthorizationError("Аккаунт заблокирован");
   }
 
   req.user = toRequestUser(user);
@@ -80,7 +90,7 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    const decoded = tokenService.verifyToken(
+    const decoded = await tokenService.verifyToken(
       token,
       tokenService.extractDeviceInfo(req)
     );
@@ -89,9 +99,12 @@ export const authenticateOptional = asyncHandler(async (req, res, next) => {
       // Load full user data from database
       const user = await userRepository.findById(decoded.id);
 
-      if (user) {
+      if (user && !isBlocked(user)) {
         req.user = toRequestUser(user);
       } else {
+        // Заблокированный аккаунт для «необязательной» авторизации — гость:
+        // иначе по своему токену он получал бы вид staff (данные жильца в
+        // паркинге, архивные объявления).
         req.user = null;
       }
     } else {

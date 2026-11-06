@@ -5,9 +5,36 @@ import { logger } from "../utils/logger.js";
 /**
  * Global error handler middleware
  */
+
+/**
+ * Ошибки разбора тела (`body-parser`) — это проблема запроса, а не авария.
+ * Без этой ветки битый JSON и слишком большое тело приходили клиенту как 500
+ * и ложились в лог как сбой сервиса — то есть маскировали настоящую аварию
+ * среди мусорных запросов.
+ */
+const REQUEST_PARSE_ERRORS = {
+  "entity.too.large": {
+    statusCode: HTTP_STATUS.REQUEST_ENTITY_TOO_LARGE,
+    code: ERROR_CODES.PAYLOAD_TOO_LARGE,
+    message: "Тело запроса слишком большое",
+  },
+  "entity.parse.failed": {
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    code: ERROR_CODES.VALIDATION_ERROR,
+    message: "Тело запроса разобрано неверно (ожидается корректный JSON)",
+  },
+  "entity.verify.failed": {
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    code: ERROR_CODES.VALIDATION_ERROR,
+    message: "Тело запроса не прошло проверку",
+  },
+};
+
 export const errorHandler = (err, req, res, next) => {
+  const requestError = REQUEST_PARSE_ERRORS[err.type];
+
   // Log error
-  if (err.isOperational) {
+  if (err.isOperational || requestError) {
     logger.warn({
       message: err.message,
       code: err.code,
@@ -29,6 +56,16 @@ export const errorHandler = (err, req, res, next) => {
   // Handle known application errors
   if (err instanceof AppError) {
     return res.status(err.statusCode).json(err.toJSON());
+  }
+
+  if (requestError) {
+    return res.status(requestError.statusCode).json({
+      error: {
+        message: requestError.message,
+        code: requestError.code,
+        statusCode: requestError.statusCode,
+      },
+    });
   }
 
   // Отказ multer — это проблема запроса, а не авария: раньше «файл больше 10 МБ»

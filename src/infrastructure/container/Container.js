@@ -296,7 +296,9 @@ export class Container {
 
     // Services
     this.registerMany([
-      ["tokenService", TokenService, []],
+      // `refreshTokenRepository` нужен токен-сервису как хранилище сессий:
+      // отзыв сессии читается из таблицы, а не из памяти процесса.
+      ["tokenService", TokenService, ["refreshTokenRepository"]],
     ]);
 
     // Экземпляр из модуля, а не new: очередь pLimit и пауза 2с защищают один токен бота,
@@ -332,7 +334,9 @@ export class Container {
       ["refreshTokenUseCase", RefreshTokenUseCase, ["userRepository", "tokenService", "refreshTokenRepository", "sessionIssuer"]],
       ["updateUserUseCase", UpdateUserUseCase, ["userRepository"]],
       ["uploadAvatarUseCase", UploadAvatarUseCase, ["userRepository"]],
-      ["logoutUseCase", LogoutUseCase, ["refreshTokenRepository", "tokenService"]],
+      // Хранилище сессий живёт внутри `tokenService`: отзыв пары теперь один
+      // вызов, и репозиторий отдельно кейсу не нужен.
+      ["logoutUseCase", LogoutUseCase, ["tokenService"]],
     ]);
 
     // Use Cases - MAX
@@ -527,8 +531,8 @@ export class Container {
     // Use Cases - AdImage
     this.registerMany([
       ["createAdImagesUseCase", CreateAdImagesUseCase, ["adImageRepository", "adRepository", "postRepository"]],
-      ["getAdImagesUseCase", GetAdImagesUseCase, ["adImageRepository"]],
-      ["getImagesByIdUseCase", GetImagesByIdUseCase, ["adImageRepository"]],
+      ["getAdImagesUseCase", GetAdImagesUseCase, ["adImageRepository", "adRepository"]],
+      ["getImagesByIdUseCase", GetImagesByIdUseCase, ["adImageRepository", "adRepository"]],
       ["deleteAdImageUseCase", DeleteAdImageUseCase, ["adImageRepository", "adRepository", "postRepository"]],
       ["deleteMultipleAdImagesUseCase", DeleteMultipleAdImagesUseCase, ["adImageRepository", "adRepository", "postRepository"]],
       ["setMainImageUseCase", SetMainImageUseCase, ["adImageRepository", "adRepository", "postRepository"]],

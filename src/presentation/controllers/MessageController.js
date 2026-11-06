@@ -3,7 +3,8 @@ import SendMessageUseCase from "../../application/use-cases/message/SendMessageU
 import GetMessagesUseCase from "../../application/use-cases/message/GetMessagesUseCase.js";
 import GetConversationsUseCase from "../../application/use-cases/message/GetConversationsUseCase.js";
 import MessageRepository from "../../infrastructure/repositories/MessageRepository.js";
-import { ValidationError } from "../../domain/errors/index.js";
+import { ValidationError, NotFoundError } from "../../domain/errors/index.js";
+import { logger } from "../../core/utils/logger.js";
 
 /**
  * MessageController - handles HTTP requests for messaging
@@ -57,12 +58,13 @@ export class MessageController {
     const currentUserId = req.user?.user_id || null; // Allow null for unauthenticated users
     const { ad_id, limit = 50, offset = 0, mark_as_read = "false" } = req.query;
 
-    console.log("MessageController.getMessages called with:", {
-      userId,
-      currentUserId,
-      query: req.query,
-      ad_id,
-      mark_as_read,
+    // Форма запроса, без адресатов: `userId` — это id Telegram собеседника, и
+    // такой лог в проде превращается в список «кто с кем разговаривал».
+    logger.debug("List of messages requested", {
+      limit: Number(limit) || 50,
+      offset: Number(offset) || 0,
+      hasAd: Boolean(ad_id),
+      markAsRead: mark_as_read === "true",
     });
 
     const result = await this.getMessagesUseCase.execute({
@@ -137,8 +139,15 @@ export class MessageController {
    */
   getThread = asyncHandler(async (req, res) => {
     const { threadId } = req.params;
+    const userId = req.user.user_id;
 
-    const messages = await this.messageRepository.getThread(threadId);
+    const messages = await this.messageRepository.getThread(threadId, userId);
+
+    if (messages.length === 0) {
+      // Тот же ответ для «чужой переписки» и «такой нить нет» — иначе по коду
+      // ответа можно разведывать, какие threadId вообще существуют.
+      throw new NotFoundError("Message thread not found");
+    }
 
     res.json({ messages: messages.map((m) => m.toJSON()) });
   });

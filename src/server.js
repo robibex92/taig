@@ -91,13 +91,20 @@ const corsOptions = {
 // `cors()` сам отвечает на PREFLIGHT, поэтому отдельного `app.options("*")` не нужно.
 app.use(cors(corsOptions));
 
-// Body parsers
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use(cookieParser());
-
-// Rate limiting
+// `generalLimiter` обязан стоять до разбора тела: иначе аноним может заставить
+// воркер распарсить чужие байты раньше, чем сработает квота, — а это и есть
+// самый дешёвый отказ в обслуживании на этом хосте.
 app.use(generalLimiter);
+
+// Body parsers
+//
+// 50 МБ JSON здесь были наследием эпохи, когда картинки пробовали тащить в теле.
+// Файлы идут multipart'ом (`uploadMiddleware` со своими лимитами), а легитимное
+// текстовое тело объявления или новости — десятки килобайт, поэтому 2 МБ с
+// запасом; больший JSON теперь означает либо ошибку клиента, либо подбор DoS.
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ limit: "2mb", extended: true }));
+app.use(cookieParser());
 
 // Request logging
 app.use((req, res, next) => {
@@ -233,6 +240,14 @@ app.use(errorHandler);
 // ================== Server Startup ==================
 
 const PORT = process.env.PORT || 4000;
+
+/**
+ * Адрес прослушивания. Дефолт оставлен `0.0.0.0` намеренно: если nginx живёт не
+ * на этой машине, привязка к 127.0.0.1 уберёт сайт целиком, а это проверка,
+ * которую делает он сам. Переключается одной строкой в `.env`
+ * (`BIND_HOST=127.0.0.1`) после того, как сверено, кто проксирует.
+ */
+const BIND_HOST = process.env.BIND_HOST || "0.0.0.0";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Проверка БД не блокирует старт (так было заведено): при недоступной базе
@@ -246,9 +261,10 @@ if (!databaseConnected) {
   );
 }
 
-const server = app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, BIND_HOST, () => {
   logger.info("Server started", {
     port: PORT,
+    bindHost: BIND_HOST,
     environment: NODE_ENV,
     nodeVersion: process.version,
     databaseConnected,

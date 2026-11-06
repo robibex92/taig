@@ -236,8 +236,13 @@ export class FileUploadService {
     const fileName = path.basename(relPath);
     const filePath = path.join(this.uploadsDir, fileName);
 
-    // Security check: ensure file path is within uploads directory
-    if (!filePath.startsWith(this.uploadsDir)) {
+    // Граница — с разделителем, как в `removeStoredFile`: `startsWith(uploadsDir)`
+    // посчитал бы «своим» и сосед `/uploads-secret/…`, если такой каталог
+    // окажется рядом с нашим.
+    if (
+      filePath !== this.uploadsDir &&
+      !filePath.startsWith(this.uploadsDir + path.sep)
+    ) {
       throw new AppError("Invalid file path", 400);
     }
 

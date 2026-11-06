@@ -2,31 +2,30 @@ import { logger } from "../../../core/utils/logger.js";
 
 /**
  * Improved Logout Use Case
- * - Revokes refresh token in database
- * - Adds access token to blacklist
- * - Proper audit logging
+ *
+ * `jti` у access и refresh одной пары общий, поэтому один отзыв строки
+ * `refresh_tokens` выключает оба токена — сразу и для всех инстансов процесса.
+ * Раньше access-токен попадал только в `Set` памяти воркера, и после рестарта
+ * (или на втором воркере PM2) «вышедший» пользователь оставался в системе до
+ * конца жизни токена.
  */
 export class LogoutUseCase {
-  constructor(refreshTokenRepository, tokenService) {
-    this.refreshTokenRepository = refreshTokenRepository;
+  constructor(tokenService) {
     this.tokenService = tokenService;
   }
 
   async execute(userId, accessToken, refreshToken) {
-    // Revoke access token (add to blacklist)
-    if (accessToken) {
-      this.tokenService.revokeToken(accessToken);
-    }
+    const token = refreshToken || accessToken;
 
-    // Revoke refresh token in database
-    if (refreshToken) {
+    if (token) {
       try {
-        const decoded = this.tokenService.decodeToken(refreshToken);
-        if (decoded?.jti) {
-          await this.refreshTokenRepository.revokeByJti(decoded.jti);
+        const revoked = await this.tokenService.revokeToken(token);
+
+        if (!revoked) {
+          logger.warn("Сессию не удалось отозвать", { user_id: userId });
         }
       } catch (error) {
-        logger.warn("Could not revoke refresh token", {
+        logger.warn("Could not revoke session", {
           user_id: userId,
           error: error.message,
         });

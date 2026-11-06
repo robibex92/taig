@@ -21,7 +21,10 @@ export class RefreshTokenUseCase {
       throw new AuthenticationError("Refresh token is required");
     }
 
-    const decoded = this.tokenService.verifyRefreshToken(refreshToken, deviceInfo);
+    const decoded = await this.tokenService.verifyRefreshToken(
+      refreshToken,
+      deviceInfo
+    );
 
     if (!decoded?.id || !decoded?.jti) {
       throw new AuthenticationError("Invalid refresh token");

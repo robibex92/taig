@@ -9,7 +9,7 @@ import {
   telegramClaimSchema,
   sessionIdSchema,
 } from "../../core/validation/schemas/auth.schema.js";
-import { authLimiter } from "../middlewares/securityMiddleware.js";
+import { authLimiter, claimLimiter } from "../middlewares/securityMiddleware.js";
 
 const router = express.Router();
 const authController = container.resolve("authController");
@@ -29,10 +29,12 @@ router.post(
   authController.authenticateMax
 );
 
-// Без authLimiter: сайт опрашивает этот эндпоинт пару минут (поллинг входа),
-// а коды/requestId одноразовые и высокоэнтропийные.
+// Без `authLimiter`: сайт опрашивает этот эндпоинт пару минут (поллинг входа).
+// Но и совсем без квоты нельзя — possession of a live requestId сам по себе
+// выдаёт сессию, поэтому перебор закрыт отдельным `claimLimiter`.
 router.post(
   "/auth/max/claim",
+  claimLimiter,
   validateRequest(maxClaimCodeSchema, "body"),
   authController.claimMax
 );
@@ -40,6 +42,7 @@ router.post(
 // Тот же хендовер для Telegram-бота: `/start login_<requestId>` → claim.
 router.post(
   "/auth/telegram/claim",
+  claimLimiter,
   validateRequest(telegramClaimSchema, "body"),
   authController.claimTelegram
 );

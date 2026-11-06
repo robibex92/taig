@@ -355,12 +355,28 @@ export class MessageRepository {
 
   /**
    * Get message thread (parent message with all replies)
+   *
+   * `participantId` обязателен: без него запрос отдавал любую переписку по
+   * перебору `threadId` — маршруту хватало самого факта авторизации. Список
+   * ограничивается парами, где вызывающий стоит отправителем или получателем.
    */
-  async getThread(threadId) {
+  async getThread(threadId, participantId) {
+    if (!participantId) {
+      throw new DatabaseError("getThread: participantId is required");
+    }
+
     try {
       const messages = await prisma.message.findMany({
         where: {
           OR: [{ id: BigInt(threadId) }, { thread_id: BigInt(threadId) }],
+          AND: [
+            {
+              OR: [
+                { sender_id: BigInt(participantId) },
+                { receiver_id: BigInt(participantId) },
+              ],
+            },
+          ],
           is_deleted: false,
         },
         include: {

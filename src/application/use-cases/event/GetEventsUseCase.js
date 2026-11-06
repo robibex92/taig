@@ -1,4 +1,5 @@
 import { prisma } from "../../../infrastructure/database/prisma.js";
+import { isModerator } from "../../../core/utils/roles.js";
 import logger from "../../../infrastructure/logger/index.js";
 
 /**
@@ -6,7 +7,9 @@ import logger from "../../../infrastructure/logger/index.js";
  * Retrieves events with filtering and pagination
  */
 export class GetEventsUseCase {
-  async execute(filters = {}, pagination = {}) {
+  async execute(filters = {}, pagination = {}, viewer = null) {
+    const canSeeParticipants = isModerator(viewer);
+
     try {
       const { status, event_type, search } = filters;
       const { page = 0, limit = 10 } = pagination;
@@ -92,7 +95,11 @@ export class GetEventsUseCase {
               username: event.creator.username,
             }
           : null,
-        registrations: event.registrations || [],
+        // Публичному календарю нужна длина очереди, а не имена: без модерации
+        // персональные поля снимаются, счётчик мест остаётся честным.
+        registrations: canSeeParticipants
+          ? event.registrations || []
+          : (event.registrations || []).map(({ user, ...rest }) => rest),
       }));
 
       logger.info("Events retrieved successfully", {

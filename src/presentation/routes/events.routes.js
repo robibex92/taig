@@ -1,6 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
 import { GLOBAL_ROLES } from "../../core/utils/roles.js";
 
@@ -58,7 +58,10 @@ const BASE_ROUTE = "/";
  *       500:
  *         description: Internal Server Error
  */
-router.get(BASE_ROUTE, eventController.getEvents);
+// `authenticateOptional` нужен не для доступа, а чтобы сервер видел, кто
+// спрашивает: список участников события отдаётся модерации, остальным — длина
+// очереди без имён.
+router.get(BASE_ROUTE, authenticateOptional, eventController.getEvents);
 
 /**
  * @swagger
@@ -138,7 +141,7 @@ router.post(
  *       500:
  *         description: Internal Server Error
  */
-router.get(`${BASE_ROUTE}/:id`, eventController.getEventById);
+router.get(`${BASE_ROUTE}/:id`, authenticateOptional, eventController.getEventById);
 
 /**
  * @swagger

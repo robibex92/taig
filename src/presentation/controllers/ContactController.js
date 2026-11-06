@@ -30,24 +30,53 @@ export class ContactController {
   }
 
   /**
-   * GET /api/contacts/availability?user_id=123 | ?id_telegram=777
+   * Адресат запроса.
+   *
+   * Обычно клиент называет человека. Но `GET /api/cars` чужой `user_id` больше
+   * не отдаёт (см. `projectCarForViewer`), и тогда «написать владельцу» пришлось
+   * бы просто убрать. Поэтому клиент может назвать машину — а её владельца
+   * сервер возьмёт из базы.
+   */
+  async #recipient({ userId, idTelegram, carId }) {
+    if (carId == null || userId != null || idTelegram != null) {
+      return { userId, idTelegram };
+    }
+
+    const car = await this.db.car.findUnique({
+      where: { id: BigInt(carId) },
+      select: { user_id: true },
+    });
+
+    return { userId: car?.user_id ?? null };
+  }
+
+  /**
+   * GET /api/contacts/availability?user_id=123 | ?id_telegram=777 | ?car_id=8
    * { found, telegram, max } — только флаги, без самих id.
    */
   availability = asyncHandler(async (req, res) => {
-    const { user_id: userId, id_telegram: idTelegram } = req.query;
+    const { user_id: userId, id_telegram: idTelegram, car_id: carId } = req.query;
 
-    const result = await this.delivery.availability({ userId, idTelegram });
+    const result = await this.delivery.availability(
+      await this.#recipient({ userId, idTelegram, carId })
+    );
 
     res.status(HTTP_STATUS.OK).json({ success: true, data: result });
   });
 
   /**
    * POST /api/contacts/send
-   * { user_id | id_telegram, message, contextType, contextData, channel }
+   * { user_id | id_telegram | car_id, message, contextType, contextData, channel }
    */
   send = asyncHandler(async (req, res) => {
-    const { user_id: userId, id_telegram: idTelegram, message, contextType, contextData } =
-      req.body;
+    const {
+      user_id: rawUserId,
+      id_telegram: idTelegram,
+      car_id: carId,
+      message,
+      contextType,
+      contextData,
+    } = req.body;
     const requestedChannel = req.body.channel || "auto";
 
     if (!CHANNELS.has(requestedChannel)) {
@@ -57,6 +86,11 @@ export class ContactController {
     }
 
     const senderId = req.user?.user_id ?? null;
+    const { userId } = await this.#recipient({
+      userId: rawUserId,
+      idTelegram,
+      carId,
+    });
     const availability = await this.delivery.availability({ userId, idTelegram });
 
     if (!availability.found) {

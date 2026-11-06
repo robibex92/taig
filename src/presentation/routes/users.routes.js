@@ -14,8 +14,17 @@ const publicRouter = express.Router();
 const userController = container.resolve("userController");
 
 // Public routes
-publicRouter.get("/users/:id", userController.getUserById);
-publicRouter.get("/users/:id/avatar", userController.getUserAvatar);
+/**
+ * Карточка автора: имя и аватар видны всем (их показывает объявление), ник
+ * человека — только модерации и ему самому. Поэтому здесь необязательный токен,
+ * а не полный отказ гостю.
+ */
+publicRouter.get("/users/:id", authenticateOptional, userController.getUserById);
+publicRouter.get(
+  "/users/:id/avatar",
+  authenticateOptional,
+  userController.getUserAvatar
+);
 // Публичный список объявлений пользователя: `/api/ads/user/:user_id`.
 // `authenticateOptional` здесь нужен не для доступа, а для того, чтобы
 // сервер понял, что спрашивает владелец, и вернул архив/удалённые + `counts`.

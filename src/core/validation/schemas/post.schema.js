@@ -1,6 +1,21 @@
 import Joi from "joi";
 import { ownUploadUrl } from "./uploadUrl.js";
 
+/**
+ * Ссылка «Источник»: её кликает каждый читатель новости, поэтому scheme
+ * проверяется на записи. `javascript:` в этом поле — выполнение кода на
+ * странице жертвы, а не переход на чужой сайт (аудит 06.11, S13).
+ */
+const postSource = Joi.string()
+  .trim()
+  .max(2048)
+  .uri({ scheme: ["http", "https"] })
+  .allow("", null)
+  .messages({
+    "string.uriCustomScheme": "Источник — только ссылка http:// или https://",
+    "string.max": "Источник слишком длинный",
+  });
+
 export const createPostSchema = Joi.object({
   title: Joi.string().min(3).max(255).trim().required().messages({
     "string.min": "Title must be at least 3 characters long",
@@ -19,7 +34,7 @@ export const createPostSchema = Joi.object({
 
   status: Joi.string().valid("active", "deleted").default("active"),
 
-  source: Joi.string().trim().allow("", null),
+  source: postSource,
 
   marker: Joi.string().trim().allow("", null),
 
@@ -54,7 +69,7 @@ export const updatePostSchema = Joi.object({
   // Только файл из нашего каталога загрузок: ссылка попадает в `src` на сайте.
   image_url: ownUploadUrl().allow("", null),
   status: Joi.string().valid("active", "deleted"),
-  source: Joi.string().trim().allow("", null),
+  source: postSource,
   marker: Joi.string().trim().allow("", null),
 }).min(1);
 

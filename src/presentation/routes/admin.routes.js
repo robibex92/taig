@@ -1,6 +1,8 @@
 import express from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
+import { validateRequest } from "../../core/validation/validator.js";
+import { adminUserSearchSchema } from "../../core/validation/schemas/user.schema.js";
 import { GLOBAL_ROLES, SERVICE_ROLES } from "../../core/utils/roles.js";
 import { container } from "../../infrastructure/container/Container.js";
 import { backupLimiter } from "../middlewares/securityMiddleware.js";
@@ -15,7 +17,7 @@ router.use(authenticateJWT);
 
 /**
  * @route   GET /api/admin/users
- * @desc    Resident directory (name + platform ids). Parking and cars admins
+ * @desc    Resident directory page (name + platform ids). Parking and cars admins
  *          need it to attach a place or a car to a resident.
  * @access  Private (staff, parking admin, cars admin)
  */
@@ -28,6 +30,23 @@ router.get(
     SERVICE_ROLES.CARS_ADMIN
   ),
   adminController.getAllUsers
+);
+
+/**
+ * @route   POST /api/admin/users/search
+ * @desc    Same directory filtered by free-text search and/or role
+ * @access  Private (staff, parking admin, cars admin)
+ */
+router.post(
+  "/users/search",
+  requireRoles(
+    GLOBAL_ROLES.ADMIN,
+    GLOBAL_ROLES.MODERATOR,
+    SERVICE_ROLES.PARKING_ADMIN,
+    SERVICE_ROLES.CARS_ADMIN
+  ),
+  validateRequest(adminUserSearchSchema, "body"),
+  adminController.searchUsers
 );
 
 /**

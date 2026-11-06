@@ -1,3 +1,4 @@
+/* eslint-env jest */
 import { buildMaxAdMessageText, publishToMaxChats, removeAdFromMaxChats } from "../../../application/use-cases/ad/maxAdPublishing.js";
 
 /**

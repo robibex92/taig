@@ -51,10 +51,9 @@ export const rateLimitKey = (req) => {
 
   if (tokenService) {
     try {
-      const decoded = tokenService.verifyAccessToken(header.slice(7), {
-        userAgent: req.headers["user-agent"] || "",
-        ip: req.ip || "",
-      });
+      // Только подпись: ключ лимитера собирается синхронно, и читать ради него
+      // состояние сессий было бы лишним запросом на каждый ответ.
+      const decoded = tokenService.verifyAccessTokenSignature(header.slice(7));
 
       if (decoded?.id) return `user:${decoded.id}`;
     } catch {
@@ -133,6 +132,39 @@ export const authLimiter = rateLimit({
   },
   validate: { trustProxy: false }, // Disable validation warning
 });
+
+/**
+ * Квота на обмен одноразового handoff-кода на сессию (`/auth/max/claim`,
+ * `/auth/telegram/claim`).
+ *
+ * `authLimiter` (40 неудач/15 мин) сюда не подходит: сайт опрашивает этот
+ * эндпоинт каждые 2,5 с до подтверждения в боте, то есть одна легитимная
+ * попытка входа сама по себе даёт ~48 ответов 401, а живут жители одним домом
+ * за одним NAT. Порог в 30 раз выше и считается только по неудачам: перебор
+ * чужих requestId в него упирается, несколько параллельных входов подъезда — нет.
+ *
+ * Число вынесено в фабрику, чтобы семантику (`skipSuccessfulRequests`) можно
+ * было проверить на маленьких значениях, а не гонять 1200 запросов в тесте.
+ */
+export const makeClaimLimiter = (max) =>
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: {
+        message: "Слишком много попыток подтверждения входа, попробуйте позже",
+        code: "CLAIM_RATE_LIMIT_EXCEEDED",
+      },
+    },
+    validate: { trustProxy: false },
+  });
+
+export const claimLimiter = makeClaimLimiter(
+  parseInt(process.env.RATE_LIMIT_CLAIM_MAX) || 1200
+);
 
 /**
  * Rate limiter for ad creation

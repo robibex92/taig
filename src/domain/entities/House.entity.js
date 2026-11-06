@@ -100,8 +100,14 @@ export class House {
 
   /**
    * Convert to filtered JSON (exclude internal fields, add hasInfo)
+   *
+   * `withResidentContact` решает сервер, а не интерфейс: `id_telegram` соседа —
+   * это и есть его `user_id`, то есть адрес, по которому ему пишут в Telegram.
+   * В открытой сетке квартир он превращал номер квартиры в адрес доставки
+   * сообщений, поэтому уезжает наружу только тем, кому показана и сама сетка
+   * (`canViewHouse`).
    */
-  toFilteredJSON() {
+  toFilteredJSON({ withResidentContact = false } = {}) {
     return {
       id: this.id,
       number: this.number,
@@ -110,7 +116,9 @@ export class House {
       position: this.position,
       cell_index: this.cellIndex,
       cell_span: this.cellSpan,
-      id_telegram: this.id_telegram,
+      ...(withResidentContact && this.id_telegram != null
+        ? { id_telegram: this.id_telegram }
+        : {}),
       hasInfo: !!(this.info && this.info.trim()),
     };
   }

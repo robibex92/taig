@@ -11,13 +11,18 @@ const EXPRESSION_UNITS = { s: 1, m: 60, h: 3600, d: 86400 };
 /**
  * Centralized Token Service
  *
- * Подпись токена: `{id, type, device}` для access и `{id, type, jti, device}`
- * для refresh; `device` — sha256 от `userAgent|acceptLanguage`. IP в отпечаток
- * намеренно не входит: он меняется между запросами одного пользователя
- * (мобильный интернет, NAT дома), а `jti` уже делает refresh-токен уникальным.
+ * Подпись токена: `{id, type, jti, device}` — и у access, и у refresh. Один
+ * `jti` на пару — это id сессии: строка `refresh_tokens` создаётся под него при
+ * входе, поэтому отзыв сессии гасит оба токена сразу и виден всем инстансам и
+ * после рестарта (раньше отозванный access-токен лежал в `Set` памяти процесса
+ * и на втором воркере PM2 продолжал работать; аудит S17).
+ *
+ * `device` — sha256 от `userAgent|acceptLanguage`. IP в отпечаток намеренно не
+ * входит: он меняется между запросами одного пользователя (мобильный интернет,
+ * NAT дома), а уникальность сессии обеспечивает `jti`.
  */
 export class TokenService {
-  constructor() {
+  constructor(sessionStore = null) {
     this.accessTokenSecret =
       process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
     this.refreshTokenSecret =
@@ -37,27 +42,32 @@ export class TokenService {
     }
 
     /**
-     * Отозванные access-токены. Живёт в памяти процесса: на втором инстансе PM2
-     * (или после рестарта) отзыв не виден, и токен доживает до своего 15 минут.
-     * Честный отзыв требует таблицы или Redis — это H0.4/E в реестре рефакторинга.
+     * Хранилище сессий (`refreshTokenRepository`): по `jti` отвечает, отозвана
+     * ли сессия. Без него сервис работает как раньше — токен проверяется только
+     * по подписи; его подставляют в DI, а тесты оставляют `null`.
      */
-    this.blacklist = new Set();
+    this.sessionStore = sessionStore;
   }
 
-  generateAccessToken(user, deviceInfo = {}) {
+  generateAccessToken(user, deviceInfo = {}, jti = null) {
     return jwt.sign(
-      { id: user.user_id, type: "access", device: this.hashDeviceInfo(deviceInfo) },
+      {
+        id: user.user_id,
+        type: "access",
+        jti: jti ?? crypto.randomUUID(),
+        device: this.hashDeviceInfo(deviceInfo),
+      },
       this.accessTokenSecret,
       { expiresIn: this.accessTokenExpiration, issuer: ISSUER, audience: AUDIENCE }
     );
   }
 
-  generateRefreshToken(user, deviceInfo = {}, rememberMe = false) {
+  generateRefreshToken(user, deviceInfo = {}, rememberMe = false, jti = null) {
     return jwt.sign(
       {
         id: user.user_id,
         type: "refresh",
-        jti: crypto.randomUUID(),
+        jti: jti ?? crypto.randomUUID(),
         device: this.hashDeviceInfo(deviceInfo),
       },
       this.refreshTokenSecret,
@@ -71,14 +81,37 @@ export class TokenService {
     );
   }
 
+  /**
+   * Пара токенов одной сессии: оба несут один `jti`, поэтому отзыв строки
+   * `refresh_tokens` выключает и access, и refresh.
+   */
   generateTokenPair(user, deviceInfo = {}, rememberMe = false) {
+    const jti = crypto.randomUUID();
+
     return {
-      accessToken: this.generateAccessToken(user, deviceInfo),
-      refreshToken: this.generateRefreshToken(user, deviceInfo, rememberMe),
+      jti,
+      accessToken: this.generateAccessToken(user, deviceInfo, jti),
+      refreshToken: this.generateRefreshToken(user, deviceInfo, rememberMe, jti),
     };
   }
 
-  verifyAccessToken(token, deviceInfo = {}) {
+  /**
+   * Проверка подписи без чтения сессий — синхронная. Нужна там, где токен
+   * используют только как ключ (например, `rateLimitKey`), и обращаться к базе
+   * в момент формирования запроса нельзя. Отозванная сессия здесь остаётся
+   * «действующей»: это не пропуск в систему, а деление квоты, и безопаснее
+   * знать, что за ключ, чем класть всех анонимов в одну корзину по IP дома.
+   */
+  verifyAccessTokenSignature(token) {
+    return this._verifySignature({
+      token,
+      secret: this.accessTokenSecret,
+      expectedType: "access",
+      kind: "Access",
+    });
+  }
+
+  async verifyAccessToken(token, deviceInfo = {}) {
     return this._verify({
       token,
       secret: this.accessTokenSecret,
@@ -88,7 +121,7 @@ export class TokenService {
     });
   }
 
-  verifyRefreshToken(token, deviceInfo = {}) {
+  async verifyRefreshToken(token, deviceInfo = {}) {
     return this._verify({
       token,
       secret: this.refreshTokenSecret,
@@ -98,18 +131,12 @@ export class TokenService {
     });
   }
 
-  _verify({ token, secret, expectedType, deviceInfo, kind }) {
-    const revokedMessage =
-      expectedType === "access"
-        ? "Token has been revoked"
-        : "Refresh token has been revoked";
-
+  _verifySignature({ token, secret, expectedType, kind }) {
     try {
-      if (this.blacklist.has(token)) {
-        throw new AuthenticationError(revokedMessage);
-      }
-
       const decoded = jwt.verify(token, secret, {
+        // Без явного списка jsonwebtoken берёт алгоритм из самого токена. Подпись
+        // симметрическая, поэтому фиксируем HS256 — тот же, что в `jwt.sign`.
+        algorithms: ["HS256"],
         issuer: ISSUER,
         audience: AUDIENCE,
       });
@@ -117,8 +144,6 @@ export class TokenService {
       if (decoded.type !== expectedType) {
         throw new AuthenticationError("Invalid token type");
       }
-
-      this.noteDeviceMismatch(decoded, deviceInfo);
 
       return decoded;
     } catch (error) {
@@ -130,6 +155,47 @@ export class TokenService {
         throw new AuthenticationError(`Invalid ${kind.toLowerCase()} token`);
       }
       throw new AuthenticationError(`${kind} token verification failed`);
+    }
+  }
+
+  async _verify({ token, secret, expectedType, deviceInfo, kind }) {
+    const decoded = this._verifySignature({ token, secret, expectedType, kind });
+
+    // Отзыв смотрим уже после подписи: чужую подделку не должно быть видно
+    // как «отозванную сессию».
+    await this.assertNotRevokedSession(decoded, kind);
+
+    this.noteDeviceMismatch(decoded, deviceInfo);
+
+    return decoded;
+  }
+
+  /**
+   * Сессия отозвана — токены этой сессии не принимаются.
+   *
+   * Строки может не оказаться (токен выпущен до того, как сессии стали
+   * табличными, или база недоступна): тогда проверка не блокирует запрос —
+   * подпись всё ещё обязана совпасть. Терять из-за сбоя хранилища авторизацию
+   * всего дома дороже, чем окно в одну сессию, которую и так не отозвали.
+   */
+  async assertNotRevokedSession(decoded, kind) {
+    if (!this.sessionStore || !decoded?.jti) return;
+
+    let session;
+    try {
+      session = await this.sessionStore.findByJti(decoded.jti);
+    } catch (error) {
+      logger.warn("Не удалось прочитать сессию при проверке токена", {
+        jti: decoded.jti,
+        error: error.message,
+      });
+      return;
+    }
+
+    if (session?.is_revoked) {
+      throw new AuthenticationError(
+        kind === "Access" ? "Token has been revoked" : "Refresh token has been revoked"
+      );
     }
   }
 
@@ -156,7 +222,7 @@ export class TokenService {
   /**
    * Алиас для verifyAccessToken: middleware авторизации исторически зовёт его.
    */
-  verifyToken(token, deviceInfo = {}) {
+  async verifyToken(token, deviceInfo = {}) {
     return this.verifyAccessToken(token, deviceInfo);
   }
 
@@ -164,14 +230,27 @@ export class TokenService {
     return jwt.decode(token);
   }
 
-  revokeToken(token) {
-    this.blacklist.add(token);
+  /**
+   * Отозвать сессию по любому токену пары: `jti` у access и refresh один, и
+   * отзыв строки `refresh_tokens` выключает оба — сразу, на всех инстансах и
+   * после рестарта процесса.
+   */
+  async revokeToken(token) {
+    const decoded = this.decodeToken(token);
 
-    logger.info("Token revoked", { token_hash: this.hashToken(token) });
-  }
+    if (!decoded?.jti) return false;
 
-  isTokenRevoked(token) {
-    return this.blacklist.has(token);
+    if (!this.sessionStore) {
+      logger.warn("Токен отзывают без хранилища сессий — отзыв виден только до рестарта", {
+        jti: decoded.jti,
+      });
+      return false;
+    }
+
+    await this.sessionStore.revokeByJti(decoded.jti);
+    logger.info("Session revoked", { jti: decoded.jti });
+
+    return true;
   }
 
   extractDeviceInfo(req) {

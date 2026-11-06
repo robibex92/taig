@@ -73,6 +73,7 @@ export class BookingController {
     const result = await this.getBookingsUseCase.getAdBookings({
       adId,
       status,
+      viewer: req.user ?? null,
     });
 
     res.json(result);
@@ -107,6 +108,7 @@ export class BookingController {
 
     const result = await this.getBookingsUseCase.getAdBookingStats({
       adId,
+      viewer: req.user ?? null,
     });
 
     res.json(result);

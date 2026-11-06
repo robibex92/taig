@@ -31,6 +31,8 @@ const idSchema = Joi.alternatives().try(Joi.number().integer().positive(), Joi.s
 const sendSchema = Joi.object({
   user_id: idSchema,
   id_telegram: idSchema,
+  /** Вместо человека можно назвать машину: её владельца берёт сервер. */
+  car_id: Joi.number().integer().positive(),
   message: Joi.string().min(1).max(4096).required().messages({
     "string.empty": "Текст сообщения обязателен",
     "string.max": "Сообщение слишком длинное",
@@ -40,12 +42,13 @@ const sendSchema = Joi.object({
     .allow("", null),
   contextData: Joi.object().allow(null),
   channel: Joi.string().valid("telegram", "max", "auto").default("auto"),
-}).or("user_id", "id_telegram");
+}).or("user_id", "id_telegram", "car_id");
 
 const availabilitySchema = Joi.object({
   user_id: idSchema,
   id_telegram: idSchema,
-}).or("user_id", "id_telegram");
+  car_id: Joi.number().integer().positive(),
+}).or("user_id", "id_telegram", "car_id");
 
 /**
  * @swagger

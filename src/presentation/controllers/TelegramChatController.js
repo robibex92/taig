@@ -25,11 +25,14 @@ export class TelegramChatController {
    */
   getChats = asyncHandler(async (req, res) => {
     const { purpose, active_only, visible_to_all_only } = req.query;
-    const chats = await this.getTelegramChatsUseCase.execute({
-      purpose,
-      active_only: active_only === "true",
-      visible_to_all_only: visible_to_all_only === "true",
-    });
+    const chats = await this.getTelegramChatsUseCase.execute(
+      {
+        purpose,
+        active_only: active_only === "true",
+        visible_to_all_only: visible_to_all_only === "true",
+      },
+      req.user ?? null
+    );
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

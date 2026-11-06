@@ -31,7 +31,7 @@ export class EventController {
     const filters = { status, event_type, search };
     const pagination = { page: parseInt(page), limit: parseInt(limit) };
 
-    const result = await this.getEventsUseCase.execute(filters, pagination);
+    const result = await this.getEventsUseCase.execute(filters, pagination, req.user ?? null);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -45,7 +45,7 @@ export class EventController {
    */
   getEventById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const event = await this.getEventByIdUseCase.execute(Number(id));
+    const event = await this.getEventByIdUseCase.execute(Number(id), req.user ?? null);
 
     res.status(HTTP_STATUS.OK).json({
       success: true,

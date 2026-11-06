@@ -23,6 +23,11 @@ const HOUSE_ROWS = {
 
 const byId = (rows) => rows[0];
 
+// Текст комментария видит тот, кому открыт дом (см. `residentContactScope`),
+// поэтому почти все вызовы ниже идут со смотрителем-модератором: здесь проверяется
+// адресация, а не права.
+const staff = { user_id: 1n, roles: ["global:moderator"] };
+
 // `house_id` у строк нарочно разбросан по квартирам — в том числе чужими: читать
 // по нему больше нельзя.
 const HOUSE_COMMENTS = [
@@ -77,22 +82,22 @@ const entranceUseCase = new GetEntranceCommentUseCase(entranceRepository, houseR
 
 describe("комментарий дома принадлежит номеру дома", () => {
   it("дом без дроби видит свои строки, на каких бы квартирах они ни лежали", async () => {
-    expect(await useCase.executeByNumber("39")).toHaveLength(3);
-    expect(await useCase.executeSimple("39")).toBe("чат дома 39, последний");
-    expect(await useCase.executeSimple("37")).toBe("чат дома 37");
+    expect(await useCase.executeByNumber("39", staff)).toHaveLength(3);
+    expect(await useCase.executeSimple("39", staff)).toBe("чат дома 39, последний");
+    expect(await useCase.executeSimple("37", staff)).toBe("чат дома 37");
   });
 
   it("39 и 39/1 — разные здания", async () => {
-    expect(await useCase.executeSimple("39/1")).toBe("чат дома 39/1");
-    expect(await useCase.executeSimple("37/1")).toBe("чат дома 37/1");
+    expect(await useCase.executeSimple("39/1", staff)).toBe("чат дома 39/1");
+    expect(await useCase.executeSimple("37/1", staff)).toBe("чат дома 37/1");
   });
 
   it("номер дома не трактуется как id квартиры", async () => {
     // Сломанный путь: `house_id = 39` — одна квартира дома 39, а не весь дом.
-    const asRowId = await useCase.execute("39");
+    const asRowId = await useCase.execute("39", staff);
     expect(asRowId.map((c) => c.comment)).toEqual(["чат дома 39"]);
 
-    expect(await useCase.executeByNumber("39")).toHaveLength(3);
+    expect(await useCase.executeByNumber("39", staff)).toHaveLength(3);
   });
 
   it("нет таблицы — пусто, нет колонки — ошибка", async () => {
@@ -107,37 +112,37 @@ describe("комментарий дома принадлежит номеру д
       });
     };
 
-    expect(await failing("P2021").executeByNumber("39")).toEqual([]);
-    expect(await failing("P2021").executeSimple("39")).toBeNull();
-    await expect(failing("P2022").executeByNumber("39")).rejects.toMatchObject({ code: "P2022" });
-    await expect(failing("P2022").executeSimple("39")).rejects.toMatchObject({ code: "P2022" });
+    expect(await failing("P2021").executeByNumber("39", staff)).toEqual([]);
+    expect(await failing("P2021").executeSimple("39", staff)).toBeNull();
+    await expect(failing("P2022").executeByNumber("39", staff)).rejects.toMatchObject({ code: "P2022" });
+    await expect(failing("P2022").executeSimple("39", staff)).rejects.toMatchObject({ code: "P2022" });
   });
 });
 
 describe("комментарий подъезда", () => {
   it("открыли первый подъезд дома 39 — текст дома 39", async () => {
-    const result = await entranceUseCase.execute("39", 1);
+    const result = await entranceUseCase.execute("39", 1, staff);
 
     expect(result).toMatchObject({ house: "39", entrance: 1, comment: "39, секция 1" });
   });
 
   it("открыли первый подъезд дома 39/1 — текст дома 39/1", async () => {
-    expect((await entranceUseCase.execute("39/1", 1)).comment).toBe("39/1, секция 1");
-    expect((await entranceUseCase.execute("37/1", 1)).comment).toBe("37/1, секция 1, дубль");
+    expect((await entranceUseCase.execute("39/1", 1, staff)).comment).toBe("39/1, секция 1");
+    expect((await entranceUseCase.execute("37/1", 1, staff)).comment).toBe("37/1, секция 1, дубль");
   });
 
   it("квартира чужого дома под текстом ничего не меняет", async () => {
     // 37/1 живёт на houses.id = 37 и 1039, при этом 37 — квартира дома 39.
-    expect((await entranceUseCase.execute("39", 1)).comment).not.toMatch(/37/);
+    expect((await entranceUseCase.execute("39", 1, staff)).comment).not.toMatch(/37/);
   });
 
   it("пусто, если у подъезда комментария нет", async () => {
-    expect(await entranceUseCase.execute("37/1", 4)).toMatchObject({ comment: null });
+    expect(await entranceUseCase.execute("37/1", 4, staff)).toMatchObject({ comment: null });
   });
 
   it("неизвестный дом и битый подъезд — ошибки, а не чужие данные", async () => {
-    await expect(entranceUseCase.execute("41", 1)).rejects.toBeInstanceOf(NotFoundError);
-    await expect(entranceUseCase.execute("37", 0)).rejects.toBeInstanceOf(ValidationError);
+    await expect(entranceUseCase.execute("41", 1, staff)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(entranceUseCase.execute("37", 0, staff)).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("новый комментарий записывается с номером дома", async () => {

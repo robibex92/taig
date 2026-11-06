@@ -1,6 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 const adImageController = container.resolve("adImageController");
@@ -8,9 +8,11 @@ const adImageController = container.resolve("adImageController");
 /**
  * Фотографии объявлений и заметок.
  *
- * Чтение — публичное (картинки видны в ленте), запись — только с токеном и
- * только по своим объектам: право «чей это снимок» решает `imageAccess` в
- * кейсах, потому что целей четыре и вход у них разный.
+ * Чтение — публичное (картинки видны в ленте), но видимость следует за самим
+ * объявлением: снятое и удалённое отдают снимки только автору и модерации,
+ * поэтому на GET стоит необязательный токен. Запись — только с токеном и только
+ * по своим объектам: право «чей это снимок» решает `imageAccess` в кейсах,
+ * потому что целей четыре и вход у них разный.
  */
 
 /**
@@ -23,16 +25,16 @@ router.post("/ad-images", authenticateJWT, adImageController.create);
 /**
  * @route   GET /ad-images
  * @desc    Get images by ad_id or post_id query param
- * @access  Public
+ * @access  Public (с токеном — ещё и свои снимки из архива)
  */
-router.get("/ad-images", adImageController.getByQuery);
+router.get("/ad-images", authenticateOptional, adImageController.getByQuery);
 
 /**
  * @route   GET /ad-images/:id
  * @desc    Get images by ID (tries as ad_id, then post_id)
- * @access  Public
+ * @access  Public (с токеном — ещё и свои снимки из архива)
  */
-router.get("/ad-images/:id", adImageController.getById);
+router.get("/ad-images/:id", authenticateOptional, adImageController.getById);
 
 /**
  * @route   DELETE /ad-images/:id

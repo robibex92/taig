@@ -123,6 +123,21 @@ describe("планировщик напоминаний", () => {
     expect(second.telegram.sendMessage).not.toHaveBeenCalled();
   });
 
+  // Смерть процесса между «чат принял» и записью успеха оставляет ключ взятым,
+  // а результата — нет. Повторить такое сообщение в чат дома дороже, чем потерять
+  // одно напоминание, поэтому неизвестный исход считается обработанным.
+  it("взятый без результата ключ повторно не отправляется", async () => {
+    const claimed = reminder({
+      last_occurrence_key: "2026-10T10:00",
+      last_result: null,
+      failed_attempts: 0,
+    });
+    const { scheduler, telegram } = build({ rows: [claimed] });
+
+    expect((await scheduler.tick({ now: AT_10_01 })).sent).toBe(0);
+    expect(telegram.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("пропущенный из-за простоя момент помечается skipped и задним числом не шлётся", async () => {
     const { scheduler, repository, telegram } = build({ rows: [reminder()] });
 
@@ -145,6 +160,31 @@ describe("планировщик напоминаний", () => {
 
     expect((await scheduler.tick({ now: new Date("2026-11-05T07:01:00Z") })).sent).toBe(0);
     expect(telegram.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // Напоминание, заведённое уже после своего времени, ничего не пропускало: у него
+  // ещё не было момента. До этой границы первый же тик писал `skipped`, и карточка
+  // в админке всю неделю винила в этом простой сервера.
+  it("напоминание, созданное после своего момента, не помечается пропущенным", async () => {
+    const bornLate = reminder({ created_at: new Date("2026-10-31T08:00:00Z") });
+    const { scheduler, repository, telegram } = build({ rows: [bornLate] });
+
+    const results = await scheduler.tick({ now: new Date("2026-10-31T14:00:00Z") });
+
+    expect(results).toMatchObject({ sent: 0, failed: 0, skipped: 0 });
+    expect(repository.recordSkipped).not.toHaveBeenCalled();
+    expect(telegram.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("число 31 в коротком месяце срабатывает в последний день", async () => {
+    const thirtyFirst = reminder({ last_day_of_month: false, day_of_month: 31 });
+    const { scheduler, telegram } = build({ rows: [thirtyFirst] });
+
+    // 30.11 — последний день месяца, 31-го числа в нём нет.
+    const results = await scheduler.tick({ now: new Date("2026-11-30T07:01:00Z") });
+
+    expect(results.sent).toBe(1);
+    expect(telegram.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it("недельное расписание смотрит на день недели в поясе, а не на UTC", async () => {

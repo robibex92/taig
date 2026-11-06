@@ -82,6 +82,9 @@ export const zonedTimeToUtc = (date, time, timeZone = reminderTimeZone()) => {
  *  предыдущим днём, а полдень всегда попадает в тот же календарный день. */
 const dayAnchor = (parts) => Date.UTC(parts.year, parts.month - 1, parts.day, 12);
 
+/** Сколько дней в этом месяце: 0-е число следующего месяца = последний день этого. */
+const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+
 /** Последний ли это день месяца в поясе (без вычисления длины месяца вручную). */
 const isLastDayOfMonth = (parts, timeZone) => {
   const tomorrow = zonedParts(new Date(dayAnchor(parts) + 86_400_000), timeZone);
@@ -105,7 +108,12 @@ const matchesDay = (reminder, parts, timeZone) => {
 
   if (reminder.last_day_of_month) return isLastDayOfMonth(parts, timeZone);
 
-  return Number(reminder.day_of_month) === parts.day;
+  const day = Number(reminder.day_of_month);
+  const shorter = day > daysInMonth(parts.year, parts.month);
+
+  // Число 31 в месяце короче — это «последний день», а не пропущенный месяц:
+  // иначе напоминание молча не срабатывало бы пять месяцев в году.
+  return day === parts.day || (shorter && isLastDayOfMonth(parts, timeZone));
 };
 
 /** Ключ срабатывания: день для daily/weekly, месяц для monthly. */
@@ -121,6 +129,12 @@ export const occurrenceKey = (reminder, parts) => {
 
 /**
  * Пора ли отправлять сейчас.
+ *
+ * `created_at` строки важен: напоминание, заведённое уже ПОСЛЕ своего времени
+ * срабатывания, ничего не пропускает — у него просто ещё не было момента. Без
+ * этой границы первый тик такого напоминания писал `skipped`, и карточка в
+ * админке всю оставшуюся неделю винила в этом простой сервера.
+ *
  * @returns {{ due: boolean, missed: boolean, key: string|null }}
  */
 export const reminderStatus = (reminder, now = new Date(), timeZone = reminderTimeZone()) => {
@@ -135,9 +149,38 @@ export const reminderStatus = (reminder, now = new Date(), timeZone = reminderTi
   // elapsed < 0 — время ещё не наступило; > окна догона — момент упущен,
   // позже напоминание терять нельзя (оно станет неактуальным).
   if (elapsed < 0) return { due: false, missed: false, key };
-  if (elapsed > REMINDER_CATCH_UP_MS) return { due: false, missed: true, key };
+
+  if (elapsed > REMINDER_CATCH_UP_MS) {
+    const born = reminder.created_at ? new Date(reminder.created_at).getTime() : null;
+
+    if (born !== null && scheduled < born) return { due: false, missed: false, key: null };
+
+    return { due: false, missed: true, key };
+  }
 
   return { due: true, missed: false, key };
+};
+
+/**
+ * Момент срабатывания по его ключу — человекочитаемо, для подписи в админке.
+ * Ключ хранит локальное время пояса сервера, поэтому разворачиваем его назад без
+ * перевода в UTC: «31.10.2026, 10:00» — это то, что админ и вводил.
+ */
+export const describeOccurrence = (reminder, key) => {
+  const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?T(\d{2}:\d{2})$/.exec(String(key ?? ""));
+
+  if (!match) return null;
+
+  const [, year, month, day, time] = match;
+  const resolvedDay =
+    day ??
+    String(
+      reminder.last_day_of_month
+        ? daysInMonth(Number(year), Number(month))
+        : Math.min(Number(reminder.day_of_month) || 1, daysInMonth(Number(year), Number(month)))
+    ).padStart(2, "0");
+
+  return `${resolvedDay}.${month}.${year}, ${time}`;
 };
 
 /** Следующий момент срабатывания — для предпросмотра в админке. */
@@ -242,13 +285,16 @@ export const describeReminderSchedule = (reminder) => {
 
   return reminder.last_day_of_month
     ? `последний день месяца в ${time}`
-    : `${reminder.day_of_month}-е число каждого месяца в ${time}`;
+    : `${reminder.day_of_month}-е число каждого месяца в ${time}${
+        Number(reminder.day_of_month) > 28 ? " (если месяц короче — в последний день)" : ""
+      }`;
 };
 
 export default {
   reminderTimeZone,
   reminderStatus,
   nextOccurrence,
+  describeOccurrence,
   validateReminderSchedule,
   describeReminderSchedule,
 };

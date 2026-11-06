@@ -72,7 +72,8 @@ export class AdImageController {
     const { ad_id, post_id } = req.query;
     const images = await this.getAdImagesUseCase.execute(
       ad_id ? parseInt(ad_id) : null,
-      post_id ? parseInt(post_id) : null
+      post_id ? parseInt(post_id) : null,
+      req.user ?? null
     );
 
     res.json({
@@ -95,7 +96,8 @@ export class AdImageController {
     }
 
     const images = await this.getImagesByIdUseCase.execute(
-      parseInt(req.params.id)
+      parseInt(req.params.id),
+      req.user ?? null
     );
 
     res.json({
@@ -180,7 +182,11 @@ export class AdImageController {
     }
 
     // Get all images for this ad
-    const images = await this.getAdImagesUseCase.execute(parseInt(ad_id), null);
+    const images = await this.getAdImagesUseCase.execute(
+      parseInt(ad_id),
+      null,
+      req.user ?? null
+    );
 
     // Find the image with matching URL
     const imageToDelete = images.find((img) => img.image_url === image_url);

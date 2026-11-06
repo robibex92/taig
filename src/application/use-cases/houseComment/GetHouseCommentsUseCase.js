@@ -1,5 +1,6 @@
 import { IHouseCommentRepository } from "../../../domain/repositories/IHouseCommentRepository.js";
 import { ValidationError } from "../../../core/errors/AppError.js";
+import { canViewHouse } from "../../../core/utils/roles.js";
 import { logger } from "../../../core/utils/logger.js";
 
 /**
@@ -14,6 +15,11 @@ import { logger } from "../../../core/utils/logger.js";
  * Раньше выбор делался через `isNaN(houseKey)`, и номер «37» (он же число!)
  * уезжал в поиск по id записи: тултип дома 37 показывал комментарий квартиры с
  * id 37 — то есть чужого здания — а дома с дробью (`37/1`) работали правильно.
+ *
+ * Текст комментария — про людей («в чат дома добавляет @ник»), поэтому его
+ * читает только тот, кому открыт этот дом: модерация и держатель
+ * `house:<n>:view`.
+ * Остальным — пустой ответ, без ошибки: тултип просто не появляется.
  */
 export class GetHouseCommentsUseCase {
   constructor(houseCommentRepository) {
@@ -26,26 +32,38 @@ export class GetHouseCommentsUseCase {
     }
   }
 
+  #allowed(houseNumber, viewer) {
+    return canViewHouse(viewer, houseNumber);
+  }
+
   /** Комментарии по id записи дома (маршрут с `:house_id` в пути). */
-  async execute(house_id) {
+  async execute(house_id, viewer = null) {
     this.#requireHouse(house_id);
 
-    return this.#swallow(() =>
+    const rows = await this.#swallow(() =>
       this.houseCommentRepository.findByHouseId(parseInt(house_id))
     );
+
+    if (rows.length === 0) return rows;
+
+    return this.#allowed(rows[0].house_number, viewer) ? rows : [];
   }
 
   /** Комментарии по номеру дома: `37`, `39/1`. */
-  async executeByNumber(house_number) {
+  async executeByNumber(house_number, viewer = null) {
     this.#requireHouse(house_number);
+
+    if (!this.#allowed(house_number, viewer)) return [];
 
     return this.#swallow(() =>
       this.houseCommentRepository.findByHouseNumber(String(house_number))
     );
   }
 
-  async executeSimple(house_number) {
+  async executeSimple(house_number, viewer = null) {
     this.#requireHouse(house_number);
+
+    if (!this.#allowed(house_number, viewer)) return null;
 
     const comment = await this.#swallow(
       () =>

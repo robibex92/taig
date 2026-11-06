@@ -1,17 +1,13 @@
-import { AD_STATUS } from "../../../core/constants/index.js";
 import { NotFoundError } from "../../../core/errors/AppError.js";
-import { isModerator } from "../../../core/utils/roles.js";
+import { canSeeAd } from "../../../core/utils/adVisibility.js";
 
 /**
  * Снятое с публикации и удалённое объявление живёт по своей ссылке только для
  * автора и модерации. Для всех остальных оно ведёт себя как несуществующее:
  * иначе «удалил объявление» означало бы «ссылка на него работает вечно».
  *
- * `user_id` в Prisma — BigInt, поэтому сравнение через `String()`.
+ * Само правило в `canSeeAd` — его проверяют и фотографии объявления.
  */
-const canSeeInactiveAd = (ad, viewer) =>
-  Boolean(viewer) &&
-  (String(viewer.user_id) === String(ad.user_id) || isModerator(viewer));
 
 /**
  * Use case for getting an ad by ID
@@ -34,7 +30,7 @@ export class GetAdByIdUseCase {
       throw new NotFoundError("Ad");
     }
 
-    if (ad.status !== AD_STATUS.ACTIVE && !canSeeInactiveAd(ad, viewer)) {
+    if (!canSeeAd(ad, viewer)) {
       throw new NotFoundError("Ad");
     }
 

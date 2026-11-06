@@ -1,6 +1,6 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 import { requireRoles } from "../../core/middlewares/checkRole.js";
 import { validateRequest } from "../../core/validation/validator.js";
 import {
@@ -26,7 +26,10 @@ const carController = container.resolve("carController");
 
 /**
  * Gallery rule (single source of truth for the whole cars feature):
- *   - car IDENTITY (plate, brand, model, colour, owner) is public/searchable;
+ *   - car IDENTITY (plate, brand, model, colour) is public/searchable;
+ *   - who owns it (`user_id`) is known only to that owner, `cars:admin` and
+ *     moderation — the id is a Telegram id, so publicly it links a plate to a
+ *     resident, an address and a nickname;
  *   - everything VISUAL or EDITORIAL (photos + their comments, admin notes,
  *     merge, owner assignment) requires `cars:admin` (or `global:admin`).
  * The only exception is reading a car's own gallery: the owner may see the
@@ -38,17 +41,19 @@ const carsAdmin = requireRoles(SERVICE_ROLES.CARS_ADMIN, GLOBAL_ROLES.ADMIN);
 /**
  * @route   GET /cars
  * @desc    Get all active cars (identity only, no gallery)
- * @access  Public
+ * @access  Public; с токеном сервер понимает, кто спрашивает, и владельцу
+ *          автомобилей (и самой машине) отдаёт `user_id`
  */
-router.get("/cars", carController.getAll);
+router.get("/cars", authenticateOptional, carController.getAll);
 
 /**
  * @route   GET /cars/user/:user_id
  * @desc    Get cars by user ID
- * @access  Public
+ * @access  Private (the owner, cars admin, moderation)
  */
 router.get(
   "/cars/user/:user_id",
+  authenticateJWT,
   validateRequest(userIdParamSchema, "params"),
   carController.getUserCars
 );
@@ -56,10 +61,11 @@ router.get(
 /**
  * @route   GET /cars/:id
  * @desc    Get car by ID
- * @access  Public
+ * @access  Public (владелец и администратор автомобилей видят привязку)
  */
 router.get(
   "/cars/:id",
+  authenticateOptional,
   validateRequest(carIdParamSchema, "params"),
   carController.getById
 );

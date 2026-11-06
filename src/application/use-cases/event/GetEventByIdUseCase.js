@@ -1,5 +1,6 @@
 import { prisma } from "../../../infrastructure/database/prisma.js";
 import { NotFoundError } from "../../../core/errors/AppError.js";
+import { isModerator } from "../../../core/utils/roles.js";
 import logger from "../../../infrastructure/logger/index.js";
 
 /**
@@ -7,7 +8,9 @@ import logger from "../../../infrastructure/logger/index.js";
  * Retrieves a single event with full details
  */
 export class GetEventByIdUseCase {
-  async execute(eventId) {
+  async execute(eventId, viewer = null) {
+    const canSeeParticipants = isModerator(viewer);
+
     try {
       const event = await prisma.event.findUnique({
         where: { id: BigInt(eventId) },
@@ -64,16 +67,21 @@ export class GetEventByIdUseCase {
               username: event.creator.username,
             }
           : null,
+        // Состав участников виден модерации: остальным — только количество
+        // (публичный календарь читает длину массива, поэтому массив сохраняется,
+        // но без персональных полей).
         registrations: event.registrations.map((reg) => ({
           id: Number(reg.id),
           status: reg.status,
           registered_at: reg.registered_at.toISOString(),
-          user: {
-            user_id: Number(reg.user.user_id),
-            username: reg.user.username,
-            first_name: reg.user.first_name,
-            last_name: reg.user.last_name,
-          },
+          user: canSeeParticipants
+            ? {
+                user_id: Number(reg.user.user_id),
+                username: reg.user.username,
+                first_name: reg.user.first_name,
+                last_name: reg.user.last_name,
+              }
+            : null,
         })),
       };
     } catch (error) {

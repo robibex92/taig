@@ -11,6 +11,7 @@ import {
   validateAutoReplyInput,
 } from "../../../core/utils/chatAutoReply.js";
 import {
+  describeOccurrence,
   describeReminderSchedule,
   nextOccurrence,
   reminderTimeZone,
@@ -59,7 +60,7 @@ const serializeAutoReply = (row) => ({
   updated_at: row.updated_at,
 });
 
-const serializeReminder = (row) => ({
+const serializeReminder = (row, now = new Date()) => ({
   id: String(row.id),
   platform: row.platform,
   chat_record_id: String(row.chat_record_id),
@@ -75,7 +76,14 @@ const serializeReminder = (row) => ({
   last_error: row.last_error,
   last_sent_at: row.last_sent_at,
   failed_attempts: row.failed_attempts,
+  created_at: row.created_at,
   schedule_description: describeReminderSchedule(row),
+  // Когда именно произойдёт следующее срабатывание и что за момент стоит за
+  // `last_result` — считает сервер: без этого карточка «пропущено» висела бы
+  // месяцами без единой подсказки, когда же оно всё-таки придёт.
+  next_occurrence: row.is_active ? nextOccurrence(row, now) : null,
+  last_occurrence_label: describeOccurrence(row, row.last_occurrence_key),
+  timezone: reminderTimeZone(),
 });
 
 /** Нормализованное расписание -> поля репозитория (одна форма для create и update). */
