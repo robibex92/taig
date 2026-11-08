@@ -673,3 +673,70 @@ model MaxBotState {
 
   @@map("max_bot_state")
 }
+
+/// Один загруженный срез ГИС ЖКХ: одно голосование одного дома на одну дату выгрузки.
+/// Имя голосования вводит админ — в файле нет ни номера ОСС, ни повестки.
+model GisVoteReport {
+  id                 BigInt   @id @default(autoincrement())
+  /// Ключ дома из справочника: `DISTINCT houses.house WHERE status = true`.
+  house              String   @db.VarChar(20)
+  /// Название голосования; выбирается из ранее введённых или вводится своё.
+  title              String   @db.VarChar(200)
+  /// Дата выгрузки из блока 1.1 файла — не из имени файла и не дата загрузки.
+  exported_at        DateTime @db.Date
+  file_name          String?  @db.VarChar(255)
+  address            String?
+  house_fias         String?  @db.VarChar(40)
+  inn                String?  @db.VarChar(20)
+  management_company String?  @db.VarChar(255)
+
+  ownership_rows Int      @default(0)
+  rooms_total    Int      @default(0)
+  area_total     Decimal  @db.Decimal(12, 2)
+  rooms_base     Int      @default(0)
+  area_base      Decimal  @db.Decimal(12, 2)
+  area_common    Decimal  @db.Decimal(12, 2)
+  rooms_voted    Int      @default(0)
+  owners_voted   Int      @default(0)
+  weight_voted   Decimal  @db.Decimal(12, 2)
+  /// Дефекты данных этого среза (Σдолей ≠ 1, вес ≠ площадь × доля, нет кадастра, …).
+  defects        Json     @default("{}")
+
+  /// Кто принёс файл. Связь с `users` только в SQL: как у ParkingSpotNote.
+  uploaded_by        BigInt?
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  rooms GisVoteReportRoom[]
+
+  @@unique([house, title, exported_at], map: "uq_gis_vote_reports_house_title_date")
+  @@index([house, title], map: "idx_gis_vote_reports_house_title")
+  @@map("gis_vote_reports")
+}
+
+/// Помещение среза. Ключ — кадастровый номер (G1); у строк без него стоит null,
+/// и они попадают в дефекты, а не сливаются в одну группу по пустому ключу.
+model GisVoteReportRoom {
+  id        BigInt  @id @default(autoincrement())
+  report_id BigInt
+  cadastre  String? @db.VarChar(64)
+  room_label String? @db.VarChar(64)
+  /// apartment | storage | office | other_non_residential | common
+  kind      String  @db.VarChar(32)
+  /// Общее имущество в базу голосования не входит (решение от 07.11).
+  in_base   Boolean @default(true)
+  owners    Int     @default(1)
+  /// Площадь по Росреестру, перенесённая вниз по группе (G2).
+  area      Decimal @default(0.0) @db.Decimal(10, 2)
+  /// Вес голоса из колонки K, а не «площадь × доля» (§2).
+  weight    Decimal @default(0.0) @db.Decimal(10, 2)
+  share_sum Decimal? @db.Decimal(6, 4)
+  /// Признак участия — наличие номера из бюллетеня (H), §2.
+  voted     Boolean @default(false)
+  last_bulletin_date DateTime? @db.Date
+
+  report GisVoteReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@index([report_id], map: "idx_gis_vote_report_rooms_report_id")
+  @@index([cadastre], map: "idx_gis_vote_report_rooms_cadastre")
+  @@map("gis_vote_report_rooms")
+}

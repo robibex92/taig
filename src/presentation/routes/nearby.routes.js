@@ -13,6 +13,7 @@ import {
 
 const router = express.Router();
 const houseController = container.resolve("houseController");
+const gisVoteController = container.resolve("gisVoteController");
 
 /**
  * @route   GET /nearby/houses
@@ -35,6 +36,18 @@ router.get("/nearby/entrances", houseController.getEntrances);
  *          открыт этот дом (см. `GetHousesByFilterUseCase`)
  */
 router.get("/nearby", authenticateOptional, houseController.getHousesByFilter);
+
+/**
+ * @route   GET /nearby/gis-vote
+ * @desc    Последний срез ГИС ЖКХ по дому, наложенный на сетку квартир.
+ *          `data: null` — прав на этот дом нет; интерфейсной надписи про это нет.
+ * @access  Private (модерация и держатели house:<номер>:view|manage)
+ */
+router.get(
+  "/nearby/gis-vote",
+  authenticateOptional,
+  gisVoteController.gridSummary
+);
 
 /**
  * @route   GET /nearby/user/:id_telegram

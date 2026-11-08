@@ -59,6 +59,7 @@ import favoritesRoutes from "./presentation/routes/favorites.routes.js";
 import maxBotRoutes from "./presentation/routes/maxBot.routes.js";
 import maxChatRoutes from "./presentation/routes/maxChatRoutes.js";
 import chatBotRoutes from "./presentation/routes/chatBot.routes.js";
+import gisVotesRoutes from "./presentation/routes/gisVotes.routes.js";
 import chatReminderScheduler from "./infrastructure/services/ChatReminderScheduler.js";
 
 // Telegram Bot
@@ -198,6 +199,8 @@ app.use("/api/admin/max-bot", maxBotRoutes);
 app.use("/api/max-chats", maxChatRoutes);
 // Раздел админки «Боты в чатах»: условия автоответа и напоминания.
 app.use("/api/admin/chat-bots", chatBotRoutes);
+// Раздел админки «Голосование дома»: разбор выгрузки ГИС ЖКХ, ничего не сохраняет.
+app.use("/api/admin/gis-votes", gisVotesRoutes);
 app.use("/api/events", eventsRoutes);
 app.use("/api/favorites", favoritesRoutes);
 

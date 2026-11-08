@@ -403,7 +403,7 @@ describe("админка: проверка условий и напоминан�
     const { useCases, autoReplyRepository, service } = buildUseCases();
 
     // Кэш движка прогреваем заранее: правка условия должна вытеснить его сразу,
-    // иначе новое правило zaczнёт действовать только через несколько секунд.
+    // иначе новое правило начнёт действовать только через несколько секунд.
     await service.activeReplies("max");
 
     expect(service.cache.size).toBe(1);

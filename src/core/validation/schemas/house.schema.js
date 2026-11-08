@@ -17,6 +17,17 @@ export const getEntrancesSchema = Joi.object({
   house: Joi.string().required(),
 });
 
+/**
+ * Дом для наложения среза ГИС ЖКХ на сетку квартир. Ключ совпадает с
+ * `houses.house`, поэтому `"39"` и `"39/1"` — разные дома и разные права.
+ */
+export const gisHouseVoteQuerySchema = Joi.object({
+  house: Joi.string().trim().min(1).max(20).required().messages({
+    "any.required": "Нужен дом",
+    "string.empty": "Нужен дом",
+  }),
+});
+
 export const getHousesFilterSchema = Joi.object({
   // `.empty("")` — иначе `?house=&entrance=` из формы считается ошибкой, хотя
   // раньше такие пустые значения просто считались «не задано».

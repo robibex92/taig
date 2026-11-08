@@ -68,6 +68,10 @@ import { SendMaxBotChatMessageUseCase } from "../../application/use-cases/maxBot
 import chatAutoReplyService from "../../application/services/ChatAutoReplyService.js";
 import { ChatBotAdminUseCases } from "../../application/use-cases/chatBot/ChatBotAdminUseCases.js";
 import { ChatBotController } from "../../presentation/controllers/ChatBotController.js";
+import { GisVoteAdminUseCases } from "../../application/use-cases/gisVote/GisVoteAdminUseCases.js";
+import { GisHouseVoteUseCase } from "../../application/use-cases/gisVote/GisHouseVoteUseCase.js";
+import { GisVoteController } from "../../presentation/controllers/GisVoteController.js";
+import { GisVoteRepository } from "../repositories/GisVoteRepository.js";
 
 // Use Cases - Session
 import { GetUserSessionsUseCase } from "../../application/use-cases/session/GetUserSessionsUseCase.js";
@@ -289,6 +293,8 @@ export class Container {
       // «Боты в чатах»: условия автоответа и напоминания.
       ["chatAutoReplyRepository", ChatAutoReplyRepository, []],
       ["chatReminderRepository", ChatReminderRepository, []],
+      // История разборов выгрузок ГИС ЖКХ.
+      ["gisVoteRepository", GisVoteRepository, []],
       ["houseCommentRepository", HouseCommentRepository, []],
       ["entranceCommentRepository", EntranceCommentRepository, []],
       ["authHandoffRepository", AuthHandoffRepository, []],
@@ -772,6 +778,35 @@ export class Container {
       (container) =>
         new ChatBotController({
           adminUseCases: container.resolve("chatBotAdminUseCases"),
+        })
+    );
+
+    // «Голосование дома»: разбор выгрузок ГИС ЖКХ и история сохранённых срезов.
+    this.register(
+      "gisVoteAdminUseCases",
+      (container) =>
+        new GisVoteAdminUseCases({
+          reports: container.resolve("gisVoteRepository"),
+          houses: container.resolve("houseRepository"),
+        })
+    );
+
+    this.register(
+      "gisVoteController",
+      (container) =>
+        new GisVoteController({
+          adminUseCases: container.resolve("gisVoteAdminUseCases"),
+          houseVoteUseCase: container.resolve("gisHouseVoteUseCase"),
+        })
+    );
+
+    // Наложение последнего среза на сетку квартир «Привет, сосед».
+    this.register(
+      "gisHouseVoteUseCase",
+      (container) =>
+        new GisHouseVoteUseCase({
+          reports: container.resolve("gisVoteRepository"),
+          houses: container.resolve("houseRepository"),
         })
     );
   }
