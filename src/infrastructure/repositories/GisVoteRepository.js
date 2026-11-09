@@ -170,9 +170,11 @@ export class GisVoteRepository {
   }
 
   /**
-   * Помещения дома, по которым есть хоть один бюллетень, с названием их
-   * голосования — на этом считается «участие в N голосованиях» конкретной
-   * квартиры. Молчащие строки не выбираем: их счётчик и так ноль.
+   * Названия голосований дома, в каждом из которых помещение оставило
+   * бюллетень, — на этом считается и перечисляется «в каких голосовали».
+   * Молчащие строки не выбираем: их список пустой и так. Порядок срезов
+   * наводит `titlesVotedByLabel`, а не запрос: `orderBy` по связанной таблице
+   * здесь лишний риск на проде, где этот путь проверяется первым запуском.
    */
   async votedRoomsByHouse(house) {
     const key = String(house ?? "").trim();
@@ -180,7 +182,7 @@ export class GisVoteRepository {
 
     return prisma.gisVoteReportRoom.findMany({
       where: { voted: true, report: { house: key } },
-      select: { room_label: true, report: { select: { title: true } } },
+      select: { room_label: true, report: { select: { title: true, exported_at: true } } },
     });
   }
 }

@@ -1,8 +1,5 @@
 import { canViewHouse } from "../../../core/utils/roles.js";
-import {
-  buildGisVoteOverlay,
-  countVotedTitlesByLabel,
-} from "../../../core/utils/gisVoteOverlay.js";
+import { buildGisVoteOverlay, titlesVotedByLabel } from "../../../core/utils/gisVoteOverlay.js";
 import { GisVoteRepository } from "../../../infrastructure/repositories/GisVoteRepository.js";
 import { HouseRepository } from "../../../infrastructure/repositories/HouseRepository.js";
 
@@ -42,7 +39,7 @@ export class GisHouseVoteUseCase {
     return buildGisVoteOverlay({
       report: slice,
       rooms: slice.rooms ?? [],
-      votes: countVotedTitlesByLabel(votedRooms),
+      votedTitles: titlesVotedByLabel(votedRooms),
       apartments: apartments.map((apartment) => ({
         id: apartment.id,
         number: apartment.number,

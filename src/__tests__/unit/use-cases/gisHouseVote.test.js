@@ -137,9 +137,11 @@ describe("наложение среза на сетку по правам", () =
 
     const result = await useCase.execute({ house: "39", viewer: staff(["house:39:view"]) });
 
-    expect(result.cells.map((cell) => [cell.number, cell.votes])).toEqual([
-      ["103", 2],
-      ["104", 0],
+    // Квартира видит только те голосования, где она участвовала, в порядке от
+    // свежего к раннему; у 104 список пуст, и интерфейсу нечего показывать.
+    expect(result.cells.map((cell) => [cell.number, cell.voted_titles])).toEqual([
+      ["103", ["ОСС 2026, кровля", "ОСС 2025, подъезд"]],
+      ["104", []],
     ]);
   });
 

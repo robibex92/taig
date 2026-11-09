@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "@jest/globals";
-import { buildGisVoteOverlay, countVotedTitlesByLabel } from "../../../core/utils/gisVoteOverlay.js";
+import { buildGisVoteOverlay, titlesVotedByLabel } from "../../../core/utils/gisVoteOverlay.js";
 
 const report = {
   house: "39",
@@ -78,15 +78,17 @@ const APARTMENTS = [
   { id: 4n, number: 462 },
 ];
 
-// Участие: 103 — в одном голосовании, 105 — в двух (два разных названия), 104 — ни в одном.
-const votes = () =>
-  countVotedTitlesByLabel([
+// Участие: 103 — в одном голосовании, 105 — в двух (строки идут от свежего среза
+// к позднему, как их отдаёт репозиторий), 104 — ни в одном.
+const votedTitles = () =>
+  titlesVotedByLabel([
     { room_label: "103", report: { title: "ОСС 2026, кровля" } },
     { room_label: "105", report: { title: "ОСС 2026, кровля" } },
     { room_label: "105", report: { title: "ОСС 2025, подъезд" } },
   ]);
 
-const overlay = () => buildGisVoteOverlay({ report, rooms: ROOMS, apartments: APARTMENTS, votes: votes() });
+const overlay = () =>
+  buildGisVoteOverlay({ report, rooms: ROOMS, apartments: APARTMENTS, votedTitles: votedTitles() });
 
 describe("наложение среза на сетку квартир", () => {
   it("подписывает срез, чтобы подпись «по срезу …» читалась честно", () => {
@@ -110,7 +112,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "1",
         number: "103",
         voted: true,
-        votes: 1,
+        voted_titles: ["ОСС 2026, кровля"],
         share_pct: 9.12,
         weight: 23.6,
         area: 23.6,
@@ -121,7 +123,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "2",
         number: "104",
         voted: false,
-        votes: 0,
+        voted_titles: [],
         share_pct: 17.57,
         weight: 0,
         area: 45.5,
@@ -133,7 +135,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "3",
         number: "105",
         voted: true,
-        votes: 2,
+        voted_titles: ["ОСС 2026, кровля", "ОСС 2025, подъезд"],
         share_pct: 15.45,
         weight: 40,
         area: 40,
@@ -170,6 +172,17 @@ describe("наложение среза на сетку квартир", () => {
     expect(result.ambiguous).toEqual([{ room: "103", area: 53.6, owners: 3 }]);
     // вес и площадь складываются по обоим помещениям, голос — если есть у любого
     expect(result.cells[0]).toMatchObject({ voted: true, weight: 23.6, area: 53.6, owners: 3 });
+  });
+
+  it("перечисляет участия от свежего среза к позднему и не дробит одно голосование", () => {
+    const titles = titlesVotedByLabel([
+      // Строки пришли вразнобой и с повторами — как их отдаёт база.
+      { room_label: "103", report: { title: "ОСС 2025, подъезд", exported_at: new Date("2025-12-20T00:00:00.000Z") } },
+      { room_label: "103", report: { title: "ОСС 2026, кровля", exported_at: new Date("2026-10-26T00:00:00.000Z") } },
+      { room_label: "103", report: { title: "ОСС 2026, кровля", exported_at: new Date("2026-08-24T00:00:00.000Z") } },
+    ]);
+
+    expect(titles.get("103")).toEqual(["ОСС 2026, кровля", "ОСС 2025, подъезд"]);
   });
 
   it("пустой список квартир не ломает наложение", () => {
