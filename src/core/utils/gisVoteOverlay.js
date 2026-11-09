@@ -92,6 +92,9 @@ export const buildGisVoteOverlay = ({ report, rooms, apartments }) => {
       id: apartment.id === null || apartment.id === undefined ? null : String(apartment.id),
       number: String(apartment.number).trim(),
       voted: premise.voted,
+      // Доля квартиры в весе базы — то, сколько она приносит кворуму. Считается
+      // здесь, а не на фронте: сервер решает форму ответа.
+      share_pct: areaBase > 0 ? round((100 * premise.area) / areaBase) : null,
       weight: premise.weight,
       area: premise.area,
       owners: premise.owners,

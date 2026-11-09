@@ -98,11 +98,42 @@ describe("наложение среза на сетку квартир", () => {
     const { cells } = overlay();
 
     expect(cells).toEqual([
-      { id: "1", number: "103", voted: true, weight: 23.6, area: 23.6, owners: 1, cadastre: "54:35:041122:1161" },
-      { id: "2", number: "104", voted: false, weight: 0, area: 45.5, owners: 1, cadastre: "54:35:041122:1162" },
+      {
+        id: "1",
+        number: "103",
+        voted: true,
+        share_pct: 9.12,
+        weight: 23.6,
+        area: 23.6,
+        owners: 1,
+        cadastre: "54:35:041122:1161",
+      },
+      {
+        id: "2",
+        number: "104",
+        voted: false,
+        share_pct: 17.57,
+        weight: 0,
+        area: 45.5,
+        owners: 1,
+        cadastre: "54:35:041122:1162",
+      },
       // `105` совпал несмотря на пробелы в метке выгрузки.
-      { id: "3", number: "105", voted: true, weight: 40, area: 40, owners: 1, cadastre: "54:35:041122:1165" },
+      {
+        id: "3",
+        number: "105",
+        voted: true,
+        share_pct: 15.45,
+        weight: 40,
+        area: 40,
+        owners: 1,
+        cadastre: "54:35:041122:1165",
+      },
     ]);
+    // Доля считается от площади помещения, а не от отданного веса: у молчащей
+    // квартиры вес нулевой, но свою долю голоса она всё равно приносит, и
+    // interface не должен показывать ей «0 %».
+    expect(cells.find((cell) => cell.number === "104").share_pct).toBeGreaterThan(0);
     // У квартиры 462 помещения в срезе нет — ячейка остаётся без признака, а не
     // получает «не голосовала».
     expect(cells.some((cell) => cell.number === "462")).toBe(false);
