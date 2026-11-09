@@ -207,7 +207,7 @@ describe("разбор выгрузки ГИС ЖКХ", () => {
   });
 
   it("даёт разрез по типу помещения и отдельной строкой общее имущество", () => {
-    const { by_kind } = analyze();
+    const { by_kind, fund } = analyze();
 
     expect(by_kind.map((row) => [row.kind, row.in_base, row.premises, row.area])).toEqual([
       ["apartment", true, 4, 163.6],
@@ -220,8 +220,23 @@ describe("разбор выгрузки ГИС ЖКХ", () => {
 
     expect(apartment.voted_premises).toBe(2);
     expect(apartment.voted_weight).toBe(56.91);
-    expect(apartment.voted_pct_of_area).toBe(34.79);
+    // Знаменатель — база целиком, а не площадь своего типа: доли типов должны
+    // складываться в общую явку (замечание от 08.11).
+    expect(apartment.voted_pct_of_base).toBe(21.98);
+    expect(apartment.voted_pct_of_base).toBeCloseTo(
+      (100 * apartment.voted_weight) / fund.base.area,
+      2
+    );
     expect(apartment.silent_area).toBe(40);
+  });
+
+  it("доли всех типов по весу складываются в явку базы", () => {
+    const { by_kind, participation } = analyze();
+    const fromKinds = by_kind
+      .filter((row) => row.in_base)
+      .reduce((total, row) => total + row.voted_pct_of_base, 0);
+
+    expect(fromKinds).toBeCloseTo(participation.pct_of_base, 1);
   });
 
   it("показывает дефекты данных, а не правит их молча", () => {

@@ -281,7 +281,12 @@ const medianApartmentArea = (premises) => {
   return areas.length % 2 ? areas[middle] : round((areas[middle - 1] + areas[middle]) / 2);
 };
 
-const byKind = (premises) =>
+/**
+ * V6: разбивка по типам помещений. Проценты — от базы, а не «внутри своего типа»:
+ * доли типов должны складываться в общую явку, иначе «9,14 % площади типа» читается
+ * как вклад типа в кворум, которым он не является.
+ */
+const byKind = (premises, baseArea) =>
   Object.entries(GIS_PREMISE_KINDS)
     .map(([kind, label]) => {
       const group = premises.filter((premise) => premise.kind === kind);
@@ -290,6 +295,7 @@ const byKind = (premises) =>
 
       const area = sumArea(group);
       const voted = group.filter((premise) => premise.voted);
+      const votedWeight = round(voted.reduce((total, premise) => total + premise.weight, 0));
 
       return {
         kind,
@@ -299,12 +305,8 @@ const byKind = (premises) =>
         premises: group.length,
         area,
         voted_premises: voted.length,
-        voted_weight: round(voted.reduce((total, premise) => total + premise.weight, 0)),
-        voted_pct_of_premises: percentOf(voted.length, group.length),
-        voted_pct_of_area: percentOf(
-          voted.reduce((total, premise) => total + premise.weight, 0),
-          area
-        ),
+        voted_weight: votedWeight,
+        voted_pct_of_base: percentOf(votedWeight, baseArea),
         silent_premises: group.length - voted.length,
         silent_area: round(area - voted.reduce((total, premise) => total + premise.area, 0)),
       };
@@ -449,7 +451,7 @@ export const summarizeGisPremises = (premises) => {
       median_apartment_area: median,
       apartments_to_close: median ? Math.round(gap / median) : null,
     },
-    by_kind: byKind(premises),
+    by_kind: byKind(premises, baseArea),
     top_silent: silentSorted.slice(0, GIS_SILENT_LIST_LIMIT).map((premise) => ({
       room: premise.room,
       cadastre: premise.cadastre,
