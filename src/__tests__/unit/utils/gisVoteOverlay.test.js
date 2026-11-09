@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "@jest/globals";
-import { buildGisVoteOverlay } from "../../../core/utils/gisVoteOverlay.js";
+import { buildGisVoteOverlay, countVotedTitlesByLabel } from "../../../core/utils/gisVoteOverlay.js";
 
 const report = {
   house: "39",
@@ -78,7 +78,15 @@ const APARTMENTS = [
   { id: 4n, number: 462 },
 ];
 
-const overlay = () => buildGisVoteOverlay({ report, rooms: ROOMS, apartments: APARTMENTS });
+// Участие: 103 — в одном голосовании, 105 — в двух (два разных названия), 104 — ни в одном.
+const votes = () =>
+  countVotedTitlesByLabel([
+    { room_label: "103", report: { title: "ОСС 2026, кровля" } },
+    { room_label: "105", report: { title: "ОСС 2026, кровля" } },
+    { room_label: "105", report: { title: "ОСС 2025, подъезд" } },
+  ]);
+
+const overlay = () => buildGisVoteOverlay({ report, rooms: ROOMS, apartments: APARTMENTS, votes: votes() });
 
 describe("наложение среза на сетку квартир", () => {
   it("подписывает срез, чтобы подпись «по срезу …» читалась честно", () => {
@@ -102,6 +110,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "1",
         number: "103",
         voted: true,
+        votes: 1,
         share_pct: 9.12,
         weight: 23.6,
         area: 23.6,
@@ -112,6 +121,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "2",
         number: "104",
         voted: false,
+        votes: 0,
         share_pct: 17.57,
         weight: 0,
         area: 45.5,
@@ -123,6 +133,7 @@ describe("наложение среза на сетку квартир", () => {
         id: "3",
         number: "105",
         voted: true,
+        votes: 2,
         share_pct: 15.45,
         weight: 40,
         area: 40,

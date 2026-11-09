@@ -46,7 +46,14 @@ const report = (overrides = {}) => ({
   ...overrides,
 });
 
-const build = ({ slice = report(), apartments = [103, 104, 105] } = {}) => {
+const build = ({
+  slice = report(),
+  apartments = [103, 104, 105],
+  votedRooms = [
+    { room_label: "103", report: { title: "ОСС 2026, кровля" } },
+    { room_label: "104", report: { title: "ОСС 2026, кровля" } },
+  ],
+} = {}) => {
   const calls = [];
 
   const useCase = new GisHouseVoteUseCase({
@@ -55,6 +62,9 @@ const build = ({ slice = report(), apartments = [103, 104, 105] } = {}) => {
         calls.push(house);
 
         return slice;
+      },
+      async votedRoomsByHouse() {
+        return votedRooms;
       },
     },
     houses: {
@@ -113,6 +123,24 @@ describe("наложение среза на сетку по правам", () =
 
     expect(result.cells.map((cell) => cell.number)).toEqual(["103", "104"]);
     expect(result.off_grid).toEqual([]);
+  });
+
+  it("участие считается по разным голосованиям, а не по числу выгрузок", async () => {
+    const { useCase } = build({
+      votedRooms: [
+        { room_label: "103", report: { title: "ОСС 2026, кровля" } },
+        // Вторая выгрузка того же ОСС — то же голосование, а не новое.
+        { room_label: "103", report: { title: "ОСС 2026, кровля" } },
+        { room_label: "103", report: { title: "ОСС 2025, подъезд" } },
+      ],
+    });
+
+    const result = await useCase.execute({ house: "39", viewer: staff(["house:39:view"]) });
+
+    expect(result.cells.map((cell) => [cell.number, cell.votes])).toEqual([
+      ["103", 2],
+      ["104", 0],
+    ]);
   });
 
   it("площади и веса из Decimal-строк становятся числами", async () => {

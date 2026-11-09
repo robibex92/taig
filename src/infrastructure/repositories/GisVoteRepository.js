@@ -168,4 +168,19 @@ export class GisVoteRepository {
       include: { rooms: true },
     });
   }
+
+  /**
+   * Помещения дома, по которым есть хоть один бюллетень, с названием их
+   * голосования — на этом считается «участие в N голосованиях» конкретной
+   * квартиры. Молчащие строки не выбираем: их счётчик и так ноль.
+   */
+  async votedRoomsByHouse(house) {
+    const key = String(house ?? "").trim();
+    if (!key) return [];
+
+    return prisma.gisVoteReportRoom.findMany({
+      where: { voted: true, report: { house: key } },
+      select: { room_label: true, report: { select: { title: true } } },
+    });
+  }
 }

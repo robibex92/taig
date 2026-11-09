@@ -35,11 +35,34 @@ const russianDate = (iso) => {
 };
 
 /**
+ * Сколько разных голосований дома, где помещение участвовало: ключ —
+ * нормализованная метка, значение — число названий. Два среза одного ОСС дают
+ * одно голосование, а не два: «участие» считается по голосованиям, а не по
+ * количеству выгрузок.
+ */
+export const countVotedTitlesByLabel = (rows) => {
+  const byLabel = new Map();
+
+  for (const row of rows ?? []) {
+    const label = normalizeLabel(row.room_label);
+    const title = row.report?.title;
+
+    if (!label || !title) continue;
+
+    if (!byLabel.has(label)) byLabel.set(label, new Set());
+    byLabel.get(label).add(title);
+  }
+
+  return byLabel;
+};
+
+/**
  * @param {object} report  строка `gis_vote_reports` (без помещений)
  * @param {Array} rooms    строки `gis_vote_report_rooms` того же среза
  * @param {Array} apartments квартиры сетки этого дома: [{ id, number }]
+ * @param {Map} votes      результат `countVotedTitlesByLabel` по всему дому
  */
-export const buildGisVoteOverlay = ({ report, rooms, apartments }) => {
+export const buildGisVoteOverlay = ({ report, rooms, apartments, votes = new Map() }) => {
   const exportedAt = isoDate(report.exported_at);
   const areaBase = toNumber(report.area_base) ?? 0;
   const weightVoted = toNumber(report.weight_voted) ?? 0;
@@ -92,6 +115,7 @@ export const buildGisVoteOverlay = ({ report, rooms, apartments }) => {
       id: apartment.id === null || apartment.id === undefined ? null : String(apartment.id),
       number: String(apartment.number).trim(),
       voted: premise.voted,
+      votes: votes.get(label)?.size ?? 0,
       // Доля квартиры в весе базы — то, сколько она приносит кворуму. Считается
       // здесь, а не на фронте: сервер решает форму ответа.
       share_pct: areaBase > 0 ? round((100 * premise.area) / areaBase) : null,

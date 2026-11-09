@@ -1,5 +1,8 @@
 import { canViewHouse } from "../../../core/utils/roles.js";
-import { buildGisVoteOverlay } from "../../../core/utils/gisVoteOverlay.js";
+import {
+  buildGisVoteOverlay,
+  countVotedTitlesByLabel,
+} from "../../../core/utils/gisVoteOverlay.js";
 import { GisVoteRepository } from "../../../infrastructure/repositories/GisVoteRepository.js";
 import { HouseRepository } from "../../../infrastructure/repositories/HouseRepository.js";
 
@@ -31,11 +34,15 @@ export class GisHouseVoteUseCase {
     if (!slice) return null;
 
     // Те же квартиры, что риснет сетка: `position = 1` — первые из совладельцев.
-    const apartments = await this.houses.findByFilters({ house });
+    const [apartments, votedRooms] = await Promise.all([
+      this.houses.findByFilters({ house }),
+      this.reports.votedRoomsByHouse(house),
+    ]);
 
     return buildGisVoteOverlay({
       report: slice,
       rooms: slice.rooms ?? [],
+      votes: countVotedTitlesByLabel(votedRooms),
       apartments: apartments.map((apartment) => ({
         id: apartment.id,
         number: apartment.number,
