@@ -17,6 +17,10 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 export const gisWorkbookUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_WORKBOOK_BYTES, files: 1 },
+  // Имя файла — параметр Content-Disposition, и busboy читает параметры как
+  // latin1: «Тайгинская 39.xlsx» доезжало до истории как «Ð¢Ð°Ð¹Ð³Ð¸Ð½ÑÐºÐ°Ñ».
+  // Значения полей (`title`) идут другим механизмом и уже utf8.
+  defParamCharset: "utf8",
   fileFilter: (req, file, cb) => {
     const extension = path.extname(String(file.originalname ?? "")).toLowerCase();
 

@@ -122,7 +122,12 @@ export const buildGisVoteOverlay = ({ report, rooms, apartments, votedTitles = n
     cells.push({
       id: apartment.id === null || apartment.id === undefined ? null : String(apartment.id),
       number: String(apartment.number).trim(),
-      voted: premise.voted,
+      // Отметка на сетке и перечень в панели обязаны утверждать одно и то же.
+      // Участие считается по всем срезам дома: квартира, голосовавшая в
+      // прошлом ОСС и молчащая в свежем, иначе теряет точку, но сохраняет текст
+      // «участие в N голосованиях». Площадь, вес и совладельцы остаются из
+      // последнего среза — это текущая доля, а не история.
+      voted: premise.voted || votedTitles.has(label),
       voted_titles: votedTitles.get(label) ?? [],
       // Доля квартиры в весе базы — то, сколько она приносит кворуму. Считается
       // здесь, а не на фронте: сервер решает форму ответа.

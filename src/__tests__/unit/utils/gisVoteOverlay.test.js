@@ -152,6 +152,35 @@ describe("наложение среза на сетку квартир", () => {
     expect(cells.some((cell) => cell.number === "462")).toBe(false);
   });
 
+  it("голосовавшая в прошлом ОСС не теряет отметку, когда в свежем срезе молчит", () => {
+    // 104 в свежем срезе молчит (`voted: false`), но в прежнем срезе дома
+    // бюллетень оставила. Панель ей участие перечисляет — отметка обязана тоже.
+    const titles = titlesVotedByLabel([
+      {
+        room_label: "104",
+        report: { title: "ОСС 2025, подъезд", exported_at: new Date("2026-08-24T00:00:00.000Z") },
+      },
+    ]);
+    const { cells } = buildGisVoteOverlay({
+      report,
+      rooms: ROOMS,
+      apartments: APARTMENTS,
+      votedTitles: titles,
+    });
+    const cell = cells.find((row) => row.number === "104");
+
+    expect(cell.voted).toBe(true);
+    expect(cell.voted_titles).toEqual(["ОСС 2025, подъезд"]);
+    // Доля и вес остаются из свежего среза: история участия их не переписывает.
+    expect(cell).toMatchObject({ weight: 0, area: 45.5, share_pct: 17.57 });
+  });
+
+  it("отметка стоит ровно там, где панель перечисляет участия", () => {
+    for (const cell of overlay().cells) {
+      expect(cell.voted).toBe(cell.voted_titles.length > 0);
+    }
+  });
+
   it("помещений вне сетки не теряет: офис и кладовая уходят отдельным списком", () => {
     const { off_grid } = overlay();
 

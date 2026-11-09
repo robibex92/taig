@@ -49,10 +49,7 @@ const report = (overrides = {}) => ({
 const build = ({
   slice = report(),
   apartments = [103, 104, 105],
-  votedRooms = [
-    { room_label: "103", report: { title: "ОСС 2026, кровля" } },
-    { room_label: "104", report: { title: "ОСС 2026, кровля" } },
-  ],
+  votedRooms = [{ room_label: "103", report: { title: "ОСС 2026, кровля" } }],
 } = {}) => {
   const calls = [];
 
@@ -143,6 +140,26 @@ describe("наложение среза на сетку по правам", () =
       ["103", ["ОСС 2026, кровля", "ОСС 2025, подъезд"]],
       ["104", []],
     ]);
+  });
+
+  it("голосовавшая в прошлом ОСС не теряет отметку, когда свежий срез молчит", async () => {
+    // В свежем срезе у 104 `voted: false`, но в прежнем срезе дома бюллетень есть.
+    // Отметка на сетке и перечень в панели обязаны говорить одно и то же.
+    const { useCase } = build({
+      votedRooms: [
+        { room_label: "103", report: { title: "ОСС 2026, кровля", exported_at: new Date("2026-10-26T00:00:00.000Z") } },
+        { room_label: "104", report: { title: "ОСС 2025, подъезд", exported_at: new Date("2026-08-24T00:00:00.000Z") } },
+      ],
+    });
+
+    const result = await useCase.execute({ house: "39", viewer: staff(["house:39:view"]) });
+    const silent = result.cells.find((cell) => cell.number === "104");
+
+    expect(silent.voted).toBe(true);
+    expect(silent.voted_titles).toEqual(["ОСС 2025, подъезд"]);
+    // Площадь, вес и совладельцы остаются из свежего среза — это текущая доля.
+    expect(silent).toMatchObject({ weight: 0, area: 45.5, owners: 2 });
+    expect(result.cells.every((cell) => cell.voted === cell.voted_titles.length > 0)).toBe(true);
   });
 
   it("площади и веса из Decimal-строк становятся числами", async () => {
