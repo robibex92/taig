@@ -7,7 +7,7 @@
  * говорят ничего.
  */
 
-import { GIS_PREMISE_KINDS, summarizeGisPremises } from "./gisVotingReport.js";
+import { GIS_PREMISE_KINDS, apartmentCoverage, summarizeGisPremises } from "./gisVotingReport.js";
 
 const round = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -163,6 +163,7 @@ export const buildGisVotingHistory = (slices) => {
         key,
         room: premise.room,
         cadastre: premise.cadastre,
+        kind: premise.kind,
         label: premise.label,
         area: premise.area,
         slices: premise.voted ? 1 : 0,
@@ -206,6 +207,9 @@ export const buildGisVotingHistory = (slices) => {
 
   const everVoted = rooms.filter((room) => room.voted_slices > 0);
   const latestArea = round(latestBase.reduce((total, premise) => total + premise.area, 0));
+  // Покрытие по всем срезам голосования: максимальный номер квартиры и сколько
+  // строк до него не хватает — «505 при 515 квартирах» видно сразу, а не гаданием.
+  const coverage = apartmentCoverage([...votedByRoom.values()]);
 
   return {
     slices: withDeltas,
@@ -218,6 +222,9 @@ export const buildGisVotingHistory = (slices) => {
       slices: ordered.length,
       comparable: ordered.length > 1,
       rooms_total: rooms.length,
+      rooms_expected: rooms.length + coverage.missing,
+      rooms_missing: coverage.missing,
+      apartments_max_number: coverage.max_number,
       ever_voted: everVoted.length,
       ever_voted_pct: rooms.length ? round((100 * everVoted.length) / rooms.length) : null,
       ever_voted_area: round(everVoted.reduce((total, room) => total + room.area, 0)),

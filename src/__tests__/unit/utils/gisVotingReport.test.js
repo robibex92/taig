@@ -230,6 +230,25 @@ describe("разбор выгрузки ГИС ЖКХ", () => {
     expect(apartment.silent_area).toBe(40);
   });
 
+  it("покрытие квартир считает по максимальному номеру, а список молчащих отдаёт целиком", () => {
+    const { apartments, by_kind, top_silent, silent_truncated } = analyze();
+
+    // Квартиры фикстуры: 103, 116, 460, 501. Нумерация доходит до 501, строк
+    // четыре — 497 номеров в выгрузке нет, и это видно, а не «дом уменьшился».
+    expect(apartments).toEqual({ present: 4, max_number: 501, missing: 497 });
+
+    const apartment = by_kind.find((row) => row.kind === "apartment");
+
+    expect(apartment.max_number).toBe(501);
+    expect(apartment.missing_premises).toBe(497);
+    // У не-квартирных типов нумерации нет.
+    expect(by_kind.find((row) => row.kind === "office").max_number).toBeNull();
+    expect(by_kind.find((row) => row.kind === "office").missing_premises).toBe(0);
+    // Список молчащих полный: листает его фронт, сервер не обрезает.
+    expect(top_silent).toHaveLength(4);
+    expect(silent_truncated).toBe(false);
+  });
+
   it("доли всех типов по весу складываются в явку базы", () => {
     const { by_kind, participation } = analyze();
     const fromKinds = by_kind

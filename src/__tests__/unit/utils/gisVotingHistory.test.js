@@ -135,6 +135,10 @@ describe("история одного голосования", () => {
       first_time: 1,
       stopped: 2,
       never: 1,
+      // Номера квартир фикстуры 100…500: до 500 не хватает 495 строк.
+      rooms_expected: 500,
+      rooms_missing: 495,
+      apartments_max_number: 500,
     });
   });
 

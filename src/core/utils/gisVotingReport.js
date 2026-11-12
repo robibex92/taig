@@ -25,9 +25,6 @@ import { readWorkbook } from "./xlsxWorkbook.js";
 /** Планка кворума, от которой считаем разрыв (ст. 45 ЖК — 50 % голосов). */
 export const GIS_QUORUM_PERCENT = 50;
 
-/** Сколько «молчунов» отдаём наружу, и так ли список обрезан. */
-export const GIS_SILENT_LIST_LIMIT = 100;
-
 const COLUMN = {
   room: 1,
   area_rosp: 2,
@@ -282,11 +279,31 @@ const medianApartmentArea = (premises) => {
 };
 
 /**
+ * Покрытие квартир в выгрузке. Строки могут пропасть, поэтому «сколько квартир
+ * в доме» выводим из максимального номера (нумерация 1…N), а не из числа строк:
+ * `missing` — сколько квартир до максимального номера в выгрузке не хватает.
+ * Площадь пропавших неизвестна, поэтому вес базы не меняем — это только счёт.
+ */
+export const apartmentCoverage = (premises) => {
+  const apartments = premises.filter((premise) => premise.kind === "apartment");
+  const numbers = apartments
+    .map((premise) => Number.parseInt(premise.room, 10))
+    .filter((number) => Number.isFinite(number) && number > 0);
+  const maxNumber = numbers.length ? Math.max(...numbers) : null;
+
+  return {
+    present: apartments.length,
+    max_number: maxNumber,
+    missing: maxNumber === null ? 0 : Math.max(0, maxNumber - apartments.length),
+  };
+};
+
+/**
  * V6: разбивка по типам помещений. Проценты — от базы, а не «внутри своего типа»:
  * доли типов должны складываться в общую явку, иначе «9,14 % площади типа» читается
  * как вклад типа в кворум, которым он не является.
  */
-const byKind = (premises, baseArea) =>
+const byKind = (premises, baseArea, coverage) =>
   Object.entries(GIS_PREMISE_KINDS)
     .map(([kind, label]) => {
       const group = premises.filter((premise) => premise.kind === kind);
@@ -309,6 +326,10 @@ const byKind = (premises, baseArea) =>
         voted_pct_of_base: percentOf(votedWeight, baseArea),
         silent_premises: group.length - voted.length,
         silent_area: round(area - voted.reduce((total, premise) => total + premise.area, 0)),
+        // Знаменатель «проголосовало X из N» для квартир — полный дом по
+        // максимальному номеру, а не число строк; missing сколько не попало.
+        max_number: kind === "apartment" ? coverage.max_number : null,
+        missing_premises: kind === "apartment" ? coverage.missing : 0,
       };
     })
     .filter(Boolean);
@@ -422,8 +443,10 @@ export const summarizeGisPremises = (premises) => {
   const median = medianApartmentArea(premises);
   const needed = round((baseArea * GIS_QUORUM_PERCENT) / 100);
   const gap = round(needed - votedWeight);
+  const coverage = apartmentCoverage(premises);
 
-  // V6: кого агитировать в первую очередь — молчащие по убыванию веса.
+  // V6: кого агитировать в первую очередь — молчащие по убыванию площади.
+  // Список отдаём целиком: UI листает его страницами, а не обрезает до первых.
   const silentSorted = [...silent].sort((a, b) => b.area - a.area);
 
   return {
@@ -451,15 +474,16 @@ export const summarizeGisPremises = (premises) => {
       median_apartment_area: median,
       apartments_to_close: median ? Math.round(gap / median) : null,
     },
-    by_kind: byKind(premises, baseArea),
-    top_silent: silentSorted.slice(0, GIS_SILENT_LIST_LIMIT).map((premise) => ({
+    by_kind: byKind(premises, baseArea, coverage),
+    apartments: coverage,
+    top_silent: silentSorted.map((premise) => ({
       room: premise.room,
       cadastre: premise.cadastre,
       label: premise.label,
       area: premise.area,
       owners: premise.owners,
     })),
-    silent_truncated: silentSorted.length > GIS_SILENT_LIST_LIMIT,
+    silent_truncated: false,
   };
 };
 
