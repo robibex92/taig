@@ -49,7 +49,9 @@ export class SessionIssuer {
 
     await this.refreshTokenRepository.create({
       user_id: user.user_id,
-      token: refreshToken,
+      // В БД лежит только sha256 токена (AR-4): сам refresh-токен покидает
+      // сервер один раз — в ответе на логин/ротацию.
+      token: this.tokenService.hashRefreshToken(refreshToken),
       jti: decodedRefresh.jti,
       device_fingerprint:
         deviceInfo && Object.keys(deviceInfo).length > 0

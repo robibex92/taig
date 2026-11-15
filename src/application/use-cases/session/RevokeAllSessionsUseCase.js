@@ -5,23 +5,15 @@ import { logger } from "../../../core/utils/logger.js";
  * "Logout from all other devices" feature
  */
 export class RevokeAllSessionsUseCase {
-  constructor(refreshTokenRepository, tokenService) {
+  constructor(refreshTokenRepository) {
     this.refreshTokenRepository = refreshTokenRepository;
-    this.tokenService = tokenService;
   }
 
-  async execute(userId, currentToken) {
-    // Get current session JTI
-    let currentJti = null;
-    if (currentToken) {
-      try {
-        const decoded = this.tokenService.decodeToken(currentToken);
-        currentJti = decoded?.jti;
-      } catch (error) {
-        logger.warn("Could not decode current token", { user_id: userId });
-      }
-    }
-
+  /**
+   * @param {string|null} currentJti — jti текущей сессии из проверенного
+   *   access-токена (AR-16). Без него отзываются ВСЕ сессии (logout-all).
+   */
+  async execute(userId, currentJti) {
     // Revoke all sessions except current
     if (currentJti) {
       await this.refreshTokenRepository.revokeAllExcept(userId, currentJti);

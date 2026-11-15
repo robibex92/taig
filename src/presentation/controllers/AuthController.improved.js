@@ -1,6 +1,7 @@
 import { HTTP_STATUS } from "../../core/constants/index.js";
 import { asyncHandler } from "../../core/middlewares/errorHandler.js";
-import { ValidationError } from "../../core/errors/AppError.js";
+import { AuthenticationError, ValidationError } from "../../core/errors/AppError.js";
+import { frontendEntry } from "../../core/utils/frontendUrl.js";
 
 /**
  * Improved Auth Controller with enhanced security
@@ -115,6 +116,59 @@ export class AuthController {
   });
 
   /**
+   * Подтверждение входа MAX по ссылке из чата бота (AR-1).
+   * GET /api/auth/max/confirm?r=<requestId>&t=<nonce>
+   *
+   * Одноразовый нонс знает только получатель сообщения в личном чате бота,
+   * поэтому переход по ссылке — явное согласие владельца аккаунта. В ответ
+   * отдаём простую HTML-страницу: ссылку открывает браузер человека, не API-клиент.
+   */
+  confirmMaxLogin = asyncHandler(async (req, res) => {
+    const { r: requestId, t: nonce } = req.query;
+
+    const page = (title, body) => `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#f8fafc;color:#0f172a}main{max-width:26rem;padding:2rem;text-align:center}a{display:inline-block;margin-top:1rem;padding:.7rem 1.4rem;background:#0d9488;color:#fff;border-radius:.6rem;text-decoration:none}</style>
+</head><body><main>${body}</main></body></html>`;
+
+    try {
+      const { confirmed, code } =
+        await this.authenticateMaxUserUseCase.confirmStagedLogin(requestId, nonce);
+
+      if (!confirmed) {
+        throw new AuthenticationError("Login request not found or expired");
+      }
+
+      const entry = frontendEntry(`max_login=${code}`);
+
+      return res
+        .status(HTTP_STATUS.OK)
+        .type("html")
+        .send(
+          page(
+            "Вход подтверждён",
+            `<h1>✅ Вход подтверждён</h1><p>Откройте сайт — он войдёт сам.</p><a href="${entry}">Открыть сайт</a>`
+          )
+        );
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return res
+          .status(HTTP_STATUS.UNAUTHORIZED)
+          .type("html")
+          .send(
+            page(
+              "Ссылка устарела",
+              "<h1>Ссылка устарела</h1><p>Запрос входа уже использован или истёк. Начните вход заново на сайте.</p>"
+            )
+          );
+      }
+      throw error;
+    }
+  });
+
+  /**
    * Забрать сессию, заработанную в Telegram-боте: по requestId или по code
    * POST /api/auth/telegram/claim
    */
@@ -196,7 +250,7 @@ export class AuthController {
 
   /**
    * Authenticate user via Telegram
-   * POST /api-v1/auth/telegram
+   * POST /api/auth/telegram
    */
   authenticateTelegram = asyncHandler(async (req, res) => {
     const telegramData = req.body;
@@ -206,7 +260,8 @@ export class AuthController {
 
     const result = await this.authenticateUserUseCase.execute(
       telegramData,
-      deviceInfo
+      deviceInfo,
+      Boolean(req.body?.remember_me)
     );
 
     // В кросс-доменной среде отправляем ВСЕ в body
@@ -225,7 +280,7 @@ export class AuthController {
 
   /**
    * Refresh access token - UPDATED for cross-domain
-   * POST /api-v1/auth/refresh
+   * POST /api/auth/refresh
    */
   refreshToken = asyncHandler(async (req, res) => {
     // В кросс-доменной среде используем ТОЛЬКО body
@@ -259,7 +314,7 @@ export class AuthController {
 
   /**
    * Get current session user
-   * GET /api-v1/auth/session
+   * GET /api/auth/session
    */
   getSession = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -273,19 +328,31 @@ export class AuthController {
 
   /**
    * Logout user (current session only)
-   * POST /api-v1/auth/logout
+   * POST /api/auth/logout
    */
   logout = asyncHandler(async (req, res) => {
-    const userId = req.user.user_id;
-  
+    const userId = req.user?.user_id ?? null;
+
     const accessToken =
       req.headers.authorization?.split(" ")[1] || null;
-  
+
     const refreshToken =
       req.body?.refreshToken ||
       req.cookies?.refreshToken ||
       null;
-  
+
+    /**
+     * AR-13: access мог протухнуть — выход всё равно должен дойти до сервера,
+     * иначе refresh-токен остаётся рабочим ещё 7–30 дней. Без действующей
+     * сессии отзываем по refresh-токену, проверив его подпись.
+     */
+    if (!userId) {
+      if (!refreshToken) {
+        throw new ValidationError("Нужен refresh-токен или действующая сессия");
+      }
+      await this.tokenService.verifyRefreshTokenSignature(refreshToken);
+    }
+
     await this.logoutUseCase.execute(
       userId,
       accessToken,
@@ -311,17 +378,16 @@ export class AuthController {
 
   /**
    * Get all user sessions
-   * GET /api-v1/auth/sessions
+   * GET /api/auth/sessions
    */
   getSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
-    const currentRefreshTokenStack = [req.body?.refreshToken, req.cookies?.refreshToken];
-    const currentRefreshToken =
-      currentRefreshTokenStack.find((t) => typeof t === 'string' && t.length > 0) ?? null;
 
+    // jti текущей сессии пришёл из проверенного access-токена в middleware
+    // (AR-16): у GET-запроса тела нет, брать токен было неоткуда.
     const sessions = await this.getUserSessionsUseCase.execute(
       userId,
-      currentRefreshToken
+      req.user.jti ?? null
     );
 
     res.status(HTTP_STATUS.OK).json({
@@ -332,7 +398,7 @@ export class AuthController {
 
   /**
    * Revoke a specific session
-   * DELETE /api-v1/auth/sessions/:sessionId
+   * DELETE /api/auth/sessions/:sessionId
    */
   revokeSession = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
@@ -348,15 +414,14 @@ export class AuthController {
 
   /**
    * Revoke all sessions except current
-   * POST /api-v1/auth/sessions/revoke-all
+   * POST /api/auth/sessions/revoke-all
    */
   revokeAllOtherSessions = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
-    const currentRefreshToken = req.body?.refreshToken ?? req.cookies?.refreshToken ?? null;
 
     const result = await this.revokeAllSessionsUseCase.execute(
       userId,
-      currentRefreshToken
+      req.user.jti ?? null
     );
 
     res.status(HTTP_STATUS.OK).json({
@@ -367,7 +432,7 @@ export class AuthController {
 
   /**
    * Logout from all devices
-   * POST /api-v1/auth/logout-all
+   * POST /api/auth/logout-all
    */
   logoutAll = asyncHandler(async (req, res) => {
     const userId = req.user.user_id;

@@ -56,12 +56,23 @@ export class AuthenticateUserUseCase {
   /**
    * Окно 1 час (как в MAX WebAppData) плюс допуск на перекос часов клиента.
    * Суточное окно превращало перехваченный initData в логин на целый день.
+   * Дата из будущего дальше допуска отвергается (AR-7) — иначе подпись
+   * с будущим auth_date проходила бы бессрочно.
    */
   isAuthDateValid(authDate, maxAgeSeconds = 3600) {
+    if (typeof authDate !== "number" || !Number.isFinite(authDate)) {
+      return false;
+    }
+
     const currentTime = Math.floor(Date.now() / 1000);
     const skewAllowanceSeconds = 60;
+    const age = currentTime - authDate;
 
-    return currentTime - authDate < maxAgeSeconds + skewAllowanceSeconds;
+    if (age < -skewAllowanceSeconds) {
+      return false;
+    }
+
+    return age <= maxAgeSeconds + skewAllowanceSeconds;
   }
 
   async execute(telegramAuthData, deviceInfo = {}, rememberMe = false) {

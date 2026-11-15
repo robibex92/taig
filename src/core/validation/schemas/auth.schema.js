@@ -92,6 +92,27 @@ export const telegramClaimSchema = Joi.object({
 });
 
 /**
+ * Подтверждение входа MAX из чата бота (AR-1): переход по ссылке с нонсом.
+ * `r` — requestId вкладки сайта, `t` — одноразовый нонс из сообщения бота.
+ */
+export const maxConfirmQuerySchema = Joi.object({
+  r: Joi.string()
+    .pattern(/^[A-Za-z0-9_-]{8,64}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Invalid MAX login request",
+      "any.required": "MAX login request is required",
+    }),
+  t: Joi.string()
+    .pattern(/^[a-f0-9]{32}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Invalid confirmation token",
+      "any.required": "Confirmation token is required",
+    }),
+});
+
+/**
  * Refresh token schema
  */export const refreshTokenSchema = Joi.object({
   refreshToken: Joi.string().trim().required().messages({

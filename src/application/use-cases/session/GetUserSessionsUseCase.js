@@ -5,30 +5,22 @@ import { logger } from "../../../core/utils/logger.js";
  * Shows active and recent sessions for security monitoring
  */
 export class GetUserSessionsUseCase {
-  constructor(refreshTokenRepository, tokenService) {
+  constructor(refreshTokenRepository) {
     this.refreshTokenRepository = refreshTokenRepository;
-    this.tokenService = tokenService;
   }
 
-  async execute(userId, currentToken = null) {
+  /**
+   * @param {string|null} currentJti — jti текущей сессии из проверенного
+   *   access-токена (AR-16); у GET-запроса тела нет.
+   */
+  async execute(userId, currentJti = null) {
     // Get all active sessions
     const sessions = await this.refreshTokenRepository.findByUserId(userId);
-
-    // Determine current session based on token
-    let currentJti = null;
-    if (currentToken) {
-      try {
-        const decoded = this.tokenService.decodeToken(currentToken);
-        currentJti = decoded?.jti;
-      } catch (error) {
-        // Ignore error, just won't mark current session
-      }
-    }
 
     // Format sessions for response
     const formattedSessions = sessions.map((session) => {
       const sessionData = session.toJSON();
-      sessionData.is_current = session.jti === currentJti;
+      sessionData.is_current = Boolean(currentJti) && session.jti === currentJti;
       return sessionData;
     });
 

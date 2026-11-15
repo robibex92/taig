@@ -12,25 +12,39 @@ import { logger } from "../../core/utils/logger.js";
  * одному — второй получает отказ, а не вторую сессию.
  */
 export class AuthHandoffRepository {
-  /** `kind` — "code" | "request"; срок жизни задаёт вызывающий. */
+  /**
+   * `kind` — "code" | "request" | "tg-confirm" | "max-confirm"; срок жизни
+   * задаёт вызывающий.
+   *
+   * Владелец записи неизменен (AR-2): повторный `put` тем же пользователем
+   * продлевает срок, а другим — отказ. Иначе повторное подтверждение того же
+   * requestId чужим аккаунтом подменяло бы владельца хендовера.
+   */
   async put({ kind, key, userId, ttlMs }) {
     this._purgeExpired();
 
+    const uid = BigInt(userId);
+    const expiresAt = new Date(Date.now() + ttlMs);
+
     try {
-      await prisma.authHandoff.upsert({
-        where: { kind_key: { kind, key } },
-        create: {
-          kind,
-          key,
-          user_id: BigInt(userId),
-          expires_at: new Date(Date.now() + ttlMs),
-        },
-        update: {
-          user_id: BigInt(userId),
-          expires_at: new Date(Date.now() + ttlMs),
-        },
+      await prisma.authHandoff.create({
+        data: { kind, key, user_id: uid, expires_at: expiresAt },
       });
     } catch (error) {
+      if (error?.code === "P2002") {
+        const existing = await prisma.authHandoff.findFirst({ where: { kind, key } });
+
+        if (existing && existing.user_id === uid) {
+          await prisma.authHandoff.update({
+            where: { id: existing.id },
+            data: { expires_at: expiresAt },
+          });
+          return;
+        }
+
+        throw new AuthenticationError("Хендовер уже выдан другому пользователю");
+      }
+
       throw this._mapError(error);
     }
   }

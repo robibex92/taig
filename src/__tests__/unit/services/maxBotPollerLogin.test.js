@@ -1,18 +1,19 @@
 /* eslint-env jest */
 /**
- * Юнит-тесты подтверждения входа с сайта в чате MAX-бота.
+ * Юнит-тесты запроса подтверждения входа с сайта в чате MAX-бота (AR-1).
  *
  * Проверяется связка, а не парсер: поллер получает ответ `/updates` с событием
- * `bot_started`, зовёт кейс привязки и отвечает пользователю. Отдельно — что без
- * внедрённого кейса поллер остаётся просто сборщиком входящих, а сбой подтверждения
- * не рвёт цикл polling.
+ * `bot_started`, зовёт кейс ПОСТАНОВКИ запроса (не выдачи сессии!) и отвечает
+ * пользователю ссылкой подтверждения с одноразовым нонсом. Отдельно — что без
+ * внедрённого кейса поллер остаётся просто сборщиком входящих, а сбой
+ * постановки не рвёт цикл polling.
  */
 
 import { jest } from "@jest/globals";
 import { MaxBotUpdatePoller } from "../../../infrastructure/services/MaxBotUpdatePoller.js";
 
 const ID = "bfdcc801130747bd8f124b1680f5effd";
-const CODE = "a".repeat(64);
+const NONCE = "b".repeat(32);
 
 const startedUpdate = {
   update_type: "bot_started",
@@ -38,54 +39,58 @@ const buildPoller = ({ loginConfirmation = null, service } = {}) =>
   });
 
 describe("MaxBotUpdatePoller: вход с сайта", () => {
-  it("привязывает автора события к requestId и отвечает в чат ссылкой с кодом", async () => {
-    const confirmLoginFromBotUser = jest.fn(async () => ({
-      user_id: 5n,
-      confirmed: true,
-      code: CODE,
-    }));
+  const prevApiUrl = process.env.API_URL;
+
+  beforeEach(() => {
+    process.env.API_URL = "https://api.example.test/api-v1";
+  });
+
+  afterEach(() => {
+    if (prevApiUrl === undefined) delete process.env.API_URL;
+    else process.env.API_URL = prevApiUrl;
+  });
+
+  it("ставит запрос на подтверждение и шлёт ссылку с нонсом, а не выдаёт сессию", async () => {
+    const stageLoginFromBotUser = jest.fn(async () => ({ staged: true, nonce: NONCE }));
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
-    const poller = buildPoller({ loginConfirmation: { confirmLoginFromBotUser }, service });
+    const poller = buildPoller({ loginConfirmation: { stageLoginFromBotUser }, service });
 
     await poller._processLoginRequests({ updates: [startedUpdate] });
 
-    expect(confirmLoginFromBotUser).toHaveBeenCalledWith(
+    expect(stageLoginFromBotUser).toHaveBeenCalledWith(
       { id: "123", username: "anton", first_name: "Антон" },
       ID
     );
 
     const text = service.sendMessage.mock.calls[0][1];
-    expect(text).toContain("Вход подтверждён");
-    // Ссылка с `?max_login=` — то, что делает вход независимым от вкладки сайта.
-    expect(text).toContain(`/?max_login=${CODE}`);
+    expect(text).toContain("Запрос входа на сайт");
+    expect(text).toContain(`/auth/max/confirm?r=${ID}&t=${NONCE}`);
+    // Сессия на этом шаге не выдаётся: ссылки с кодом входа в сообщении нет.
+    expect(text).not.toContain("max_login=");
   });
 
-  it("без кода отвечает старой формулировкой и без ссылки", async () => {
+  it("без API_URL честно сообщает, что ссылку не собрать", async () => {
+    delete process.env.API_URL;
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
     const poller = buildPoller({
       service,
       loginConfirmation: {
-        confirmLoginFromBotUser: jest.fn(async () => ({ user_id: 5n, confirmed: true, code: null })),
+        stageLoginFromBotUser: jest.fn(async () => ({ staged: true, nonce: NONCE })),
       },
     });
 
     await poller._processLoginRequests({ updates: [startedUpdate] });
 
     const text = service.sendMessage.mock.calls[0][1];
-    expect(text).toContain("Вернитесь во вкладку сайта");
-    expect(text).not.toContain("max_login");
+    expect(text).toContain("Не удалось собрать ссылку подтверждения");
   });
 
-  it("неподтверждённый запрос не получает ни кода, ни ссылки", async () => {
+  it("неподтверждённый запрос не получает ссылки", async () => {
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
     const poller = buildPoller({
       service,
       loginConfirmation: {
-        confirmLoginFromBotUser: jest.fn(async () => ({
-          user_id: 5n,
-          confirmed: false,
-          code: null,
-        })),
+        stageLoginFromBotUser: jest.fn(async () => ({ staged: false, nonce: null })),
       },
     });
 
@@ -93,7 +98,7 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
 
     const text = service.sendMessage.mock.calls[0][1];
     expect(text).toContain("не подошёл");
-    expect(text).not.toContain("max_login");
+    expect(text).not.toContain("/auth/max/confirm");
   });
 
   it("молчит, если кейс подтверждения не внедрён", async () => {
@@ -104,12 +109,12 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
     expect(service.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("сбой привязки не рвёт цикл и не отвечает в чат", async () => {
+  it("сбой постановки не рвёт цикл и не отвечает в чат", async () => {
     const service = { sendMessage: jest.fn() };
     const poller = buildPoller({
       service,
       loginConfirmation: {
-        confirmLoginFromBotUser: jest.fn(async () => {
+        stageLoginFromBotUser: jest.fn(async () => {
           throw new Error("auth_handoffs недоступна");
         }),
       },
@@ -125,7 +130,7 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
   });
 
   it("сообщает имена ключей start-события, где параметр не нашёлся", async () => {
-    const poller = buildPoller({ loginConfirmation: { confirmLoginFromBotUser: jest.fn() } });
+    const poller = buildPoller({ loginConfirmation: { stageLoginFromBotUser: jest.fn() } });
 
     await poller._processLoginRequests({
       updates: [{ update_type: "bot_started", user: { user_id: 1 }, some_other_form: "abcdef" }],

@@ -1,10 +1,13 @@
 /* eslint-env jest */
 /**
- * Что именно кладется в `auth_handoffs`, когда вход подтвердили в чате MAX-бота.
+ * Двухшаговый вход через чат MAX-бота (AR-1).
  *
- * С 26.10 подтверждение даёт не только `requestId` для опроса вкладки сайта, но и
- * одноразовый `code` для ссылки `?max_login=` — без неё вход на телефоне
- * доживает только пока вкладка не уснула.
+ * Шаг 1 (`stageLoginFromBotUser`): событие бота только ставит запрос на
+ * подтверждение (`max-confirm` с нонсом) — сессия не выдаётся, потому что
+ * ссылку на бота мог прислать кто угодно.
+ * Шаг 2 (`confirmStagedLogin`): переход по ссылке из чата гасит нонс и кладёт
+ * обычные хендоверы — `request` для опроса вкладки и `code` для ссылки
+ * `?max_login=`.
  */
 
 import { jest } from "@jest/globals";
@@ -29,12 +32,44 @@ const build = () => {
   };
 };
 
-describe("подтверждение входа в чате MAX", () => {
-  it("кладёт и requestId, и одноразовый код для ссылки", async () => {
+describe("постановка запроса входа в чате MAX", () => {
+  it("кладёт max-confirm с нонсом и не выдаёт хендовер сессии", async () => {
     const { handoffs, useCase } = build();
 
-    const result = await useCase.confirmLoginFromBotUser(maxUser, REQUEST_ID);
+    const { staged, nonce } = await useCase.stageLoginFromBotUser(maxUser, REQUEST_ID);
 
+    expect(staged).toBe(true);
+    expect(nonce).toMatch(/^[0-9a-f]{32}$/);
+
+    expect(handoffs.put).toHaveBeenCalledTimes(1);
+    const [args] = handoffs.put.mock.calls[0];
+    expect(args.kind).toBe("max-confirm");
+    expect(args.key).toBe(`${REQUEST_ID}:${nonce}`);
+    expect(String(args.userId)).toBe("5");
+    expect(args.ttlMs).toBe(5 * 60 * 1000);
+  });
+
+  it("слишком короткий requestId не порождает запроса", async () => {
+    const { handoffs, useCase } = build();
+
+    // Правило то же, что у Telegram-бота: `{8,64}`, «login_777» сюда не годится.
+    const { staged, nonce } = await useCase.stageLoginFromBotUser(maxUser, "777");
+
+    expect(staged).toBe(false);
+    expect(nonce).toBeNull();
+    expect(handoffs.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("подтверждение входа по ссылке из чата MAX", () => {
+  it("гасит нонс и кладёт requestId и одноразовый код", async () => {
+    const { handoffs, useCase } = build();
+    const nonce = "c".repeat(32);
+    handoffs.consume.mockResolvedValue(5n);
+
+    const result = await useCase.confirmStagedLogin(REQUEST_ID, nonce);
+
+    expect(handoffs.consume).toHaveBeenCalledWith("max-confirm", `${REQUEST_ID}:${nonce}`);
     expect(result.confirmed).toBe(true);
     expect(result.code).toMatch(/^[0-9a-f]{64}$/);
 
@@ -44,17 +79,24 @@ describe("подтверждение входа в чате MAX", () => {
     const codeRow = handoffs.put.mock.calls.find(([args]) => args.kind === "code")[0];
     expect(codeRow.key).toBe(result.code);
     expect(String(codeRow.userId)).toBe("5");
-    expect(codeRow.ttlMs).toBe(5 * 60 * 1000);
   });
 
-  it("слишком короткий requestId не порождает ни хендовера, ни кода", async () => {
+  it("просроченный или чужой нонс не выдаёт сессию", async () => {
+    const { handoffs, useCase } = build();
+    handoffs.consume.mockResolvedValue(null);
+
+    await expect(useCase.confirmStagedLogin(REQUEST_ID, "c".repeat(32))).rejects.toThrow(
+      "Login request not found or expired"
+    );
+    expect(handoffs.put).not.toHaveBeenCalled();
+  });
+
+  it("невалидный нонс отвергается до похода в хранилище", async () => {
     const { handoffs, useCase } = build();
 
-    // Правило то же, что у Telegram-бота: `{8,64}`, «login_777» сюда не годится.
-    const result = await useCase.confirmLoginFromBotUser(maxUser, "777");
-
-    expect(result.confirmed).toBe(false);
-    expect(result.code).toBeNull();
-    expect(handoffs.put).not.toHaveBeenCalled();
+    await expect(useCase.confirmStagedLogin(REQUEST_ID, "not-a-nonce")).rejects.toThrow(
+      "Invalid MAX login confirmation"
+    );
+    expect(handoffs.consume).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,7 @@ import {
   MAX_BOT_STATE_KEYS,
 } from "../../core/constants/maxBot.js";
 import { extractPayloadMarker, extractMaxLoginRequests, parseMaxUpdatesPayload } from "../../core/utils/maxBotEvents.js";
-import { frontendEntry } from "../../core/utils/frontendUrl.js";
+import { apiPublicLink } from "../../core/utils/requestUrl.js";
 
 const POLL_TIMEOUT_MS = 25000;
 const POLL_LIMIT = 50;
@@ -32,20 +32,21 @@ const isGroupType = (type) => GROUP_CHAT_TYPES.has(String(type ?? "").toUpperCas
 const isDialogType = (type) => DIALOG_CHAT_TYPES.has(String(type ?? "").toUpperCase());
 
 /**
- * Ответ бота после подтверждения входа с сайта.
+ * Запрос подтверждения входа (AR-1).
  *
- * Ссылка с одноразовым кодом — главный способ добрать вход на телефоне: пока
- * человек подтверждает в MAX, вкладка сайта фоновая, её опрос засыпается, и
- * забирать сессию становится некому. Тап по ссылке открывает сайт с
- * `?max_login=`, и фронт обменивает код сам — жива та вкладка или нет.
+ * Ссылку `?start=login_<id>` может прислать кто угодно, поэтому бот не выдаёт
+ * сессию по факту события, а просит явного подтверждения: ссылка с одноразовым
+ * нонсом ведёт на API, и только переход по ней создаёт хендовер. Сообщение
+ * приходит в личный чат автора события — чужой человек ссылку не увидит.
  */
-const loginConfirmedText = (code) =>
-  code
-    ? `✅ Вход подтверждён. Откройте сайт по ссылке — он войдёт сам:\n${frontendEntry(`max_login=${code}`)}`
-    : "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.";
+const loginConfirmRequestText = (confirmUrl) =>
+  `Запрос входа на сайт infojk.ru. Если это вы — подтвердите по ссылке (действует 5 минут):\n${confirmUrl}\nЕсли вы не открывали сайт — просто проигнорируйте это сообщение.`;
 
 const LOGIN_REJECTED_TEXT =
   "Код входа из ссылки не подошёл. Нажмите «Войти через MAX» на сайте и перейдите по ссылке, которую он откроет, — код в ней длинный и одноразовый.";
+
+const LOGIN_NO_API_URL_TEXT =
+  "Не удалось собрать ссылку подтверждения входа. Откройте сайт через мини-апп MAX и войдите там.";
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
@@ -519,10 +520,12 @@ export class MaxBotUpdatePoller {
 
   /**
    * MAX-бот как подтверждение входа на сайт: событие `bot_started` (или
-   * сообщение `/start login_…`) привязывает автора к одноразовому `requestId`,
-   * и в чат уходит ответ со ссылкой `?max_login=<code>`. Сайт забирает сессию
-   * либо своим поллингом `POST /api/auth/max/claim`, либо тапом по ссылке —
-   * второе работает и когда вкладка за время подтверждения уснула.
+   * сообщение `/start login_…`) СТАВИТ запрос на подтверждение (AR-1) и шлёт
+   * автору ссылку с одноразовым нонсом. Хендовер создаётся только при переходе
+   * по ней (`GET /api/auth/max/confirm`) — сама по себе ссылка на бота,
+   * которую мог прислать кто угодно, сессию не выдаёт. Сайт забирает сессию
+   * либо своим поллингом `POST /api/auth/max/claim`, либо тапом по ссылке
+   * `?max_login=<code>` со страницы подтверждения.
    *
    * Мини-апп для этого не нужен: на десктопном клиенте MAX не отдаёт подпись
    * `WebAppData`, поэтому путь «подтвердить в мини-аппе» там непроходим, а
@@ -543,7 +546,7 @@ export class MaxBotUpdatePoller {
 
     for (const item of requests) {
       try {
-        const { confirmed, code } = await this.loginConfirmation.confirmLoginFromBotUser(
+        const { staged, nonce } = await this.loginConfirmation.stageLoginFromBotUser(
           {
             id: item.max_user_id,
             username: item.username,
@@ -552,13 +555,19 @@ export class MaxBotUpdatePoller {
           item.request_id
         );
 
-        const sent = await this.service.sendMessage(
-          item.max_user_id,
-          confirmed ? loginConfirmedText(code) : LOGIN_REJECTED_TEXT
-        );
+        let text = LOGIN_REJECTED_TEXT;
+
+        if (staged) {
+          const confirmUrl = apiPublicLink(
+            `/auth/max/confirm?r=${encodeURIComponent(item.request_id)}&t=${nonce}`
+          );
+          text = confirmUrl ? loginConfirmRequestText(confirmUrl) : LOGIN_NO_API_URL_TEXT;
+        }
+
+        const sent = await this.service.sendMessage(item.max_user_id, text);
 
         if (!sent.ok && !sent.skipped) {
-          this.log.warn("MAX-бот: ответ о подтверждении входа не отправлен", {
+          this.log.warn("MAX-бот: запрос подтверждения входа не отправлен", {
             error: sent.error,
           });
         }

@@ -64,18 +64,26 @@ export class AuthenticateMaxUserUseCase {
       );
     }
 
-    const user = await this.userRepository.findById(userId);
+    try {
+      const user = await this.userRepository.findById(userId);
 
-    if (!user) {
-      throw new AuthenticationError("User not found");
+      if (!user) {
+        throw new AuthenticationError("User not found");
+      }
+
+      logger.info("MAX login request claimed", {
+        user_id: user.user_id,
+        requestId,
+      });
+
+      return await this.issueSession(user, deviceInfo, rememberMe);
+    } catch (error) {
+      // AR-18: выдача упала после consume — возвращаем хендовер для повтора.
+      await this.handoffs
+        .put({ kind: "request", key: requestId, userId, ttlMs: this.REQUEST_TTL_MS })
+        .catch(() => {});
+      throw error;
     }
-
-    logger.info("MAX login request claimed", {
-      user_id: user.user_id,
-      requestId,
-    });
-
-    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
   async claimLoginCode(code, deviceInfo = {}, rememberMe = false) {
@@ -89,17 +97,25 @@ export class AuthenticateMaxUserUseCase {
       throw new AuthenticationError("Login code is invalid or has expired");
     }
 
-    const user = await this.userRepository.findById(userId);
+    try {
+      const user = await this.userRepository.findById(userId);
 
-    if (!user) {
-      throw new AuthenticationError("User not found");
+      if (!user) {
+        throw new AuthenticationError("User not found");
+      }
+
+      logger.info("MAX login code claimed", {
+        user_id: user.user_id,
+      });
+
+      return await this.issueSession(user, deviceInfo, rememberMe);
+    } catch (error) {
+      // AR-18: выдача упала после consume — возвращаем хендовер для повтора.
+      await this.handoffs
+        .put({ kind: "code", key: code, userId, ttlMs: this.LOGIN_CODE_TTL_MS })
+        .catch(() => {});
+      throw error;
     }
-
-    logger.info("MAX login code claimed", {
-      user_id: user.user_id,
-    });
-
-    return this.issueSession(user, deviceInfo, rememberMe);
   }
 
   _emptyVerify(reason) {
@@ -386,38 +402,76 @@ export class AuthenticateMaxUserUseCase {
   }
 
   /**
-   * Вход подтверждён в чате бота — без мини-аппа.
+   * Первый шаг входа из чата бота (AR-1): событие `bot_started` только СТАВИТ
+   * запрос на подтверждение и возвращает одноразовый nonce для ссылки.
    *
-   * Сайт открывает ссылку на бота с одноразовым `requestId`, MAX присылает
-   * событие, в котором есть автор и этот параметр. Личность подтверждена самим
-   * MAX (событие пришло из бот-апдейта), поэтому верифицировать `WebAppData`
-   * не нужно — а на десктопном клиенте подписи в адресе нет вовсе, и путь через
-   * мини-апп там физически непроходим.
-   *
-   * Хендовер тот же (`kind: "request"`, 5 минут), забирает его тот же
-   * `claimLoginRequest`, так что сайт ничего не выбирает заново.
-   *
-   * Вместе с запросом выдаётся и одноразовый `code` для ссылки `?max_login=`:
-   * на телефоне вкладка сайта засыпает, когда пользователь уходит подтверждать
-   * вход в MAX, и опрос до подтверждения может не дожить. Ссылка в ответе бота
-   * не зависит от того, жива ли вкладка, — открыл, тапнул, вошёл.
+   * Ссылку `?start=login_<id>` может прислать кто угодно, поэтому хендовер
+   * выдаётся не по факту события, а после явного перехода по ссылке
+   * подтверждения из личного чата бота (GET /api/auth/max/confirm). Нонс
+   * знает только получатель сообщения в чате.
    *
    * @param {object} maxUser — `{ id, username, first_name, last_name }` из события
-   * @returns {Promise<{user_id: bigint, confirmed: boolean, code: string|null}>}
+   * @returns {Promise<{staged: boolean, nonce: string|null}>}
    */
-  async confirmLoginFromBotUser(maxUser, requestId) {
-    const user = await this.findOrCreateMaxUser(maxUser);
-    const confirmed = await this.createLoginRequest(requestId, user.user_id);
-    const code = confirmed ? await this.createLoginCode(user.user_id) : null;
+  async stageLoginFromBotUser(maxUser, requestId) {
+    if (
+      typeof requestId !== "string" ||
+      !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)
+    ) {
+      return { staged: false, nonce: null };
+    }
 
-    logger.info("MAX login confirmed in bot chat", {
+    const user = await this.findOrCreateMaxUser(maxUser);
+    const nonce = crypto.randomBytes(16).toString("hex");
+
+    await this.handoffs.put({
+      kind: "max-confirm",
+      key: `${requestId}:${nonce}`,
+      userId: user.user_id,
+      ttlMs: this.REQUEST_TTL_MS,
+    });
+
+    logger.info("MAX login staged for confirmation", {
       user_id: user.user_id,
-      // Сам requestId и сам code не логируются: до обмена это действующие credentials.
+      max_id: String(maxUser.id),
+    });
+
+    return { staged: true, nonce };
+  }
+
+  /**
+   * Второй шаг: пользователь перешёл по ссылке подтверждения из чата бота.
+   * Запрос одноразовый; после обмена выдаются обычные хендоверы (`request`
+   * для поллинга сайтом и `code` для ссылки `?max_login=`).
+   *
+   * @returns {Promise<{confirmed: boolean, code: string|null}>}
+   */
+  async confirmStagedLogin(requestId, nonce) {
+    if (
+      typeof requestId !== "string" ||
+      !/^[A-Za-z0-9_-]{8,64}$/.test(requestId) ||
+      typeof nonce !== "string" ||
+      !/^[a-f0-9]{32}$/.test(nonce)
+    ) {
+      throw new AuthenticationError("Invalid MAX login confirmation");
+    }
+
+    const userId = await this.handoffs.consume("max-confirm", `${requestId}:${nonce}`);
+
+    if (!userId) {
+      throw new AuthenticationError("Login request not found or expired");
+    }
+
+    const confirmed = await this.createLoginRequest(requestId, userId);
+    const code = confirmed ? await this.createLoginCode(userId) : null;
+
+    logger.info("MAX login confirmed via bot link", {
+      user_id: userId,
       hasRequestId: Boolean(confirmed),
       hasLoginCode: Boolean(code),
     });
 
-    return { user_id: user.user_id, confirmed, code };
+    return { confirmed, code };
   }
 
   async execute(

@@ -65,7 +65,9 @@ export const authenticateJWT = asyncHandler(async (req, res, next) => {
     throw new AuthorizationError("Аккаунт заблокирован");
   }
 
-  req.user = toRequestUser(user);
+  // jti текущей сессии — для «завершить другие сессии» и отметки is_current
+  // (AR-16): брать его из тела GET-запроса было неоткуда.
+  req.user = { ...toRequestUser(user), jti: decoded.jti ?? null };
 
   next();
 });

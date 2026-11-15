@@ -258,6 +258,7 @@ model Subcategory {
 model RefreshToken {
   id                 BigInt    @id @default(autoincrement())
   user_id            BigInt
+  /// sha256 refresh-токена (AR-4), не сам токен; поиск сессии идёт по jti.
   token              String    @unique
   jti                String    @unique @db.VarChar(255)
   device_fingerprint String?   @db.VarChar(255)

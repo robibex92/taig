@@ -21,28 +21,36 @@ export class RefreshTokenUseCase {
       throw new AuthenticationError("Refresh token is required");
     }
 
-    const decoded = await this.tokenService.verifyRefreshToken(
-      refreshToken,
-      deviceInfo
+    // Только подпись: отзыв проверяем по строке сессии ниже, чтобы отличить
+    // «ещё не отзывали» от «отозванный токен используют повторно» (AR-5).
+    const decoded = await this.tokenService.verifyRefreshTokenSignature(
+      refreshToken
     );
 
     if (!decoded?.id || !decoded?.jti) {
       throw new AuthenticationError("Invalid refresh token");
     }
 
-    const storedToken = await this.refreshTokenRepository.findByToken(
-      refreshToken
+    this.tokenService.noteDeviceMismatch(decoded, deviceInfo);
+
+    const storedToken = await this.refreshTokenRepository.findByJti(
+      decoded.jti
     );
 
-    if (!storedToken) {
+    if (!storedToken || String(storedToken.user_id) !== String(decoded.id)) {
       throw new AuthenticationError("Invalid refresh token");
     }
 
+    /**
+     * Повторное использование отозванного токена — признак кражи пары:
+     * гасим все сессии пользователя, а не просто отвечаем 401.
+     */
     if (storedToken.isRevoked()) {
-      logger.warn("Attempt to use revoked refresh token", {
+      logger.warn("Attempt to use revoked refresh token — revoking user sessions", {
         jti: decoded.jti,
         user_id: decoded.id,
       });
+      await this.refreshTokenRepository.revokeAllForUser(decoded.id);
       throw new AuthenticationError("Refresh token has been revoked");
     }
 
@@ -62,7 +70,21 @@ export class RefreshTokenUseCase {
      */
     const rememberMe = this._wasLongLived(storedToken);
 
-    await this.refreshTokenRepository.revokeByJti(decoded.jti);
+    /**
+     * Атомарная ротация: из двух параллельных запросов одним токеном отзыв
+     * строки получает только один (count === 1). Проигравший — либо гонка
+     * вкладок, либо кража; в обоих случаях семейство сессий гасится.
+     */
+    const revoked = await this.refreshTokenRepository.revokeIfActive(decoded.jti);
+
+    if (!revoked) {
+      logger.warn("Refresh token rotation race — revoking user sessions", {
+        jti: decoded.jti,
+        user_id: decoded.id,
+      });
+      await this.refreshTokenRepository.revokeAllForUser(decoded.id);
+      throw new AuthenticationError("Refresh token has been revoked");
+    }
 
     const tokens = await this.sessionIssuer.issue({
       user,

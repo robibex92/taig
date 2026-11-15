@@ -353,7 +353,7 @@ export class Container {
 
     // Use Cases - Session
     this.registerMany([
-      ["getUserSessionsUseCase", GetUserSessionsUseCase, ["refreshTokenRepository", "tokenService"]],
+      ["getUserSessionsUseCase", GetUserSessionsUseCase, ["refreshTokenRepository"]],
       ["revokeSessionUseCase", RevokeSessionUseCase, ["refreshTokenRepository"]],
       ["revokeAllSessionsUseCase", RevokeAllSessionsUseCase, ["refreshTokenRepository"]],
     ]);

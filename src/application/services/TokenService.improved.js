@@ -111,6 +111,21 @@ export class TokenService {
     });
   }
 
+  /**
+   * Подпись refresh-токена без проверки отзыва. Нужна ротации (AR-5): чтобы
+   * отличить «токен ещё не отзывали» от «отозванный токен используют повторно»,
+   * решение об отзыве семейства принимает use case по строке `refresh_tokens`,
+   * а не сервис по факту ошибки.
+   */
+  verifyRefreshTokenSignature(token) {
+    return this._verifySignature({
+      token,
+      secret: this.refreshTokenSecret,
+      expectedType: "refresh",
+      kind: "Refresh",
+    });
+  }
+
   async verifyAccessToken(token, deviceInfo = {}) {
     return this._verify({
       token,
@@ -256,8 +271,10 @@ export class TokenService {
   extractDeviceInfo(req) {
     return {
       userAgent: req.headers["user-agent"] || "",
+      // `trust proxy` включён: req.ip — нормализованный адрес клиента, а не
+      // сырая подделываемая цепочка x-forwarded-for (AR-9).
       ip:
-        req.headers["x-forwarded-for"] ||
+        req.ip ||
         req.headers["x-real-ip"] ||
         req.socket?.remoteAddress ||
         "",
@@ -279,6 +296,15 @@ export class TokenService {
   /** В лог попадает только префикс хеша: по токену можно было войти. */
   hashToken(token) {
     return crypto.createHash("sha256").update(token).digest("hex").slice(0, 16);
+  }
+
+  /**
+   * Полный sha256 refresh-токена для хранения в `refresh_tokens.token` (AR-4):
+   * утечка дампа не даёт готовых рабочих сессий. Поиск сессии идёт по `jti`,
+   * хеш нужен только как неуникальный след токена.
+   */
+  hashRefreshToken(token) {
+    return crypto.createHash("sha256").update(token).digest("hex");
   }
 
   getAccessTokenExpiration() {

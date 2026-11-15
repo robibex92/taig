@@ -140,20 +140,34 @@ export class TelegramBot {
           return;
         }
 
-        const { code } = await container
+        /**
+         * AR-1: ссылку `?start=login_<id>` может прислать кто угодно, поэтому
+         * сам `/start` только ставит запрос на подтверждение. Сессия выдаётся
+         * лишь после явного нажатия кнопки ниже — иначе чужая ссылка
+         * авторизовала бы атакующего в аккаунте жертвы (login CSRF).
+         */
+        const staged = await container
           .resolve("loginHandoffUseCase")
-          .issueForTelegramUser(ctx.from, { requestId });
+          .stageForTelegramUser(ctx.from, requestId);
+
+        if (!staged) {
+          await ctx.reply("Не удалось поставить запрос входа. Попробуйте ещё раз с сайта.");
+          return;
+        }
 
         await ctx.reply(
-          "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.",
+          "Запрос входа на сайт infojk.ru. Если это вы — подтвердите. Если вы не открывали сайт — нажмите «Отмена».",
           {
             reply_markup: {
-              inline_keyboard: [[{ text: "Открыть сайт", url: frontendEntry(`tg_login=${code}`) }]],
+              inline_keyboard: [
+                [{ text: "Подтвердить вход", callback_data: `login_confirm:${requestId}` }],
+                [{ text: "Отмена", callback_data: `login_cancel:${requestId}` }],
+              ],
             },
           }
         );
 
-        logger.info("Telegram login handoff accepted", {
+        logger.info("Telegram login handoff staged", {
           telegram_id: ctx.from.id,
           chat_id: ctx.chat?.id,
         });
@@ -167,6 +181,60 @@ export class TelegramBot {
           .reply("Не удалось подтвердить вход. Попробуйте ещё раз с сайта.")
           .catch(() => {});
       }
+    });
+
+    /**
+     * Подтверждение/отмена входа кнопкой (AR-1). Автор нажатия подтверждён
+     * самим Telegram; use case дополнительно сверяет, что аккаунт тот же,
+     * что и просил вход.
+     */
+    this.bot.action(/^login_confirm:([A-Za-z0-9_-]{8,64})$/, async (ctx) => {
+      const requestId = ctx.match[1];
+
+      try {
+        const { code } = await container
+          .resolve("loginHandoffUseCase")
+          .confirmTelegramRequest(requestId, ctx.from);
+
+        await ctx.answerCbQuery("Вход подтверждён");
+        await ctx.editMessageText(
+          "✅ Вход подтверждён. Вернитесь во вкладку сайта — она авторизуется сама.",
+          {
+            reply_markup: {
+              inline_keyboard: [[{ text: "Открыть сайт", url: frontendEntry(`tg_login=${code}`) }]],
+            },
+          }
+        );
+
+        logger.info("Telegram login handoff accepted", {
+          telegram_id: ctx.from.id,
+          chat_id: ctx.chat?.id,
+        });
+      } catch (error) {
+        logger.warn("Telegram login confirmation failed", {
+          error: error.message,
+          telegram_id: ctx.from?.id,
+        });
+        await ctx.answerCbQuery("Запрос входа устарел").catch(() => {});
+        await ctx
+          .editMessageText("Запрос входа устарел или уже использован. Начните вход заново на сайте.")
+          .catch(() => {});
+      }
+    });
+
+    this.bot.action(/^login_cancel:([A-Za-z0-9_-]{8,64})$/, async (ctx) => {
+      const requestId = ctx.match[1];
+
+      try {
+        await container.resolve("loginHandoffUseCase").cancelTelegramRequest(requestId);
+      } catch (error) {
+        logger.warn("Telegram login cancel failed", { error: error.message });
+      }
+
+      await ctx.answerCbQuery("Вход отменён").catch(() => {});
+      await ctx
+        .editMessageText("Вход отменён. Если это были не вы — просто проигнорируйте такие запросы.")
+        .catch(() => {});
     });
 
     // Handle replies to bot messages

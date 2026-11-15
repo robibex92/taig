@@ -6,6 +6,7 @@ export class RefreshToken {
   constructor(data) {
     this.id = data.id;
     this.user_id = data.user_id;
+    // sha256 refresh-токена (AR-4); строки до миграции могли хранить сам JWT.
     this.token = data.token;
     this.jti = data.jti; // JWT ID from token payload
     this.device_info = data.device_info || {};

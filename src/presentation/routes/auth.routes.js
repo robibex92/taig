@@ -1,15 +1,17 @@
 import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
-import { authenticateJWT } from "../middlewares/authMiddleware.js";
+import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
 import {
   telegramAuthSchema,
   maxAuthSchema,
   maxClaimCodeSchema,
+  maxConfirmQuerySchema,
   telegramClaimSchema,
+  refreshTokenSchema,
   sessionIdSchema,
 } from "../../core/validation/schemas/auth.schema.js";
-import { authLimiter, claimLimiter } from "../middlewares/securityMiddleware.js";
+import { authLimiter, claimLimiter, refreshLimiter } from "../middlewares/securityMiddleware.js";
 
 const router = express.Router();
 const authController = container.resolve("authController");
@@ -47,14 +49,30 @@ router.post(
   authController.claimTelegram
 );
 
-// Refresh token - no rate limit (handled by general limiter)
-// We skip strict auth limiter to allow legitimate refresh attempts
-router.post("/auth/refresh", authController.refreshToken);
+// Подтверждение входа MAX по ссылке из чата бота (AR-1): нонс одноразовый,
+// переход по ссылке — явное согласие владельца аккаунта.
+router.get(
+  "/auth/max/confirm",
+  claimLimiter,
+  validateRequest(maxConfirmQuerySchema, "query"),
+  authController.confirmMaxLogin
+);
+
+// Refresh: своя квота (общий лимитер его пропускает) и Joi-схема (AR-8/AR-19).
+router.post(
+  "/auth/refresh",
+  refreshLimiter,
+  validateRequest(refreshTokenSchema, "body"),
+  authController.refreshToken
+);
 
 // Protected routes
 router.get("/auth/session", authenticateJWT, authController.getSession);
 
-router.post("/auth/logout", authenticateJWT, authController.logout);
+// Logout принимает и протухший access: иначе «выход» не доходит до сервера
+// и refresh-токен живёт ещё 7–30 дней (AR-13). Без access отзыв идёт по
+// refresh-токену из тела.
+router.post("/auth/logout", authenticateOptional, authController.logout);
 
 router.get("/auth/sessions", authenticateJWT, authController.getSessions);
 

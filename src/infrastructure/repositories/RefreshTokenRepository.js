@@ -9,7 +9,8 @@ import { logger } from "../../core/utils/logger.js";
  */
 export class RefreshTokenRepository extends IRefreshTokenRepository {
   /**
-   * Create a new refresh token entry
+   * Create a new refresh token entry.
+   * `tokenData.token` — sha256 refresh-токена (AR-4), не сам токен.
    */
   async create(tokenData) {
     const token = await prisma.refreshToken.create({
@@ -29,23 +30,6 @@ export class RefreshTokenRepository extends IRefreshTokenRepository {
     });
 
     return RefreshToken.fromDatabase(token);
-  }
-
-  /**
-   * Find refresh token by token string
-   */
-  async findByToken(token) {
-    const refreshToken = await prisma.refreshToken.findFirst({
-      where: {
-        token,
-        is_revoked: false,
-        expires_at: {
-          gte: new Date(), // Only non-expired tokens
-        },
-      },
-    });
-
-    return refreshToken ? RefreshToken.fromDatabase(refreshToken) : null;
   }
 
   /**
@@ -105,11 +89,12 @@ export class RefreshTokenRepository extends IRefreshTokenRepository {
   }
 
   /**
-   * Revoke token by token string
+   * Revoke token by JTI.
+   * `updateMany`, а не `update`: отсутствующая строка — не ошибка (AR-5).
    */
-  async revokeByToken(token) {
+  async revokeByJti(jti) {
     await prisma.refreshToken.updateMany({
-      where: { token },
+      where: { jti },
       data: {
         is_revoked: true,
         revoked_at: new Date(),
@@ -118,16 +103,20 @@ export class RefreshTokenRepository extends IRefreshTokenRepository {
   }
 
   /**
-   * Revoke token by JTI
+   * Атомарный отзыв активной сессии для ротации (AR-5): `count === 1`
+   * получает ровно один из параллельных запросов одним токеном.
+   * @returns {Promise<boolean>}
    */
-  async revokeByJti(jti) {
-    await prisma.refreshToken.update({
-      where: { jti },
+  async revokeIfActive(jti) {
+    const { count } = await prisma.refreshToken.updateMany({
+      where: { jti, is_revoked: false },
       data: {
         is_revoked: true,
         revoked_at: new Date(),
       },
     });
+
+    return count === 1;
   }
 
   /**

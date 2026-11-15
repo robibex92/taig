@@ -118,6 +118,22 @@ export const contactMessageLimiter = rateLimit(
 );
 
 /**
+ * Квота на обновление токенов (AR-8). Раньше /auth/refresh не ограничивался
+ * ничем: общий лимитер его пропускает (`skipRefresh`), своего не было.
+ * 60 запросов за 15 минут на ключ — легитимная вкладка обновляется раз в
+ * 15 минут, несколько вкладок и устройств укладываются с запасом.
+ */
+export const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_REFRESH_MAX) || 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rateLimitKey,
+  message: rateLimitMessage("REFRESH_RATE_LIMIT_EXCEEDED"),
+  validate: { trustProxy: false },
+});
+
+/**
  * Strict rate limiter for authentication endpoints
  */
 export const authLimiter = rateLimit({

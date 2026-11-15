@@ -20,20 +20,29 @@ export class LinkPlatformUseCase {
     return normalizeRoles([...(a || []), ...(b || [])]);
   }
 
-  async reassignUserId(fromId, toId) {
+  /**
+   * Переносит данные старого аккаунта на целевой ВНУТРИ транзакции слияния
+   * (AR-3): раньше здесь работал глобальный `prisma`, и `$transaction` в
+   * `mergeInto` ничего не откатывала.
+   *
+   * Конфликт уникальности (P2002) больше не удаляет строки молча: слияние
+   * прерывается с понятной ошибкой, данные обоих аккаунтов остаются целыми.
+   */
+  async reassignUserId(fromId, toId, tx) {
     const from = BigInt(fromId);
     const to = BigInt(toId);
 
     const reassign = async (model, field) => {
       try {
-        await prisma[model].updateMany({
+        await tx[model].updateMany({
           where: { [field]: from },
           data: { [field]: to },
         });
       } catch (error) {
         if (error.code === "P2002") {
-          await prisma[model].deleteMany({ where: { [field]: from } });
-          return;
+          throw new ValidationError(
+            `Слияние аккаунтов невозможно: у целевого аккаунта уже есть связанные записи (${model}). Данные не изменены.`
+          );
         }
         throw error;
       }
@@ -56,7 +65,7 @@ export class LinkPlatformUseCase {
     const fromNum = Number(fromId);
     const toNum = Number(toId);
     if (Number.isSafeInteger(fromNum) && Number.isSafeInteger(toNum)) {
-      await prisma.house.updateMany({
+      await tx.house.updateMany({
         where: { id_telegram: fromNum },
         data: { id_telegram: toNum },
       });
@@ -70,21 +79,25 @@ export class LinkPlatformUseCase {
 
     const mergedRoles = this.mergeRoles(currentUser.roles, otherUser.roles);
 
-    await prisma.$transaction(async () => {
-      await this.reassignUserId(otherUser.user_id, currentUser.user_id);
-      await prisma.user.delete({
+    // Перенос данных, удаление старого аккаунта и обновление ролей/привязок —
+    // одна транзакция: сбой посередине не оставляет данные полуперенесёнными.
+    await prisma.$transaction(async (tx) => {
+      await this.reassignUserId(otherUser.user_id, currentUser.user_id, tx);
+      await tx.user.delete({
         where: { user_id: BigInt(otherUser.user_id) },
       });
-    });
-
-    await this.userRepository.update(currentUser.user_id, {
-      roles: mergedRoles,
-      telegram_id: otherUser.telegram_id ?? currentUser.telegram_id,
-      max_id: otherUser.max_id ?? currentUser.max_id,
-      max_username: otherUser.max_username ?? currentUser.max_username,
-      max_first_name: otherUser.max_first_name ?? currentUser.max_first_name,
-      max_last_name: otherUser.max_last_name ?? currentUser.max_last_name,
-      max_avatar: otherUser.max_avatar ?? currentUser.max_avatar,
+      await tx.user.update({
+        where: { user_id: BigInt(currentUser.user_id) },
+        data: {
+          roles: mergedRoles,
+          telegram_id: otherUser.telegram_id ?? currentUser.telegram_id,
+          max_id: otherUser.max_id ?? currentUser.max_id,
+          max_username: otherUser.max_username ?? currentUser.max_username,
+          max_first_name: otherUser.max_first_name ?? currentUser.max_first_name,
+          max_last_name: otherUser.max_last_name ?? currentUser.max_last_name,
+          max_avatar: otherUser.max_avatar ?? currentUser.max_avatar,
+        },
+      });
     });
 
     logger.info("Merged user accounts", {

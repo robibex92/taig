@@ -11,13 +11,6 @@ export class IRefreshTokenRepository {
   }
 
   /**
-   * Find refresh token by token string
-   */
-  async findByToken(token) {
-    throw new Error("findByToken() must be implemented");
-  }
-
-  /**
    * Find refresh token by JTI (JWT ID)
    */
   async findByJti(jti) {
