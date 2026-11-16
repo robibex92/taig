@@ -12,11 +12,3 @@ export const buildServerUrl = (req) =>
   process.env.API_URL
     ? process.env.API_URL.replace("/api-v1", "")
     : `${req.protocol}://${req.get("host")}`;
-
-/**
- * Абсолютная ссылка на эндпоинт API для исходящих сообщений ботов
- * (подтверждение входа MAX, AR-1). Без `API_URL` ссылки не собрать —
- * вызывающий обязан обработать null.
- */
-export const apiPublicLink = (path) =>
-  process.env.API_URL ? `${process.env.API_URL.replace(/\/+$/, "")}${path}` : null;

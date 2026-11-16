@@ -26,3 +26,13 @@ export const frontendLink = (page) => `${frontendBase()}/#${page}`;
  * его внутрь хэша, и маршрутизация перестала бы совпадать с путём).
  */
 export const frontendEntry = (query) => `${frontendBase()}/?${query}`;
+
+/**
+ * Ссылка подтверждения входа MAX из чата бота (AR-1) — на страницу САЙТА,
+ * а не на API: в личных сообщениях бота адрес бэкенда светиться не должен.
+ * Страница `/#/max-confirm` сама подтверждает запрос по одноразовому нонсу.
+ */
+export const maxLoginConfirmLink = (requestId, nonce) =>
+  frontendLink(
+    `/max-confirm?r=${encodeURIComponent(requestId)}&t=${encodeURIComponent(nonce)}`
+  );

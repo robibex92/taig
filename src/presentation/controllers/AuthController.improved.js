@@ -120,11 +120,15 @@ export class AuthController {
    * GET /api/auth/max/confirm?r=<requestId>&t=<nonce>
    *
    * Одноразовый нонс знает только получатель сообщения в личном чате бота,
-   * поэтому переход по ссылке — явное согласие владельца аккаунта. В ответ
-   * отдаём простую HTML-страницу: ссылку открывает браузер человека, не API-клиент.
+   * поэтому переход по ссылке — явное согласие владельца аккаунта.
+   *
+   * Две формы ответа: со `?format=json` — для страницы сайта `/#/max-confirm`
+   * (возвращает одноразовый code для claim), без него — прежняя HTML-страница
+   * для ссылок, открытых вне приложения.
    */
   confirmMaxLogin = asyncHandler(async (req, res) => {
     const { r: requestId, t: nonce } = req.query;
+    const wantsJson = req.query.format === "json";
 
     const page = (title, body) => `<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
@@ -141,6 +145,12 @@ export class AuthController {
         throw new AuthenticationError("Login request not found or expired");
       }
 
+      if (wantsJson) {
+        return res
+          .status(HTTP_STATUS.OK)
+          .json({ success: true, data: { code } });
+      }
+
       const entry = frontendEntry(`max_login=${code}`);
 
       return res
@@ -154,6 +164,12 @@ export class AuthController {
         );
     } catch (error) {
       if (error instanceof AuthenticationError) {
+        if (wantsJson) {
+          return res
+            .status(HTTP_STATUS.UNAUTHORIZED)
+            .json({ success: false, error: "Ссылка устарела или уже использована" });
+        }
+
         return res
           .status(HTTP_STATUS.UNAUTHORIZED)
           .type("html")

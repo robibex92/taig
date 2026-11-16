@@ -9,7 +9,7 @@ import {
   MAX_BOT_STATE_KEYS,
 } from "../../core/constants/maxBot.js";
 import { extractPayloadMarker, extractMaxLoginRequests, parseMaxUpdatesPayload } from "../../core/utils/maxBotEvents.js";
-import { apiPublicLink } from "../../core/utils/requestUrl.js";
+import { maxLoginConfirmLink } from "../../core/utils/frontendUrl.js";
 
 const POLL_TIMEOUT_MS = 25000;
 const POLL_LIMIT = 50;
@@ -36,17 +36,16 @@ const isDialogType = (type) => DIALOG_CHAT_TYPES.has(String(type ?? "").toUpperC
  *
  * Ссылку `?start=login_<id>` может прислать кто угодно, поэтому бот не выдаёт
  * сессию по факту события, а просит явного подтверждения: ссылка с одноразовым
- * нонсом ведёт на API, и только переход по ней создаёт хендовер. Сообщение
- * приходит в личный чат автора события — чужой человек ссылку не увидит.
+ * нонсом ведёт на страницу сайта `/#/max-confirm`, и только подтверждение с неё
+ * создаёт хендовер. Сама по себе ссылка, которую мог прислать кто угодно,
+ * сессию не выдаёт. Сообщение приходит в личный чат автора события — чужой
+ * человек ссылку не увидит.
  */
 const loginConfirmRequestText = (confirmUrl) =>
   `Запрос входа на сайт infojk.ru. Если это вы — подтвердите по ссылке (действует 5 минут):\n${confirmUrl}\nЕсли вы не открывали сайт — просто проигнорируйте это сообщение.`;
 
 const LOGIN_REJECTED_TEXT =
   "Код входа из ссылки не подошёл. Нажмите «Войти через MAX» на сайте и перейдите по ссылке, которую он откроет, — код в ней длинный и одноразовый.";
-
-const LOGIN_NO_API_URL_TEXT =
-  "Не удалось собрать ссылку подтверждения входа. Откройте сайт через мини-апп MAX и войдите там.";
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
@@ -521,8 +520,9 @@ export class MaxBotUpdatePoller {
   /**
    * MAX-бот как подтверждение входа на сайт: событие `bot_started` (или
    * сообщение `/start login_…`) СТАВИТ запрос на подтверждение (AR-1) и шлёт
-   * автору ссылку с одноразовым нонсом. Хендовер создаётся только при переходе
-   * по ней (`GET /api/auth/max/confirm`) — сама по себе ссылка на бота,
+   * автору ссылку на страницу сайта с одноразовым нонсом. Хендовер создаётся
+   * только при подтверждении с неё
+   * (`GET /api/auth/max/confirm?format=json`) — сама по себе ссылка на бота,
    * которую мог прислать кто угодно, сессию не выдаёт. Сайт забирает сессию
    * либо своим поллингом `POST /api/auth/max/claim`, либо тапом по ссылке
    * `?max_login=<code>` со страницы подтверждения.
@@ -558,10 +558,11 @@ export class MaxBotUpdatePoller {
         let text = LOGIN_REJECTED_TEXT;
 
         if (staged) {
-          const confirmUrl = apiPublicLink(
-            `/auth/max/confirm?r=${encodeURIComponent(item.request_id)}&t=${nonce}`
+          // Ссылка ведёт на страницу сайта, а не на API: адрес бэкенда
+          // в личных сообщениях бота не светится.
+          text = loginConfirmRequestText(
+            maxLoginConfirmLink(item.request_id, nonce)
           );
-          text = confirmUrl ? loginConfirmRequestText(confirmUrl) : LOGIN_NO_API_URL_TEXT;
         }
 
         const sent = await this.service.sendMessage(item.max_user_id, text);

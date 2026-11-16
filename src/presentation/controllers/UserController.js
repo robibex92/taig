@@ -21,12 +21,14 @@ export class UserController {
     updateUserUseCase,
     userRepository,
     adRepository,
-    uploadAvatarUseCase = null
+    uploadAvatarUseCase = null,
+    deleteAccountUseCase = null
   ) {
     this.updateUserUseCase = updateUserUseCase;
     this.userRepository = userRepository;
     this.adRepository = adRepository;
     this.uploadAvatarUseCase = uploadAvatarUseCase;
+    this.deleteAccountUseCase = deleteAccountUseCase;
   }
 
   /**
@@ -99,6 +101,24 @@ export class UserController {
       success: true,
       data: user.toJSON(),
       message: "Profile updated successfully",
+    });
+  });
+
+  /**
+   * Полное удаление своего аккаунта: purge (со всем контентом) или
+   * anonymize (контент остаётся без автора). Сессии гасятся на сервере;
+   * локальную очистку делает фронт после успешного ответа.
+   */
+  deleteAccount = asyncHandler(async (req, res) => {
+    const result = await this.deleteAccountUseCase.execute(
+      req.user.user_id,
+      req.body.mode
+    );
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result,
+      message: "Account deleted",
     });
   });
 

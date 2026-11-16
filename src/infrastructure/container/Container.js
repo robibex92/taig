@@ -60,6 +60,7 @@ import { UploadAvatarUseCase } from "../../application/use-cases/user/UploadAvat
 import { LogoutUseCase } from "../../application/use-cases/user/LogoutUseCase.js";
 import { AuthenticateMaxUserUseCase } from "../../application/use-cases/user/AuthenticateMaxUserUseCase.js";
 import { LinkPlatformUseCase } from "../../application/use-cases/user/LinkPlatformUseCase.js";
+import { DeleteAccountUseCase } from "../../application/use-cases/user/DeleteAccountUseCase.js";
 
 // Use Cases - MAX Bot (админка: рассылки и входящие обращения)
 import { MaxBotAdminUseCases } from "../../application/use-cases/maxBot/MaxBotAdminUseCases.js";
@@ -349,6 +350,7 @@ export class Container {
     this.registerMany([
       ["authenticateMaxUserUseCase", AuthenticateMaxUserUseCase, ["userRepository", "sessionIssuer", "authHandoffRepository"]],
       ["linkPlatformUseCase", LinkPlatformUseCase, ["userRepository", "authenticateUserUseCase", "authenticateMaxUserUseCase"]],
+      ["deleteAccountUseCase", DeleteAccountUseCase, []],
     ]);
 
     // Use Cases - Session
@@ -404,7 +406,7 @@ export class Container {
     );
 
     this.registerMany([
-      ["userController", UserController, ["updateUserUseCase", "userRepository", "adRepository", "uploadAvatarUseCase"]],
+      ["userController", UserController, ["updateUserUseCase", "userRepository", "adRepository", "uploadAvatarUseCase", "deleteAccountUseCase"]],
       ["postController", PostController, ["getPostsUseCase", "createPostUseCase", "updatePostUseCase", "deletePostUseCase"]],
     ]);
 

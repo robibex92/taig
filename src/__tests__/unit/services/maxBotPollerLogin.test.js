@@ -40,17 +40,23 @@ const buildPoller = ({ loginConfirmation = null, service } = {}) =>
 
 describe("MaxBotUpdatePoller: вход с сайта", () => {
   const prevApiUrl = process.env.API_URL;
+  const prevFrontendUrl = process.env.FRONTEND_URL;
 
   beforeEach(() => {
+    // Адрес API заведомо «приманка»: ссылка подтверждения обязана строиться
+    // на домене сайта, бэкенд в личных сообщениях бота не светится.
     process.env.API_URL = "https://api.example.test/api-v1";
+    process.env.FRONTEND_URL = "https://infojk.ru";
   });
 
   afterEach(() => {
     if (prevApiUrl === undefined) delete process.env.API_URL;
     else process.env.API_URL = prevApiUrl;
+    if (prevFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = prevFrontendUrl;
   });
 
-  it("ставит запрос на подтверждение и шлёт ссылку с нонсом, а не выдаёт сессию", async () => {
+  it("ставит запрос на подтверждение и шлёт ссылку на страницу сайта с нонсом, а не выдаёт сессию", async () => {
     const stageLoginFromBotUser = jest.fn(async () => ({ staged: true, nonce: NONCE }));
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
     const poller = buildPoller({ loginConfirmation: { stageLoginFromBotUser }, service });
@@ -64,12 +70,13 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
 
     const text = service.sendMessage.mock.calls[0][1];
     expect(text).toContain("Запрос входа на сайт");
-    expect(text).toContain(`/auth/max/confirm?r=${ID}&t=${NONCE}`);
+    expect(text).toContain(`https://infojk.ru/#/max-confirm?r=${ID}&t=${NONCE}`);
+    expect(text).not.toContain("api.example.test");
     // Сессия на этом шаге не выдаётся: ссылки с кодом входа в сообщении нет.
     expect(text).not.toContain("max_login=");
   });
 
-  it("без API_URL честно сообщает, что ссылку не собрать", async () => {
+  it("ссылка строится даже без API_URL: подтверждение живёт на сайте", async () => {
     delete process.env.API_URL;
     const service = { sendMessage: jest.fn(async () => ({ ok: true, message_id: "1" })) };
     const poller = buildPoller({
@@ -82,7 +89,7 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
     await poller._processLoginRequests({ updates: [startedUpdate] });
 
     const text = service.sendMessage.mock.calls[0][1];
-    expect(text).toContain("Не удалось собрать ссылку подтверждения");
+    expect(text).toContain(`/#/max-confirm?r=${ID}&t=${NONCE}`);
   });
 
   it("неподтверждённый запрос не получает ссылки", async () => {
@@ -98,7 +105,7 @@ describe("MaxBotUpdatePoller: вход с сайта", () => {
 
     const text = service.sendMessage.mock.calls[0][1];
     expect(text).toContain("не подошёл");
-    expect(text).not.toContain("/auth/max/confirm");
+    expect(text).not.toContain("/max-confirm");
   });
 
   it("молчит, если кейс подтверждения не внедрён", async () => {

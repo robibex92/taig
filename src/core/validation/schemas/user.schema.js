@@ -44,6 +44,17 @@ export const adminUserSearchSchema = Joi.object({
 });
 
 /**
+ * Полное удаление своего аккаунта: `purge` — со всем контентом,
+ * `anonymize` — контент остаётся без автора.
+ */
+export const deleteAccountSchema = Joi.object({
+  mode: Joi.string().valid("purge", "anonymize").required().messages({
+    "any.required": "Выберите режим удаления: purge или anonymize",
+    "any.only": "Режим удаления должен быть purge или anonymize",
+  }),
+});
+
+/**
  * `/users/:id` и `/users/:id/avatar`. Число обязательное: `Number('abc')` даёт
  * NaN, а Prisma на нём падает пятой сотой ошибкой вместо «человека нет».
  */

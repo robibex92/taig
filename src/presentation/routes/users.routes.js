@@ -2,7 +2,7 @@ import express from "express";
 import { container } from "../../infrastructure/container/Container.js";
 import { authenticateJWT, authenticateOptional } from "../middlewares/authMiddleware.js";
 import { validateRequest } from "../../core/validation/validator.js";
-import { updateUserSchema } from "../../core/validation/schemas/user.schema.js";
+import { updateUserSchema, deleteAccountSchema } from "../../core/validation/schemas/user.schema.js";
 import {
   userAdsParamsSchema,
   userAdsQuerySchema,
@@ -46,6 +46,14 @@ router.patch(
   authenticateJWT,
   validateRequest(updateUserSchema, "body"),
   userController.updateProfile
+);
+
+// Полное удаление своего аккаунта (purge / anonymize) — выбор режима в теле.
+router.delete(
+  "/users/me",
+  authenticateJWT,
+  validateRequest(deleteAccountSchema, "body"),
+  userController.deleteAccount
 );
 
 router.post(

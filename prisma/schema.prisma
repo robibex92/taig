@@ -169,7 +169,8 @@ model HouseComment {
   house_id     BigInt
   /// Номер дома, к которому относится текст: '39' или '39/1'. Адрес здания, а не квартиры.
   house_number String?  @db.VarChar(20)
-  author_id    BigInt
+  /// Nullable: аккаунт удалён в режиме обезличивания — комментарий остаётся без автора.
+  author_id    BigInt?
   comment      String
   created_at   DateTime @default(now()) @db.Timestamptz(6)
   updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -188,7 +189,8 @@ model EntranceComment {
   /// Номер дома, к которому относится текст: '39' или '39/1'. Адрес здания, а не квартиры.
   house_number String?  @db.VarChar(20)
   entrance     Int
-  author_id    BigInt
+  /// Nullable: аккаунт удалён в режиме обезличивания — комментарий остаётся без автора.
+  author_id    BigInt?
   comment      String
   created_at   DateTime @default(now()) @db.Timestamptz(6)
   updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -502,14 +504,15 @@ model Event {
   end_date         DateTime?           @db.Timestamptz(6)
   max_participants Int?
   status           String              @default("active") @db.VarChar(50)
-  created_by       BigInt
+  /// Nullable: аккаунт создателя удалён в режиме обезличивания — событие остаётся.
+  created_by       BigInt?
   created_at       DateTime            @default(now()) @db.Timestamptz(6)
   updated_at       DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
   image_url        String?
   registrations    EventRegistration[]
   telegram_chats   EventTelegramChat[]
   waitlist         EventWaitlist[]
-  creator          User                @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
+  creator          User?               @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
 
   @@index([status])
   @@index([event_type])
