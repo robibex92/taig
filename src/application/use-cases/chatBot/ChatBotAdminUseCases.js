@@ -225,7 +225,12 @@ export class ChatBotAdminUseCases {
   async listReminders({ platform = null } = {}) {
     const rows = await this.reminders.list({ platform: platform ? validatePlatform(platform) : null });
 
-    return rows.map(serializeReminder);
+    // Стрелка обязательна: `rows.map(serializeReminder)` передал бы вторым
+    // аргументом индекс массива вместо даты — `nextOccurrence` упал бы на
+    // from.getTime() и весь список админки отдал 500.
+    const now = new Date();
+
+    return rows.map((row) => serializeReminder(row, now));
   }
 
   /** Предпросмотр расписания: когда сработает в следующий раз. */
